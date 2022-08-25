@@ -280,11 +280,10 @@ class BasePair3D(BasePair):
 
     @property
     def reverse(self):
-        lw = f"{self.lw.name[0]}{self.lw.name[2]}{self.lw.name[1]}"
         return BasePair3D(
             self.nt2,
             self.nt1,
-            LeontisWesthof[lw],
+            self.lw.reverse,
             self.saenger,
             self.nt2_3d,
             self.nt1_3d,
@@ -359,67 +358,6 @@ class Structure3D:
         if auth is not None and auth in self.residue_map:
             return self.residue_map.get(auth)
         return None
-
-    # FIXME
-    # def base_pairs(self, structure2d: Structure2D) -> List[BasePair3D]:
-    #     result = []
-    #     for base_pair in structure2d.basePairs:
-    #         nt1 = self.find_residue(base_pair.nt1.label, base_pair.nt1.auth)
-    #         nt2 = self.find_residue(base_pair.nt2.label, base_pair.nt2.auth)
-    #         if nt1 is not None and nt2 is not None:
-    #             result.append(BasePair3D(nt1, nt2, base_pair.lw))
-    #     return result
-
-    # FIXME
-    # def base_pair_graph(
-    #     self, structure2d: Structure2D, strict: bool = False
-    # ) -> Dict[Residue3D, Set[Residue3D]]:
-    #     graph = defaultdict(set)
-    #     for pair in self.base_pairs(structure2d):
-    #         if strict and pair.lw not in (LeontisWesthof.cWH, LeontisWesthof.cHW):
-    #             continue
-    #         graph[pair.nt1].add(pair.nt2)
-    #         graph[pair.nt2].add(pair.nt1)
-    #     return graph
-
-    # FIXME
-    # def base_pair_dict(
-    #     self, structure2d: Structure2D, strict: bool = False
-    # ) -> Dict[Tuple[Residue3D, Residue3D], BasePair3D]:
-    #     result = {}
-    #     for pair in self.base_pairs(structure2d):
-    #         if strict and pair.lw not in (LeontisWesthof.cWH, LeontisWesthof.cHW):
-    #             continue
-    #         result[(pair.nt1, pair.nt2)] = pair
-    #     return result
-
-    # FIXME
-    # def stackings(self, structure2d: Structure2D) -> List[Stacking3D]:
-    #     result = []
-    #     for stacking in structure2d.stackings:
-    #         nt1 = self.find_residue(stacking.nt1.label, stacking.nt1.auth)
-    #         nt2 = self.find_residue(stacking.nt2.label, stacking.nt2.auth)
-    #         if nt1 is not None and nt2 is not None:
-    #             result.append(Stacking3D(nt1, nt2))
-    #     return result
-
-    # FIXME
-    # def stacking_graph(
-    #     self, structure2d: Structure2D
-    # ) -> Dict[Residue3D, Set[Residue3D]]:
-    #     graph = defaultdict(set)
-    #     for pair in self.stackings(structure2d):
-    #         graph[pair.nt1].add(pair.nt2)
-    #         graph[pair.nt2].add(pair.nt1)
-    #     return graph
-
-    # def stacking_dict(
-    #     self, structure2d: Structure2D
-    # ) -> Dict[Tuple[Residue3D, Residue3D], Stacking3D]:
-    #     result = {}
-    #     for pair in self.stackings(structure2d):
-    #         result[(pair.nt1, pair.nt2)] = pair
-    #     return result
 
 
 def read_3d_structure(cif_or_pdb: IO[str], model: int) -> Structure3D:

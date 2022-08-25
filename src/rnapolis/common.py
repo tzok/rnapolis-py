@@ -35,6 +35,10 @@ class LeontisWesthof(Enum):
     tSH = "tSH"
     tSS = "tSS"
 
+    @property
+    def reverse(self):
+        return LeontisWesthof[f"{self.name[0]}{self.name[2]}{self.name[1]}"]
+
 
 class Saenger(Enum):
     I = "I"
