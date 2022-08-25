@@ -5,18 +5,24 @@ from collections import Counter, defaultdict
 from typing import IO, Dict, List, Optional, Tuple
 
 import numpy
-import numpy.linalg
+import numpy.typing
 import orjson
 from scipy.spatial import KDTree
 
-from rnapolis.common import BR, BPh, LeontisWesthof, Residue, Saenger, StackingTopology
-from rnapolis.secondary import (
+from rnapolis.common import (
+    BR,
     BasePair,
     BasePhosphate,
     BaseRibose,
+    BPh,
+    LeontisWesthof,
+    Residue,
+    Saenger,
     Stacking,
+    StackingTopology,
     Structure2D,
 )
+from rnapolis.parser import read_3d_structure
 from rnapolis.tertiary import (
     BASE_ACCEPTORS,
     BASE_ATOMS,
@@ -27,9 +33,8 @@ from rnapolis.tertiary import (
     Atom,
     Residue3D,
     Structure3D,
-    read_3d_structure,
+    torsion_angle,
 )
-from rnapolis.utils import angle_between_vectors, torsion_angle
 
 HYDROGEN_BOND_MAX_DISTANCE = 3.5
 HYDROGEN_BOND_MAX_PLANAR_DISTANCE = HYDROGEN_BOND_MAX_DISTANCE / 2.0
@@ -45,6 +50,12 @@ def compute_planar_distance(residue_i: Residue3D, atom_i: Atom, atom_j: Atom) ->
 
     vector_ij = atom_i.coordinates - atom_j.coordinates
     return numpy.linalg.norm(numpy.dot(normal_i, vector_ij)).item()
+
+
+def angle_between_vectors(
+    v1: numpy.typing.NDArray[numpy.floating], v2: numpy.typing.NDArray[numpy.floating]
+) -> float:
+    return math.acos(numpy.dot(v1, v2) / numpy.linalg.norm(v1) / numpy.linalg.norm(v2))
 
 
 def detect_cis_trans(residue_i: Residue3D, residue_j: Residue3D) -> Optional[str]:

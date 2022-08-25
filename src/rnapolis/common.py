@@ -1,7 +1,7 @@
 import string
 from dataclasses import dataclass
 from enum import Enum
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 
 class Molecule(Enum):
@@ -146,6 +146,14 @@ class StackingTopology(Enum):
     inward = "inward"
     outward = "outward"
 
+    @property
+    def reverse(self):
+        if self == StackingTopology.upward:
+            return StackingTopology.downward
+        elif self == StackingTopology.downward:
+            return StackingTopology.upward
+        return self
+
 
 class BR(Enum):
     _0 = "0BR"
@@ -188,16 +196,10 @@ class ResidueAuth:
     name: str
 
 
-@dataclass(order=True)
+@dataclass(frozen=True, order=True)
 class Residue:
     label: Optional[ResidueLabel]
     auth: Optional[ResidueAuth]
-
-    def __post_init__(self):
-        if isinstance(self.label, dict):
-            self.label = ResidueLabel(**self.label)
-        if isinstance(self.auth, dict):
-            self.auth = ResidueAuth(**self.auth)
 
     @property
     def chain(self) -> str:
@@ -262,3 +264,44 @@ class Residue:
         raise RuntimeError(
             "Unknown full residue name, both ResidueAuth and ResidueLabel are empty"
         )
+
+
+@dataclass(frozen=True, order=True)
+class Interaction:
+    nt1: Residue
+    nt2: Residue
+
+
+@dataclass(frozen=True, order=True)
+class BasePair(Interaction):
+    lw: LeontisWesthof
+    saenger: Optional[Saenger]
+
+
+@dataclass(frozen=True, order=True)
+class Stacking(Interaction):
+    topology: Optional[StackingTopology]
+
+
+@dataclass(frozen=True, order=True)
+class BaseRibose(Interaction):
+    br: Optional[BR]
+
+
+@dataclass(frozen=True, order=True)
+class BasePhosphate(Interaction):
+    bph: Optional[BPh]
+
+
+@dataclass(frozen=True, order=True)
+class OtherInteraction(Interaction):
+    pass
+
+
+@dataclass(frozen=True, order=True)
+class Structure2D:
+    basePairs: List[BasePair]
+    stackings: List[Stacking]
+    baseRiboseInteractions: List[BaseRibose]
+    basePhosphateInteractions: List[BasePhosphate]
+    otherInteractions: List[OtherInteraction]
