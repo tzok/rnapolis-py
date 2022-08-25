@@ -157,7 +157,7 @@ def merge_and_clean_bph_br(
 
 
 def find_pairs(
-    structure: Structure3D,
+    structure: Structure3D, model: int = 1
 ) -> Tuple[List[BasePair], List[BasePhosphate], List[BaseRibose]]:
     # put all donors and acceptors into a KDTree
     coordinates = []
@@ -165,6 +165,8 @@ def find_pairs(
     coordinates_type_map: Dict[Tuple[float, float, float], str] = {}
     coordinates_residue_map: Dict[Tuple[float, float, float], Residue3D] = {}
     for residue in structure.residues:
+        if residue.model != model:
+            continue
         acceptors = (
             BASE_ACCEPTORS.get(residue.one_letter_name, [])
             + RIBOSE_ACCEPTORS
@@ -259,16 +261,11 @@ def find_pairs(
             ]
         )
         if planar_distance < HYDROGEN_BOND_MAX_PLANAR_DISTANCE:
-            hydrogen_bonds.append((atom_i, atom_j))
+            hydrogen_bonds.append((atom_i, atom_j, residue_i, residue_j))
 
     # match hydrogen bonds with base edges
     labels = []
-    for atom_i, atom_j in hydrogen_bonds:
-        residue_i = structure.find_residue(atom_i.label, atom_i.auth)
-        residue_j = structure.find_residue(atom_j.label, atom_j.auth)
-        if residue_i is None or residue_j is None:
-            continue
-
+    for atom_i, atom_j, residue_i, residue_j in hydrogen_bonds:
         edges_i = BASE_EDGES.get(residue_i.one_letter_name, dict()).get(
             atom_i.name, None
         )
@@ -354,11 +351,13 @@ def find_pairs(
     return base_pairs, base_phosphates, base_riboses
 
 
-def find_stackings(structure: Structure3D) -> List[Stacking]:
+def find_stackings(structure: Structure3D, model: int = 1) -> List[Stacking]:
     # put all nitrogen ring centers into a KDTree
     coordinates = []
     coordinates_residue_map: Dict[Tuple[float, float, float], Residue3D] = {}
     for residue in structure.residues:
+        if residue.model != model:
+            continue
         base_atoms = BASE_ATOMS.get(residue.one_letter_name, [])
         xs, ys, zs = [], [], []
         for atom_name in base_atoms:
@@ -394,7 +393,7 @@ def find_stackings(structure: Structure3D) -> List[Stacking]:
         if math.degrees(angle) > STACKING_MAX_ANGLE_BETWEEN_NORMALS:
             continue
 
-        vector = [coordinates[i][k] - coordinates[j][k] for k in (0, 1, 2)]
+        vector = numpy.array([coordinates[i][k] - coordinates[j][k] for k in (0, 1, 2)])
         angle = min(
             angle_between_vectors(vector, normal_i),
             angle_between_vectors(vector, normal_j),
@@ -424,9 +423,11 @@ def find_stackings(structure: Structure3D) -> List[Stacking]:
     return stackings
 
 
-def extract_secondary_structure(tertiary_structure: Structure3D) -> Structure2D:
-    base_pairs, base_phosphate, base_ribose = find_pairs(tertiary_structure)
-    stackings = find_stackings(tertiary_structure)
+def extract_secondary_structure(
+    tertiary_structure: Structure3D, model: int = 1
+) -> Structure2D:
+    base_pairs, base_phosphate, base_ribose = find_pairs(tertiary_structure, model)
+    stackings = find_stackings(tertiary_structure, model)
     return Structure2D(base_pairs, stackings, base_ribose, base_phosphate, [])
 
 
