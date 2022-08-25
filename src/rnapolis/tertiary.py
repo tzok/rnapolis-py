@@ -1,5 +1,7 @@
+import itertools
 import logging
 import math
+import string
 from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Set, Tuple, Union
@@ -428,6 +430,72 @@ class Mapping2D3D:
             graph[pair.nt1_3d].add(pair.nt2_3d)
             graph[pair.nt2_3d].add(pair.nt1_3d)
         return graph
+
+    @property
+    def chains_sequences(self) -> Dict[str, str]:
+        chains = defaultdict(list)
+        for residue in self.structure3d.residues:
+            if residue.is_nucleotide:
+                chains[residue.chain].append(residue.one_letter_name)
+        return {chain: "".join(sequence) for chain, sequence in chains.items()}
+
+    @property
+    def dot_bracket(self) -> str:
+        dbn = []
+        residue_map: Dict[Residue3D, int] = {}
+        i = 0
+        for residue in self.structure3d.residues:
+            if residue.is_nucleotide:
+                dbn.append(".")
+                residue_map[residue] = i
+                i += 1
+
+        pairs = []
+        for base_pair in self.base_pairs:
+            if not base_pair.is_canonical:
+                continue
+            i = residue_map.get(base_pair.nt1_3d, None)
+            j = residue_map.get(base_pair.nt2_3d, None)
+            if i is None or j is None or i > j:
+                continue
+            pairs.append((i, j))
+
+        queue = list(pairs)
+        removed: List[Tuple[int, int]] = []
+        orders: Dict[Tuple[int, int], int] = {}
+        order = 0
+        while queue:
+            conflicts = defaultdict(list)
+            for pi, pj in itertools.combinations(queue, 2):
+                i, j = pi
+                k, l = pj
+                if i < k < j < l or k < i < l < j:
+                    conflicts[pi].append(pj)
+                    conflicts[pj].append(pi)
+            if conflicts:
+                pair = max(conflicts, key=lambda pair: (len(conflicts[pair]), pair))
+                removed.append(pair)
+                queue.remove(pair)
+            else:
+                orders.update({pair: order for pair in queue})
+                queue, removed = removed, []
+                order += 1
+
+        opening = list("([{<" + string.ascii_uppercase)
+        closing = list(")]}>" + string.ascii_lowercase)
+        for pair, order in orders.items():
+            nt1, nt2 = pair
+            dbn[nt1] = opening[order]
+            dbn[nt2] = closing[order]
+
+        i = 0
+        result = []
+        for chain, sequence in self.chains_sequences.items():
+            result.append(f">strand_{chain}")
+            result.append(sequence)
+            result.append("".join(dbn[i : i + len(sequence)]))
+            i += len(sequence)
+        return "\n".join(result)
 
 
 def torsion_angle(a1: Atom, a2: Atom, a3: Atom, a4: Atom) -> float:

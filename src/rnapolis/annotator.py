@@ -31,6 +31,7 @@ from rnapolis.tertiary import (
     PHOSPHATE_ACCEPTORS,
     RIBOSE_ACCEPTORS,
     Atom,
+    Mapping2D3D,
     Residue3D,
     Structure3D,
     torsion_angle,
@@ -445,13 +446,23 @@ def extract_secondary_structure(
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("input", help="Path to PDB or mmCIF file")
+    parser.add_argument(
+        "--json",
+        help="If set, the output will be a JSON-formatted list of all RNA interactions. "
+        "Otherwise, the output will be the dot-bracket notation of the 2D canonical structure",
+    )
     args = parser.parse_args()
 
     with open(args.input) as f:
         structure3d = read_3d_structure(f, 1)
 
     structure2d = extract_secondary_structure(structure3d)
-    print(orjson.dumps(structure2d).decode("utf-8"))
+
+    if args.json:
+        print(orjson.dumps(structure2d).decode("utf-8"))
+    else:
+        mapping = Mapping2D3D(structure3d, structure2d)
+        print(mapping.dot_bracket)
 
 
 if __name__ == "__main__":
