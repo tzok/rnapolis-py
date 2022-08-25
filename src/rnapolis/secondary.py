@@ -1,14 +1,7 @@
 from dataclasses import dataclass
 from typing import List, Optional
 
-from rnapolis.common import (
-    BR,
-    BPh,
-    LeontisWesthof,
-    Residue,
-    Saenger,
-    StackingTopology,
-)
+from rnapolis.common import BR, BPh, LeontisWesthof, Residue, Saenger, StackingTopology
 
 
 @dataclass

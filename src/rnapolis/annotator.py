@@ -9,7 +9,7 @@ import numpy.linalg
 import orjson
 from scipy.spatial import KDTree
 
-from rnapolis.common import LeontisWesthof, Saenger, Residue, BPh, BR, StackingTopology
+from rnapolis.common import BR, BPh, LeontisWesthof, Residue, Saenger, StackingTopology
 from rnapolis.secondary import (
     BasePair,
     BasePhosphate,
@@ -29,7 +29,7 @@ from rnapolis.tertiary import (
     Structure3D,
     read_3d_structure,
 )
-from rnapolis.utils import torsion_angle, angle_between_vectors
+from rnapolis.utils import angle_between_vectors, torsion_angle
 
 HYDROGEN_BOND_MAX_DISTANCE = 3.5
 HYDROGEN_BOND_MAX_PLANAR_DISTANCE = HYDROGEN_BOND_MAX_DISTANCE / 2.0
@@ -430,7 +430,7 @@ def extract_secondary_structure(tertiary_structure: Structure3D) -> Structure2D:
     return Structure2D(base_pairs, stackings, base_ribose, base_phosphate, [])
 
 
-if __name__ == "__main__":
+def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("input", help="Path to PDB or mmCIF file")
     args = parser.parse_args()
@@ -440,3 +440,7 @@ if __name__ == "__main__":
 
     structure2d = extract_secondary_structure(structure3d)
     print(orjson.dumps(structure2d).decode("utf-8"))
+
+
+if __name__ == "__main__":
+    main()

@@ -1,21 +1,13 @@
 import logging
 import math
-import string
-from collections import defaultdict
 from dataclasses import dataclass, field
-from enum import Enum
-from typing import IO, Dict, List, Optional, Set, Tuple, Union
+from typing import IO, Dict, List, Optional, Tuple, Union
 
 import numpy
 import numpy.typing
 from mmcif.io.IoAdapterPy import IoAdapterPy
 
-from rnapolis.common import (
-    GlycosidicBond,
-    LeontisWesthof,
-    ResidueAuth,
-    ResidueLabel,
-)
+from rnapolis.common import GlycosidicBond, LeontisWesthof, ResidueAuth, ResidueLabel
 from rnapolis.secondary import BasePair, Residue, Stacking
 
 BASE_ATOMS = {
