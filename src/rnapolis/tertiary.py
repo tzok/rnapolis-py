@@ -10,6 +10,14 @@ import numpy
 import numpy.typing
 from mmcif.io.IoAdapterPy import IoAdapterPy
 
+from rnapolis.common import (
+    GlycosidicBond,
+    LeontisWesthof,
+    ResidueAuth,
+    ResidueLabel,
+)
+from rnapolis.secondary import BasePair, Residue, Stacking
+
 BASE_ATOMS = {
     "A": ["N1", "C2", "N3", "C4", "C5", "C6", "N6", "N7", "C8", "N9"],
     "G": ["N1", "C2", "N2", "N3", "C4", "C5", "C6", "O6", "N7", "C8", "N9"],
@@ -17,6 +25,7 @@ BASE_ATOMS = {
     "U": ["N1", "C2", "O2", "N3", "C4", "O4", "C5", "C6"],
     "T": ["N1", "C2", "O2", "N3", "C4", "O4", "C5", "C6", "C7"],
 }
+
 BASE_DONORS = {
     "A": ["C2", "N6", "C8", "O2'"],
     "G": ["N1", "N2", "C8", "O2'"],
@@ -24,6 +33,7 @@ BASE_DONORS = {
     "U": ["N3", "C5", "C6", "O2'"],
     "T": ["N3", "C6", "C7"],
 }
+
 BASE_ACCEPTORS = {
     "A": ["N1", "N3", "N7"],
     "G": ["N3", "O6", "N7"],
@@ -31,8 +41,11 @@ BASE_ACCEPTORS = {
     "U": ["O2", "O4"],
     "T": ["O2", "O4"],
 }
+
 PHOSPHATE_ACCEPTORS = ["OP1", "OP2", "O5'", "O3'"]
+
 RIBOSE_ACCEPTORS = ["O4'"]
+
 BASE_EDGES = {
     "A": {
         "N1": "W",
@@ -52,203 +65,38 @@ BASE_EDGES = {
         "C8": "H",
         "O2'": "S",
     },
-    "C": {"O2": "WS", "N3": "W", "N4": "WH", "C5": "H", "C6": "H", "O2'": "S"},
-    "U": {"O2": "WS", "N3": "W", "O4": "WH", "C5": "H", "C6": "H", "O2'": "S"},
-    "T": {"O2": "WS", "N3": "W", "O4": "WH", "C6": "H", "C7": "H"},
-}
-SAENGER_RULES = {
-    ("AA", "tWW"): "I",
-    ("AA", "tHH"): "II",
-    ("GG", "tWW"): "III",
-    ("GG", "tSS"): "IV",
-    ("AA", "tWH"): "V",
-    ("AA", "tHW"): "V",
-    ("GG", "cWH"): "VI",
-    ("GG", "cHW"): "VI",
-    ("GG", "tWH"): "VII",
-    ("GG", "tHW"): "VII",
-    ("AG", "cWW"): "VIII",
-    ("GA", "cWW"): "VIII",
-    ("AG", "cHW"): "IX",
-    ("GA", "cWH"): "IX",
-    ("AG", "tWS"): "X",
-    ("GA", "tSW"): "X",
-    ("AG", "tHS"): "XI",
-    ("GA", "tSH"): "XI",
-    ("UU", "tWW"): "XII",
-    ("TT", "tWW"): "XII",
-    # XIII is UU/TT in tWW but donor-donor, so impossible
-    # XIV and XV are both CC in tWW but donor-donor, so impossible
-    ("UU", "cWW"): "XVI",
-    ("TT", "cWW"): "XVI",
-    ("CU", "tWW"): "XVII",
-    ("UC", "tWW"): "XVII",
-    ("CU", "cWW"): "XVIII",
-    ("UC", "cWW"): "XVIII",
-    ("CG", "cWW"): "XIX",
-    ("GC", "cWW"): "XIX",
-    ("AU", "cWW"): "XX",
-    ("UA", "cWW"): "XX",
-    ("AT", "cWW"): "XX",
-    ("TA", "cWW"): "XX",
-    ("AU", "tWW"): "XXI",
-    ("UA", "tWW"): "XXI",
-    ("AT", "tWW"): "XXI",
-    ("TA", "tWW"): "XXI",
-    ("CG", "tWW"): "XXII",
-    ("GC", "tWW"): "XXII",
-    ("AU", "cHW"): "XXIII",
-    ("UA", "cWH"): "XXIII",
-    ("AT", "cHW"): "XXIII",
-    ("TA", "cWH"): "XXIII",
-    ("AU", "tHW"): "XXIV",
-    ("UA", "tWH"): "XXIV",
-    ("AT", "tHW"): "XXIV",
-    ("TA", "tWH"): "XXIV",
-    ("AC", "tHW"): "XXV",
-    ("CA", "tWH"): "XXV",
-    ("AC", "tWW"): "XXVI",
-    ("CA", "tWW"): "XXVI",
-    ("GU", "tWW"): "XXVII",
-    ("UG", "tWW"): "XXVII",
-    ("GT", "tWW"): "XXVII",
-    ("TG", "tWW"): "XXVII",
-    ("GU", "cWW"): "XXVIII",
-    ("UG", "cWW"): "XXVIII",
-    ("GT", "cWW"): "XXVIII",
-    ("TG", "cWW"): "XXVIII",
+    "C": {
+        "O2": "WS",
+        "N3": "W",
+        "N4": "WH",
+        "C5": "H",
+        "C6": "H",
+        "O2'": "S",
+    },
+    "U": {
+        "O2": "WS",
+        "N3": "W",
+        "O4": "WH",
+        "C5": "H",
+        "C6": "H",
+        "O2'": "S",
+    },
+    "T": {
+        "O2": "WS",
+        "N3": "W",
+        "O4": "WH",
+        "C6": "H",
+        "C7": "H",
+    },
 }
 
 
-class GlycosidicBond(Enum):
-    anti = "anti"
-    syn = "syn"
-
-
-class Molecule(Enum):
-    DNA = "DNA"
-    RNA = "RNA"
-    Other = "Other"
-
-
-class LeontisWesthof(Enum):
-    cWW = "cWW"
-    cWH = "cWH"
-    cWS = "cWS"
-    cHW = "cHW"
-    cHH = "cHH"
-    cHS = "cHS"
-    cSW = "cSW"
-    cSH = "cSH"
-    cSS = "cSS"
-    tWW = "tWW"
-    tWH = "tWH"
-    tWS = "tWS"
-    tHW = "tHW"
-    tHH = "tHH"
-    tHS = "tHS"
-    tSW = "tSW"
-    tSH = "tSH"
-    tSS = "tSS"
-
-
-class Saenger(Enum):
-    I = "I"
-    II = "II"
-    III = "III"
-    IV = "IV"
-    V = "V"
-    VI = "VI"
-    VII = "VII"
-    VIII = "VIII"
-    IX = "IX"
-    X = "X"
-    XI = "XI"
-    XII = "XII"
-    XIII = "XIII"
-    XIV = "XIV"
-    XV = "XV"
-    XVI = "XVI"
-    XVII = "XVII"
-    XVIII = "XVIII"
-    XIX = "XIX"
-    XX = "XX"
-    XXI = "XXI"
-    XXII = "XXII"
-    XXIII = "XXIII"
-    XXIV = "XXIV"
-    XXV = "XXV"
-    XXVI = "XXVI"
-    XXVII = "XXVII"
-    XXVIII = "XXVIII"
-
-
-class StackingTopology(Enum):
-    upward = "upward"
-    downward = "downward"
-    inward = "inward"
-    outward = "outward"
-
-
-class BR(Enum):
-    _0 = "0BR"
-    _1 = "1BR"
-    _2 = "2BR"
-    _3 = "3BR"
-    _4 = "4BR"
-    _5 = "5BR"
-    _6 = "6BR"
-    _7 = "7BR"
-    _8 = "8BR"
-    _9 = "9BR"
-
-
-class BPh(Enum):
-    _0 = "0BPh"
-    _1 = "1BPh"
-    _2 = "2BPh"
-    _3 = "3BPh"
-    _4 = "4BPh"
-    _5 = "5BPh"
-    _6 = "6BPh"
-    _7 = "7BPh"
-    _8 = "8BPh"
-    _9 = "9BPh"
-
-
 @dataclass(frozen=True)
-class ResidueLabel:
-    chain: str
-    number: int
-    name: str
-
-
-@dataclass(frozen=True)
-class ResidueAuth:
-    chain: str
-    number: int
-    icode: Optional[str]
-    name: str
-
-
-@dataclass
-class Residue:
-    label: Optional[ResidueLabel]
-    auth: Optional[ResidueAuth]
-
-    def __post_init__(self):
-        if isinstance(self.label, dict):
-            self.label = ResidueLabel(**self.label)
-        if isinstance(self.auth, dict):
-            self.auth = ResidueAuth(**self.auth)
-
-
-@dataclass(frozen=True)
-class Atom3D:
+class Atom:
     label: Optional[ResidueLabel]
     auth: Optional[ResidueAuth]
     model: int
-    atomName: str
+    name: str
     x: float
     y: float
     z: float
@@ -259,14 +107,11 @@ class Atom3D:
 
 
 @dataclass(order=True)
-class Residue3D:
+class Residue3D(Residue):
     index: int
-    name: str
-    one_letter_name: str
     model: int
-    label: Optional[ResidueLabel]
-    auth: Optional[ResidueAuth]
-    atoms: Tuple[Atom3D, ...]
+    one_letter_name: str
+    atoms: Tuple[Atom, ...]
 
     # Dict representing expected name of atom involved in glycosidic bond
     outermost_atoms = {"A": "N9", "G": "N9", "C": "N1", "U": "N1", "T": "N1"}
@@ -278,60 +123,6 @@ class Residue3D:
 
     def __repr__(self):
         return f"{self.full_name}"
-
-    @property
-    def chain(self) -> str:
-        if self.auth is not None:
-            return self.auth.chain
-        if self.label is not None:
-            return self.label.chain
-        raise RuntimeError(
-            "Unknown chain name, both ResidueAuth and ResidueLabel are empty"
-        )
-
-    @property
-    def number(self) -> int:
-        if self.auth is not None:
-            return self.auth.number
-        if self.label is not None:
-            return self.label.number
-        raise RuntimeError(
-            "Unknown residue number, both ResidueAuth and ResidueLabel are empty"
-        )
-
-    @property
-    def icode(self) -> Optional[str]:
-        if self.auth is not None:
-            return self.auth.icode if self.auth.icode not in (" ", "?") else None
-        return None
-
-    @property
-    def molecule_type(self) -> Molecule:
-        if self.name.upper() in ("A", "C", "G", "U"):
-            return Molecule.RNA
-        if self.name.upper() in ("DA", "DC", "DG", "DT"):
-            return Molecule.DNA
-        return Molecule.Other
-
-    @property
-    def full_name(self) -> str:
-        if self.auth is not None:
-            builder = f"{self.auth.chain}.{self.auth.name}"
-            if self.auth.name[-1] in string.digits:
-                builder += "/"
-            builder += f"{self.auth.number}"
-            if self.auth.icode:
-                builder += f"^{self.auth.icode}"
-            return builder
-        elif self.label is not None:
-            builder = f"{self.label.chain}.{self.label.name}"
-            if self.label.name[-1] in string.digits:
-                builder += "/"
-            builder += f"{self.label.number}"
-            return builder
-        raise RuntimeError(
-            "Unknown full residue name, both ResidueAuth and ResidueLabel are empty"
-        )
 
     @property
     def chi(self) -> float:
@@ -355,17 +146,17 @@ class Residue3D:
         return GlycosidicBond.anti
 
     @property
-    def outermost_atom(self) -> Atom3D:
+    def outermost_atom(self) -> Atom:
         return next(filter(None, self.__outer_generator()))
 
     @property
-    def innermost_atom(self) -> Atom3D:
+    def innermost_atom(self) -> Atom:
         return next(filter(None, self.__inner_generator()))
 
     @property
     def is_nucleotide(self) -> bool:
         return len(self.atoms) > 1 and any(
-            [atom for atom in self.atoms if atom.atomName == "C1'"]
+            [atom for atom in self.atoms if atom.name == "C1'"]
         )
 
     @property
@@ -389,9 +180,9 @@ class Residue3D:
         normal: numpy.typing.NDArray[numpy.floating] = numpy.cross(v1, v2)
         return normal / numpy.linalg.norm(normal)
 
-    def find_atom(self, atom_name: str) -> Optional[Atom3D]:
+    def find_atom(self, atom_name: str) -> Optional[Atom]:
         for atom in self.atoms:
-            if atom.atomName == atom_name:
+            if atom.name == atom_name:
                 return atom
         return None
 
@@ -438,7 +229,7 @@ class Residue3D:
         logging.error(
             f"Failed to determine the outermost atom for nucleotide {self}, so an arbitrary atom will be used"
         )
-        yield Atom3D(self.label, self.auth, self.model, "UNK", 0.0, 0.0, 0.0)
+        yield Atom(self.label, self.auth, self.model, "UNK", 0.0, 0.0, 0.0)
 
     def __inner_generator(self):
         # try to find expected atom name
@@ -466,104 +257,13 @@ class Residue3D:
         logging.error(
             f"Failed to determine the innermost atom for nucleotide {self}, so an arbitrary atom will be used"
         )
-        yield Atom3D(self.label, self.auth, self.model, "UNK", 0.0, 0.0, 0.0)
+        yield Atom(self.label, self.auth, self.model, "UNK", 0.0, 0.0, 0.0)
 
 
 @dataclass
-class Interaction:
-    nt1: Residue
-    nt2: Residue
-
-    def __post_init__(self):
-        if isinstance(self.nt1, dict):
-            self.nt1 = Residue(**self.nt1)
-        if isinstance(self.nt2, dict):
-            self.nt2 = Residue(**self.nt2)
-
-
-@dataclass
-class BasePair(Interaction):
-    lw: LeontisWesthof
-    saenger: Optional[Saenger]
-
-    def __post_init__(self):
-        super(BasePair, self).__post_init__()
-        if isinstance(self.lw, str):
-            self.lw = LeontisWesthof[self.lw]
-        if isinstance(self.saenger, str):
-            self.saenger = Saenger[self.saenger]
-
-
-@dataclass
-class Stacking(Interaction):
-    topology: Optional[StackingTopology]
-
-    def __post_init__(self):
-        super(Stacking, self).__post_init__()
-        if isinstance(self.topology, str):
-            self.topology = StackingTopology[self.topology]
-
-
-@dataclass
-class BaseRibose(Interaction):
-    br: Optional[BR]
-
-    def __post_init__(self):
-        super(BaseRibose, self).__post_init__()
-        if isinstance(self.br, str):
-            self.br = BR[self.br]
-
-
-@dataclass
-class BasePhosphate(Interaction):
-    bph: Optional[BPh]
-
-    def __post_init__(self):
-        super(BasePhosphate, self).__post_init__()
-        if isinstance(self.bph, str):
-            self.bph = BPh[self.bph]
-
-
-@dataclass
-class OtherInteraction(Interaction):
-    def __post_init__(self):
-        super(OtherInteraction, self).__post_init__()
-
-
-@dataclass
-class Structure2D:
-    basePairs: List[BasePair]
-    stackings: List[Stacking]
-    baseRiboseInteractions: List[BaseRibose]
-    basePhosphateInteractions: List[BasePhosphate]
-    otherInteractions: List[OtherInteraction]
-
-    def __post_init__(self):
-        self.basePairs = [
-            BasePair(**x) if isinstance(x, dict) else x for x in self.basePairs
-        ]
-        self.stackings = [
-            Stacking(**x) if isinstance(x, dict) else x for x in self.stackings
-        ]
-        self.baseRiboseInteractions = [
-            BaseRibose(**x) if isinstance(x, dict) else x
-            for x in self.baseRiboseInteractions
-        ]
-        self.basePhosphateInteractions = [
-            BasePhosphate(**x) if isinstance(x, dict) else x
-            for x in self.basePhosphateInteractions
-        ]
-        self.otherInteractions = [
-            OtherInteraction(**x) if isinstance(x, dict) else x
-            for x in self.otherInteractions
-        ]
-
-
-@dataclass(frozen=True)
-class BasePair3D:
-    nt1: Residue3D
-    nt2: Residue3D
-    lw: LeontisWesthof
+class BasePair3D(BasePair):
+    nt1_3d: Residue3D
+    nt2_3d: Residue3D
 
     score_table = {
         LeontisWesthof.cWW: 1,
@@ -589,7 +289,14 @@ class BasePair3D:
     @property
     def reverse(self):
         lw = f"{self.lw.name[0]}{self.lw.name[2]}{self.lw.name[1]}"
-        return BasePair3D(self.nt2, self.nt1, LeontisWesthof[lw])
+        return BasePair3D(
+            self.nt2,
+            self.nt1,
+            LeontisWesthof[lw],
+            self.saenger,
+            self.nt2_3d,
+            self.nt1_3d,
+        )
 
     @property
     def score(self) -> int:
@@ -597,16 +304,24 @@ class BasePair3D:
 
     @property
     def is_canonical(self) -> bool:
+        if self.saenger is not None:
+            return self.saenger.is_canonical
+
         nts = "".join(
-            sorted([self.nt1.one_letter_name.upper(), self.nt2.one_letter_name.upper()])
+            sorted(
+                [
+                    self.nt1_3d.one_letter_name.upper(),
+                    self.nt2_3d.one_letter_name.upper(),
+                ]
+            )
         )
         return self.lw == LeontisWesthof.cWW and (
             nts == "AU" or nts == "AT" or nts == "CG" or nts == "GU"
         )
 
     def conflicts_with(self, other) -> bool:
-        xi, yi = sorted([self.nt1.index, self.nt2.index])
-        xj, yj = sorted([other.nt1.index, other.nt2.index])
+        xi, yi = sorted([self.nt1_3d.index, self.nt2_3d.index])
+        xj, yj = sorted([other.nt1_3d.index, other.nt2_3d.index])
         return xi < xj < yi < yj or xj < xi < yj < yi
 
     def in_tetrad(self, analysis) -> bool:
@@ -626,9 +341,9 @@ class BasePair3D:
 
 
 @dataclass
-class Stacking3D:
-    nt1: Residue3D
-    nt2: Residue3D
+class Stacking3D(Stacking):
+    nt1_3d: Residue3D
+    nt2_3d: Residue3D
 
 
 @dataclass
@@ -653,61 +368,66 @@ class Structure3D:
             return self.residue_map.get(auth)
         return None
 
-    def base_pairs(self, structure2d: Structure2D) -> List[BasePair3D]:
-        result = []
-        for base_pair in structure2d.basePairs:
-            nt1 = self.find_residue(base_pair.nt1.label, base_pair.nt1.auth)
-            nt2 = self.find_residue(base_pair.nt2.label, base_pair.nt2.auth)
-            if nt1 is not None and nt2 is not None:
-                result.append(BasePair3D(nt1, nt2, base_pair.lw))
-        return result
+    # FIXME
+    # def base_pairs(self, structure2d: Structure2D) -> List[BasePair3D]:
+    #     result = []
+    #     for base_pair in structure2d.basePairs:
+    #         nt1 = self.find_residue(base_pair.nt1.label, base_pair.nt1.auth)
+    #         nt2 = self.find_residue(base_pair.nt2.label, base_pair.nt2.auth)
+    #         if nt1 is not None and nt2 is not None:
+    #             result.append(BasePair3D(nt1, nt2, base_pair.lw))
+    #     return result
 
-    def base_pair_graph(
-        self, structure2d: Structure2D, strict: bool = False
-    ) -> Dict[Residue3D, Set[Residue3D]]:
-        graph = defaultdict(set)
-        for pair in self.base_pairs(structure2d):
-            if strict and pair.lw not in (LeontisWesthof.cWH, LeontisWesthof.cHW):
-                continue
-            graph[pair.nt1].add(pair.nt2)
-            graph[pair.nt2].add(pair.nt1)
-        return graph
+    # FIXME
+    # def base_pair_graph(
+    #     self, structure2d: Structure2D, strict: bool = False
+    # ) -> Dict[Residue3D, Set[Residue3D]]:
+    #     graph = defaultdict(set)
+    #     for pair in self.base_pairs(structure2d):
+    #         if strict and pair.lw not in (LeontisWesthof.cWH, LeontisWesthof.cHW):
+    #             continue
+    #         graph[pair.nt1].add(pair.nt2)
+    #         graph[pair.nt2].add(pair.nt1)
+    #     return graph
 
-    def base_pair_dict(
-        self, structure2d: Structure2D, strict: bool = False
-    ) -> Dict[Tuple[Residue3D, Residue3D], BasePair3D]:
-        result = {}
-        for pair in self.base_pairs(structure2d):
-            if strict and pair.lw not in (LeontisWesthof.cWH, LeontisWesthof.cHW):
-                continue
-            result[(pair.nt1, pair.nt2)] = pair
-        return result
+    # FIXME
+    # def base_pair_dict(
+    #     self, structure2d: Structure2D, strict: bool = False
+    # ) -> Dict[Tuple[Residue3D, Residue3D], BasePair3D]:
+    #     result = {}
+    #     for pair in self.base_pairs(structure2d):
+    #         if strict and pair.lw not in (LeontisWesthof.cWH, LeontisWesthof.cHW):
+    #             continue
+    #         result[(pair.nt1, pair.nt2)] = pair
+    #     return result
 
-    def stackings(self, structure2d: Structure2D) -> List[Stacking3D]:
-        result = []
-        for stacking in structure2d.stackings:
-            nt1 = self.find_residue(stacking.nt1.label, stacking.nt1.auth)
-            nt2 = self.find_residue(stacking.nt2.label, stacking.nt2.auth)
-            if nt1 is not None and nt2 is not None:
-                result.append(Stacking3D(nt1, nt2))
-        return result
+    # FIXME
+    # def stackings(self, structure2d: Structure2D) -> List[Stacking3D]:
+    #     result = []
+    #     for stacking in structure2d.stackings:
+    #         nt1 = self.find_residue(stacking.nt1.label, stacking.nt1.auth)
+    #         nt2 = self.find_residue(stacking.nt2.label, stacking.nt2.auth)
+    #         if nt1 is not None and nt2 is not None:
+    #             result.append(Stacking3D(nt1, nt2))
+    #     return result
 
-    def stacking_graph(
-        self, structure2d: Structure2D
-    ) -> Dict[Residue3D, Set[Residue3D]]:
-        graph = defaultdict(set)
-        for pair in self.stackings(structure2d):
-            graph[pair.nt1].add(pair.nt2)
-            graph[pair.nt2].add(pair.nt1)
-        return graph
+    # FIXME
+    # def stacking_graph(
+    #     self, structure2d: Structure2D
+    # ) -> Dict[Residue3D, Set[Residue3D]]:
+    #     graph = defaultdict(set)
+    #     for pair in self.stackings(structure2d):
+    #         graph[pair.nt1].add(pair.nt2)
+    #         graph[pair.nt2].add(pair.nt1)
+    #     return graph
 
-    def stacking_dict(
-        self, structure2d: Structure2D
-    ) -> Dict[Tuple[Residue3D, Residue3D], Stacking3D]:
-        result = {}
-        for pair in self.stackings(structure2d):
-            result[(pair.nt1, pair.nt2)] = pair
-        return result
+    # def stacking_dict(
+    #     self, structure2d: Structure2D
+    # ) -> Dict[Tuple[Residue3D, Residue3D], Stacking3D]:
+    #     result = {}
+    #     for pair in self.stackings(structure2d):
+    #         result[(pair.nt1, pair.nt2)] = pair
+    #     return result
 
 
 def read_3d_structure(cif_or_pdb: IO[str], model: int) -> Structure3D:
@@ -729,7 +449,7 @@ def is_cif(cif_or_pdb: IO[str]) -> bool:
 def parse_cif(
     cif: IO[str],
 ) -> Tuple[
-    List[Atom3D],
+    List[Atom],
     Dict[Union[ResidueLabel, ResidueAuth], str],
     Dict[Tuple[str, int], str],
 ]:
@@ -737,7 +457,7 @@ def parse_cif(
 
     io_adapter = IoAdapterPy()
     data = io_adapter.readFile(cif.name)
-    atoms: List[Atom3D] = []
+    atoms: List[Atom] = []
     modified: Dict[Union[ResidueLabel, ResidueAuth], str] = {}
     sequence = {}
 
@@ -795,7 +515,7 @@ def parse_cif(
                 x = float(row_dict["Cartn_x"])
                 y = float(row_dict["Cartn_y"])
                 z = float(row_dict["Cartn_z"])
-                atoms.append(Atom3D(label, auth, model, atom_name, x, y, z))
+                atoms.append(Atom(label, auth, model, atom_name, x, y, z))
 
         if mod_residue:
             for row in mod_residue.getRowList():
@@ -858,12 +578,12 @@ def parse_cif(
 def parse_pdb(
     pdb: IO[str],
 ) -> Tuple[
-    List[Atom3D],
+    List[Atom],
     Dict[Union[ResidueLabel, ResidueAuth], str],
     Dict[Tuple[str, int], str],
 ]:
     pdb.seek(0)
-    atoms: List[Atom3D] = []
+    atoms: List[Atom] = []
     modified: Dict[Union[ResidueLabel, ResidueAuth], str] = {}
     model = 1
 
@@ -885,7 +605,7 @@ def parse_pdb(
             auth = ResidueAuth(
                 chain_identifier, residue_number, insertion_code, residue_name
             )
-            atoms.append(Atom3D(None, auth, model, atom_name, x, y, z))
+            atoms.append(Atom(None, auth, model, atom_name, x, y, z))
         elif line.startswith("MODRES"):
             original_name = line[12:15]
             chain_identifier = line[16]
@@ -901,7 +621,7 @@ def parse_pdb(
 
 
 def group_atoms(
-    atoms: List[Atom3D],
+    atoms: List[Atom],
     modified: Dict[Union[ResidueLabel, ResidueAuth], str],
     sequence: Dict[Tuple[str, int], str],
 ) -> Structure3D:
@@ -927,13 +647,7 @@ def group_atoms(
                 one_letter_name = detect_one_letter_name(residue_atoms)
             residues.append(
                 Residue3D(
-                    index,
-                    name,
-                    one_letter_name,
-                    model,
-                    label,
-                    auth,
-                    tuple(residue_atoms),
+                    label, auth, index, model, one_letter_name, tuple(residue_atoms)
                 )
             )
             index += 1
@@ -948,10 +662,9 @@ def group_atoms(
     if one_letter_name not in "ACGUT":
         one_letter_name = detect_one_letter_name(residue_atoms)
     residues.append(
-        Residue3D(
-            index, name, one_letter_name, model, label, auth, tuple(residue_atoms)
-        )
+        Residue3D(label, auth, index, model, one_letter_name, tuple(residue_atoms))
     )
+
     return Structure3D(residues)
 
 
@@ -996,8 +709,8 @@ def get_one_letter_name(
     return "n"
 
 
-def detect_one_letter_name(atoms: List[Atom3D]) -> str:
-    atom_names_present = {atom.atomName for atom in atoms}
+def detect_one_letter_name(atoms: List[Atom]) -> str:
+    atom_names_present = {atom.name for atom in atoms}
     score = {}
     for candidate in "ACGUT":
         atom_names_expected = BASE_ATOMS[candidate]
@@ -1014,17 +727,3 @@ def try_parse_int(s: str) -> Optional[int]:
         return int(s)
     except:
         return None
-
-
-def torsion_angle(a1: Atom3D, a2: Atom3D, a3: Atom3D, a4: Atom3D) -> float:
-    v1 = a2.coordinates - a1.coordinates
-    v2 = a3.coordinates - a2.coordinates
-    v3 = a4.coordinates - a3.coordinates
-    t1: numpy.typing.NDArray[numpy.floating] = numpy.cross(v1, v2)
-    t2: numpy.typing.NDArray[numpy.floating] = numpy.cross(v2, v3)
-    t3: numpy.typing.NDArray[numpy.floating] = v1 * numpy.linalg.norm(v2)
-    return math.atan2(numpy.dot(t2, t3), numpy.dot(t1, t2))
-
-
-def angle_between_vectors(v1, v2) -> float:
-    return math.acos(numpy.dot(v1, v2) / numpy.linalg.norm(v1) / numpy.linalg.norm(v2))

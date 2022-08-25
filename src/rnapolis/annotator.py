@@ -9,32 +9,27 @@ import numpy.linalg
 import orjson
 from scipy.spatial import KDTree
 
-from rnapolis.structure import (
+from rnapolis.common import LeontisWesthof, Saenger, Residue, BPh, BR, StackingTopology
+from rnapolis.secondary import (
+    BasePair,
+    BasePhosphate,
+    BaseRibose,
+    Stacking,
+    Structure2D,
+)
+from rnapolis.tertiary import (
     BASE_ACCEPTORS,
     BASE_ATOMS,
     BASE_DONORS,
     BASE_EDGES,
-    BR,
     PHOSPHATE_ACCEPTORS,
     RIBOSE_ACCEPTORS,
-    SAENGER_RULES,
-    Atom3D,
-    BasePair,
-    BasePhosphate,
-    BaseRibose,
-    BPh,
-    LeontisWesthof,
-    Residue,
+    Atom,
     Residue3D,
-    Saenger,
-    Stacking,
-    StackingTopology,
-    Structure2D,
     Structure3D,
-    angle_between_vectors,
     read_3d_structure,
-    torsion_angle,
 )
+from rnapolis.utils import torsion_angle, angle_between_vectors
 
 HYDROGEN_BOND_MAX_DISTANCE = 3.5
 HYDROGEN_BOND_MAX_PLANAR_DISTANCE = HYDROGEN_BOND_MAX_DISTANCE / 2.0
@@ -43,9 +38,7 @@ STACKING_MAX_ANGLE_BETWEEN_NORMALS = 35.0
 STACKING_MAX_ANGLE_BETWEEN_VECTOR_AND_NORMAL = 45.0
 
 
-def compute_planar_distance(
-    residue_i: Residue3D, atom_i: Atom3D, atom_j: Atom3D
-) -> float:
+def compute_planar_distance(residue_i: Residue3D, atom_i: Atom, atom_j: Atom) -> float:
     normal_i = residue_i.base_normal_vector
     if normal_i is None:
         return math.inf
@@ -79,65 +72,65 @@ def detect_saenger(
     residue_i: Residue3D, residue_j: Residue3D, lw: LeontisWesthof
 ) -> Optional[Saenger]:
     key = (f"{residue_i.one_letter_name}{residue_j.one_letter_name}", lw.value)
-    if key in SAENGER_RULES:
-        return Saenger[SAENGER_RULES[key]]
+    if key in Saenger.table():
+        return Saenger[Saenger.table()[key]]
     return None
 
 
 def detect_bph_br_classification(
-    donor_residue: Residue3D, donor: Atom3D, acceptor: Atom3D
+    donor_residue: Residue3D, donor: Atom, acceptor: Atom
 ) -> Optional[int]:
     # source: Classification and energetics of the base-phosphate interactions in RNA. Craig L. Zirbel, Judit E. Sponer, Jiri Sponer, Jesse Stombaugh and Neocles B. Leontis
     if donor_residue.one_letter_name == "A":
-        if donor.atomName == "C2":
+        if donor.name == "C2":
             return 2
-        if donor.atomName == "N6":
+        if donor.name == "N6":
             n1 = donor_residue.find_atom("N1")
             c6 = donor_residue.find_atom("C6")
             if n1 is not None and c6 is not None:
                 torsion = math.degrees(torsion_angle(n1, c6, donor, acceptor))
                 return 6 if -90.0 < torsion < 90.0 else 7
-        if donor.atomName == "C8":
+        if donor.name == "C8":
             return 0
 
     if donor_residue.one_letter_name == "G":
-        if donor.atomName == "N1":
+        if donor.name == "N1":
             return 5
-        if donor.atomName == "N2":
+        if donor.name == "N2":
             n3 = donor_residue.find_atom("N3")
             c2 = donor_residue.find_atom("C2")
             if n3 is not None and c2 is not None:
                 torsion = math.degrees(torsion_angle(n3, c2, donor, acceptor))
                 return 1 if -90.0 < torsion < 90.0 else 3
-        if donor.atomName == "C8":
+        if donor.name == "C8":
             return 0
 
     if donor_residue.one_letter_name == "C":
-        if donor.atomName == "N4":
+        if donor.name == "N4":
             n3 = donor_residue.find_atom("N3")
             c4 = donor_residue.find_atom("C4")
             if n3 is not None and c4 is not None:
                 torsion = math.degrees(torsion_angle(n3, c4, donor, acceptor))
                 return 6 if -90.0 < torsion < 90.0 else 7
-        if donor.atomName == "C5":
+        if donor.name == "C5":
             return 9
-        if donor.atomName == "C6":
+        if donor.name == "C6":
             return 0
 
     if donor_residue.one_letter_name == "U":
-        if donor.atomName == "N3":
+        if donor.name == "N3":
             return 5
-        if donor.atomName == "C5":
+        if donor.name == "C5":
             return 9
-        if donor.atomName == "C6":
+        if donor.name == "C6":
             return 0
 
     if donor_residue.one_letter_name == "T":
-        if donor.atomName == "N3":
+        if donor.name == "N3":
             return 5
-        if donor.atomName == "C6":
+        if donor.name == "C6":
             return 0
-        if donor.atomName == "C7":
+        if donor.name == "C7":
             return 9
 
     return None
@@ -168,9 +161,9 @@ def find_pairs(
 ) -> Tuple[List[BasePair], List[BasePhosphate], List[BaseRibose]]:
     # put all donors and acceptors into a KDTree
     coordinates = []
-    coordinates_atom_map = {}
-    coordinates_type_map = {}
-    coordinates_residue_map = {}
+    coordinates_atom_map: Dict[Tuple[float, float, float], Atom] = {}
+    coordinates_type_map: Dict[Tuple[float, float, float], str] = {}
+    coordinates_residue_map: Dict[Tuple[float, float, float], Residue3D] = {}
     for residue in structure.residues:
         acceptors = (
             BASE_ACCEPTORS.get(residue.one_letter_name, [])
@@ -223,10 +216,7 @@ def find_pairs(
         residue_j = coordinates_residue_map[coordinates[j]]
 
         # check for base-phosphate contacts
-        if (
-            atom_i.atomName in PHOSPHATE_ACCEPTORS
-            or atom_j.atomName in PHOSPHATE_ACCEPTORS
-        ):
+        if atom_i.name in PHOSPHATE_ACCEPTORS or atom_j.name in PHOSPHATE_ACCEPTORS:
             if type_i == "donor":
                 donor_residue, acceptor_residue = residue_i, residue_j
                 donor_atom, acceptor_atom = atom_i, atom_j
@@ -244,7 +234,7 @@ def find_pairs(
             continue
 
         # check for base-ribose contacts
-        if atom_i.atomName in RIBOSE_ACCEPTORS or atom_j.atomName in RIBOSE_ACCEPTORS:
+        if atom_i.name in RIBOSE_ACCEPTORS or atom_j.name in RIBOSE_ACCEPTORS:
             if type_i == "donor":
                 donor_residue, acceptor_residue = residue_i, residue_j
                 donor_atom, acceptor_atom = atom_i, atom_j
@@ -280,10 +270,10 @@ def find_pairs(
             continue
 
         edges_i = BASE_EDGES.get(residue_i.one_letter_name, dict()).get(
-            atom_i.atomName, None
+            atom_i.name, None
         )
         edges_j = BASE_EDGES.get(residue_j.one_letter_name, dict()).get(
-            atom_j.atomName, None
+            atom_j.name, None
         )
         if edges_i is None or edges_j is None:
             continue
@@ -367,7 +357,7 @@ def find_pairs(
 def find_stackings(structure: Structure3D) -> List[Stacking]:
     # put all nitrogen ring centers into a KDTree
     coordinates = []
-    coordinates_residue_map = {}
+    coordinates_residue_map: Dict[Tuple[float, float, float], Residue3D] = {}
     for residue in structure.residues:
         base_atoms = BASE_ATOMS.get(residue.one_letter_name, [])
         xs, ys, zs = [], [], []
