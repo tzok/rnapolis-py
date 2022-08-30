@@ -544,7 +544,10 @@ def main():
     if args.bpseq:
         write_bpseq(args.bpseq, mapping)
 
-    print(mapping.dot_bracket)
+    if args.extended:
+        print(mapping.extended_dot_bracket)
+    else:
+        print(mapping.dot_bracket)
 
 
 if __name__ == "__main__":
