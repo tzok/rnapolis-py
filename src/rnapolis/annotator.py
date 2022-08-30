@@ -1,5 +1,6 @@
 #! /usr/bin/env python
 import argparse
+import csv
 import math
 from collections import Counter, defaultdict
 from typing import IO, Dict, List, Optional, Tuple
@@ -443,13 +444,87 @@ def extract_secondary_structure(
     return Structure2D(base_pairs, stackings, base_ribose, base_phosphate, [])
 
 
+def write_json(path: str, structure2d: Structure2D):
+    with open(path, "wb") as f:
+        f.write(orjson.dumps(structure2d))
+
+
+def write_csv(path: str, structure2d: Structure2D):
+    with open(path, "w") as f:
+        writer = csv.writer(f)
+        writer.writerow(["nt1", "nt2", "type", "classification-1", "classification-2"])
+        for base_pair in structure2d.basePairs:
+            writer.writerow(
+                [
+                    base_pair.nt1.full_name,
+                    base_pair.nt2.full_name,
+                    "base pair",
+                    base_pair.lw.value,
+                    base_pair.saenger.value or ""
+                    if base_pair.saenger is not None
+                    else "",
+                ]
+            )
+        for stacking in structure2d.stackings:
+            writer.writerow(
+                [
+                    stacking.nt1.full_name,
+                    stacking.nt2.full_name,
+                    "stacking",
+                    stacking.topology.value if stacking.topology is not None else "",
+                    "",
+                ]
+            )
+        for base_phosphate in structure2d.basePhosphateInteractions:
+            writer.writerow(
+                [
+                    base_phosphate.nt1.full_name,
+                    base_phosphate.nt2.full_name,
+                    "base-phosphate interaction",
+                    base_phosphate.bph.value if base_phosphate.bph is not None else "",
+                    "",
+                ]
+            )
+        for base_ribose in structure2d.basePhosphateInteractions:
+            writer.writerow(
+                [
+                    base_ribose.nt1.full_name,
+                    base_ribose.nt2.full_name,
+                    "base-ribose interaction",
+                    base_ribose.bph.value if base_ribose.bph is not None else "",
+                    "",
+                ]
+            )
+        for other in structure2d.otherInteractions:
+            writer.writerow(
+                [
+                    other.nt1.full_name,
+                    other.nt2.full_name,
+                    "other interaction",
+                    "",
+                    "",
+                ]
+            )
+
+
+def write_bpseq(path: str, mapping: Mapping2D3D):
+    with open(path, "w") as f:
+        f.write(mapping.bpseq)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("input", help="Path to PDB or mmCIF file")
+    parser.add_argument("--bpseq", help="(optional) path to output BPSEQ file")
+    parser.add_argument("--csv", help="(optional) path to output CSV file")
     parser.add_argument(
         "--json",
-        help="If set, the output will be a JSON-formatted list of all RNA interactions. "
-        "Otherwise, the output will be the dot-bracket notation of the 2D canonical structure",
+        help="(optional) path to output JSON file",
+    )
+    parser.add_argument(
+        "--extended",
+        action="store_true",
+        help="(optional) if set, the program will print extended secondary structure to the standard output",
     )
     args = parser.parse_args()
 
@@ -458,11 +533,18 @@ def main():
 
     structure2d = extract_secondary_structure(structure3d)
 
+    if args.csv:
+        write_csv(args.csv, structure2d)
+
     if args.json:
-        print(orjson.dumps(structure2d).decode("utf-8"))
-    else:
-        mapping = Mapping2D3D(structure3d, structure2d)
-        print(mapping.dot_bracket)
+        write_json(args.json, structure2d)
+
+    mapping = Mapping2D3D(structure3d, structure2d)
+
+    if args.bpseq:
+        write_bpseq(args.bpseq, mapping)
+
+    print(mapping.dot_bracket)
 
 
 if __name__ == "__main__":
