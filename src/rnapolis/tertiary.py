@@ -440,6 +440,29 @@ class Mapping2D3D:
         return {chain: "".join(sequence) for chain, sequence in chains.items()}
 
     @property
+    def bpseq(self) -> str:
+        result: Dict[int, List] = {}
+        residue_map: Dict[Residue3D, int] = {}
+        i = 1
+        for residue in self.structure3d.residues:
+            if residue.is_nucleotide:
+                result[i] = [i, residue.one_letter_name, 0]
+                residue_map[residue] = i
+                i += 1
+
+        for base_pair in self.base_pairs:
+            if not base_pair.is_canonical:
+                continue
+            j = residue_map.get(base_pair.nt1_3d, None)
+            k = residue_map.get(base_pair.nt2_3d, None)
+            if j is None or k is None or j > k:
+                continue
+            result[j][2] = k
+            result[k][2] = j
+
+        return "\n".join([" ".join(map(str, line)) for line in result.values()])
+
+    @property
     def dot_bracket(self) -> str:
         dbn = []
         residue_map: Dict[Residue3D, int] = {}
@@ -454,11 +477,11 @@ class Mapping2D3D:
         for base_pair in self.base_pairs:
             if not base_pair.is_canonical:
                 continue
-            i = residue_map.get(base_pair.nt1_3d, None)
-            j = residue_map.get(base_pair.nt2_3d, None)
-            if i is None or j is None or i > j:
+            j = residue_map.get(base_pair.nt1_3d, None)
+            k = residue_map.get(base_pair.nt2_3d, None)
+            if j is None or k is None or j > k:
                 continue
-            pairs.append((i, j))
+            pairs.append((j, k))
 
         queue = list(pairs)
         removed: List[Tuple[int, int]] = []
