@@ -1,3 +1,4 @@
+from functools import total_ordering
 import itertools
 import logging
 import math
@@ -46,7 +47,7 @@ BASE_ACCEPTORS = {
 
 PHOSPHATE_ACCEPTORS = ["OP1", "OP2", "O5'", "O3'"]
 
-RIBOSE_ACCEPTORS = ["O4'"]
+RIBOSE_ACCEPTORS = ["O4'", "O2'"]
 
 BASE_EDGES = {
     "A": {
@@ -92,6 +93,8 @@ BASE_EDGES = {
     },
 }
 
+AVERAGE_OXYGEN_PHOSPHORUS_DISTANCE_COVALENT = 1.6
+
 
 @dataclass(frozen=True, order=True)
 class Atom:
@@ -108,7 +111,8 @@ class Atom:
         return numpy.array([self.x, self.y, self.z])
 
 
-@dataclass(frozen=True, order=True)
+@dataclass(frozen=True)
+@total_ordering
 class Residue3D(Residue):
     model: int
     one_letter_name: str
@@ -118,6 +122,14 @@ class Residue3D(Residue):
     outermost_atoms = {"A": "N9", "G": "N9", "C": "N1", "U": "N1", "T": "N1"}
     # Dist representing expected name of atom closest to the tetrad center
     innermost_atoms = {"A": "N6", "G": "O6", "C": "N4", "U": "O4", "T": "O4"}
+
+    def __lt__(self, other):
+        return (self.model, self.chain, self.number, self.icode or " ") < (
+            other.model,
+            other.chain,
+            other.number,
+            other.icode or " ",
+        )
 
     def __hash__(self):
         return hash((self.name, self.model, self.label, self.auth, self.atoms))
@@ -186,6 +198,16 @@ class Residue3D(Residue):
             if atom.name == atom_name:
                 return atom
         return None
+
+    def is_connected(self, next_residue_candidate) -> bool:
+        o3p = self.find_atom("O3'")
+        p = next_residue_candidate.find_atom("P")
+
+        if o3p is not None and p is not None:
+            distance = numpy.linalg.norm(o3p.coordinates - p.coordinates).item()
+            return distance < 1.5 * AVERAGE_OXYGEN_PHOSPHORUS_DISTANCE_COVALENT
+
+        return False
 
     def __chi_purine(self) -> float:
         atoms = [
@@ -432,12 +454,41 @@ class Mapping2D3D:
         return graph
 
     @property
-    def chains_sequences(self) -> Dict[str, str]:
-        chains = defaultdict(list)
-        for residue in self.structure3d.residues:
-            if residue.is_nucleotide:
-                chains[residue.chain].append(residue.one_letter_name)
-        return {chain: "".join(sequence) for chain, sequence in chains.items()}
+    def strands_sequences(self) -> List[Tuple[str, str]]:
+        nucleotides = [
+            residue for residue in self.structure3d.residues if residue.is_nucleotide
+        ]
+
+        if len(nucleotides) == 0:
+            return []
+
+        result = []
+        strand = [nucleotides[0]]
+
+        for i in range(1, len(nucleotides)):
+            previous = strand[-1]
+            current = nucleotides[i]
+
+            if previous.chain == current.chain and previous.is_connected(current):
+                strand.append(current)
+            else:
+                result.append(
+                    (
+                        previous.chain,
+                        "".join([residue.one_letter_name for residue in strand]),
+                    )
+                )
+                strand = [current]
+
+        if len(strand) > 0:
+            result.append(
+                (
+                    strand[0].chain,
+                    "".join([residue.one_letter_name for residue in strand]),
+                )
+            )
+
+        return result
 
     @property
     def bpseq(self) -> str:
@@ -462,9 +513,9 @@ class Mapping2D3D:
 
         return "\n".join([" ".join(map(str, line)) for line in result.values()])
 
-    def __generate_dot_bracket_per_chain(
+    def __generate_dot_bracket_per_strand(
         self, base_pairs: List[BasePair3D]
-    ) -> Dict[str, str]:
+    ) -> List[str]:
         dbn = []
         residue_map: Dict[Residue3D, int] = {}
         i = 0
@@ -511,9 +562,9 @@ class Mapping2D3D:
             dbn[nt2] = closing[order]
 
         i = 0
-        result: Dict[str, str] = {}
-        for chain, sequence in self.chains_sequences.items():
-            result[chain] = "".join(dbn[i : i + len(sequence)])
+        result = []
+        for _, sequence in self.strands_sequences:
+            result.append("".join(dbn[i : i + len(sequence)]))
             i += len(sequence)
         return result
 
@@ -524,44 +575,48 @@ class Mapping2D3D:
             if base_pair.is_canonical:
                 base_pairs.append(base_pair)
 
-        chain_dbn = self.__generate_dot_bracket_per_chain(base_pairs)
+        dbns = self.__generate_dot_bracket_per_strand(base_pairs)
         i = 0
         result = []
 
-        for chain, sequence in self.chains_sequences.items():
+        for i, pair in enumerate(self.strands_sequences):
+            chain, sequence = pair
             result.append(f">strand_{chain}")
             result.append(sequence)
-            result.append(chain_dbn[chain])
+            result.append(dbns[i])
             i += len(sequence)
         return "\n".join(result)
 
     @property
     def extended_dot_bracket(self) -> str:
-        chain_lw_dbn: Dict[str, Dict[LeontisWesthof, str]] = defaultdict(dict)
+        strand_lw_dbn: List[Dict[LeontisWesthof, str]] = [
+            {} for _ in self.strands_sequences
+        ]
         for lw in LeontisWesthof:
             base_pairs = []
             for base_pair in self.base_pairs:
                 if base_pair.lw == lw:
                     base_pairs.append(base_pair)
 
-            chain_dbn = self.__generate_dot_bracket_per_chain(base_pairs)
-            for chain, dbn in chain_dbn.items():
-                chain_lw_dbn[chain][lw] = dbn
+            dbns = self.__generate_dot_bracket_per_strand(base_pairs)
+            for i in range(len(self.strands_sequences)):
+                strand_lw_dbn[i][lw] = dbns[i]
 
         nonempty = {lw: False for lw in LeontisWesthof}
         for lw in LeontisWesthof:
-            for chain in chain_lw_dbn:
-                if "(" in chain_lw_dbn[chain][lw]:
+            for i in range(len(strand_lw_dbn)):
+                if "(" in strand_lw_dbn[i][lw]:
                     nonempty[lw] = True
                     break
 
         result = []
-        for chain, sequence in self.chains_sequences.items():
+        for i, pair in enumerate(self.strands_sequences):
+            chain, sequence = pair
             result.append(f"    >strand_{chain}")
             result.append(f"seq {sequence}")
             for lw, flag in nonempty.items():
                 if flag:
-                    result.append(f"{lw.value} {chain_lw_dbn[chain][lw]}")
+                    result.append(f"{lw.value} {strand_lw_dbn[i][lw]}")
         return "\n".join(result)
 
 
