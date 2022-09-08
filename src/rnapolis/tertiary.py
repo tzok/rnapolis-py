@@ -501,6 +501,17 @@ class Mapping2D3D:
                 residue_map[residue] = i
                 i += 1
 
+    @property
+    def bpseq(self) -> str:
+        result: Dict[int, List] = {}
+        residue_map: Dict[Residue3D, int] = {}
+        i = 1
+        for residue in self.structure3d.residues:
+            if residue.is_nucleotide:
+                result[i] = [i, residue.one_letter_name, 0]
+                residue_map[residue] = i
+                i += 1
+
         for base_pair in self.base_pairs:
             if not base_pair.is_canonical:
                 continue
@@ -562,9 +573,9 @@ class Mapping2D3D:
             dbn[nt2] = closing[order]
 
         i = 0
-        result = []
-        for _, sequence in self.strands_sequences:
-            result.append("".join(dbn[i : i + len(sequence)]))
+        result: Dict[str, str] = {}
+        for chain, sequence in self.chains_sequences.items():
+            result[chain] = "".join(dbn[i : i + len(sequence)])
             i += len(sequence)
         return result
 
