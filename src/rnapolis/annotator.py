@@ -2,6 +2,8 @@
 import argparse
 import csv
 import math
+import logging
+import os
 from collections import Counter, defaultdict
 from typing import IO, Dict, List, Optional, Tuple
 
@@ -39,19 +41,12 @@ from rnapolis.tertiary import (
 )
 
 HYDROGEN_BOND_MAX_DISTANCE = 4.0
-HYDROGEN_BOND_MAX_PLANAR_DISTANCE = HYDROGEN_BOND_MAX_DISTANCE / 2.0
+HYDROGEN_BOND_ANGLE_RANGE = (50.0, 130.0)  # 90 degrees is ideal, so allow +- 40 degrees
 STACKING_MAX_DISTANCE = 6.0
 STACKING_MAX_ANGLE_BETWEEN_NORMALS = 35.0
 STACKING_MAX_ANGLE_BETWEEN_VECTOR_AND_NORMAL = 45.0
 
-
-def compute_planar_distance(residue_i: Residue3D, atom_i: Atom, atom_j: Atom) -> float:
-    normal_i = residue_i.base_normal_vector
-    if normal_i is None:
-        return math.inf
-
-    vector_ij = atom_i.coordinates - atom_j.coordinates
-    return numpy.linalg.norm(numpy.dot(normal_i, vector_ij)).item()
+logging.basicConfig(level=os.getenv("LOGLEVEL", "INFO").upper())
 
 
 def angle_between_vectors(
@@ -196,6 +191,10 @@ def find_pairs(
                     "acceptor" if atom_name in acceptors else "donor"
                 )
                 coordinates_residue_map[xyz] = residue
+
+    if len(coordinates) < 2:
+        return [], [], []
+
     kdtree = KDTree(coordinates)
 
     # find all hydrogen bonds
@@ -229,20 +228,19 @@ def find_pairs(
 
         residue_i = coordinates_residue_map[coordinates[i]]
         residue_j = coordinates_residue_map[coordinates[j]]
+        logging.debug(
+            f"Checking pair {residue_i.full_name} {atom_i.name} - {residue_j.full_name} {atom_j.name}"
+        )
 
         # check for base-phosphate contacts
         if atom_i.name in PHOSPHATE_ACCEPTORS or atom_j.name in PHOSPHATE_ACCEPTORS:
+            logging.debug("Checking base-phosphate interaction")
             if type_i == "donor":
                 donor_residue, acceptor_residue = residue_i, residue_j
                 donor_atom, acceptor_atom = atom_i, atom_j
             else:
                 donor_residue, acceptor_residue = residue_j, residue_i
                 donor_atom, acceptor_atom = atom_j, atom_i
-            planar_distance = compute_planar_distance(
-                donor_residue, donor_atom, acceptor_atom
-            )
-            if planar_distance > HYDROGEN_BOND_MAX_PLANAR_DISTANCE:
-                continue
             bph = detect_bph_br_classification(donor_residue, donor_atom, acceptor_atom)
             if bph is not None:
                 base_phosphate_pairs.append((donor_residue, acceptor_residue, bph))
@@ -250,30 +248,37 @@ def find_pairs(
 
         # check for base-ribose contacts
         if atom_i.name in RIBOSE_ACCEPTORS or atom_j.name in RIBOSE_ACCEPTORS:
+            logging.debug("Checking base-ribose interaction")
             if type_i == "donor":
                 donor_residue, acceptor_residue = residue_i, residue_j
                 donor_atom, acceptor_atom = atom_i, atom_j
             else:
                 donor_residue, acceptor_residue = residue_j, residue_i
                 donor_atom, acceptor_atom = atom_j, atom_i
-            planar_distance = compute_planar_distance(
-                donor_residue, donor_atom, acceptor_atom
-            )
-            if planar_distance > HYDROGEN_BOND_MAX_PLANAR_DISTANCE:
-                continue
             br = detect_bph_br_classification(donor_residue, donor_atom, acceptor_atom)
             if br is not None:
                 base_ribose_pairs.append((donor_residue, acceptor_residue, br))
             continue
 
         # check for base-base contacts
-        planar_distance = min(
-            [
-                compute_planar_distance(residue_i, atom_i, atom_j),
-                compute_planar_distance(residue_j, atom_i, atom_j),
-            ]
+        if residue_i.base_normal_vector is None or residue_j.base_normal_vector is None:
+            continue
+
+        logging.debug("Checking base-base interaction")
+        vector = atom_i.coordinates - atom_j.coordinates
+        angle1 = math.degrees(
+            angle_between_vectors(residue_i.base_normal_vector, vector)
         )
-        if planar_distance < HYDROGEN_BOND_MAX_PLANAR_DISTANCE:
+        angle2 = math.degrees(
+            angle_between_vectors(residue_j.base_normal_vector, vector)
+        )
+        logging.debug(
+            f"Angles between normals and hydrogen bond: {angle1:.2f} and {angle2:.2f}"
+        )
+        if (
+            HYDROGEN_BOND_ANGLE_RANGE[0] < angle1 < HYDROGEN_BOND_ANGLE_RANGE[1]
+            and HYDROGEN_BOND_ANGLE_RANGE[0] < angle2 < HYDROGEN_BOND_ANGLE_RANGE[1]
+        ):
             hydrogen_bonds.append((atom_i, atom_j, residue_i, residue_j))
 
     # match hydrogen bonds with base edges
@@ -292,6 +297,10 @@ def find_pairs(
         cis_trans = detect_cis_trans(residue_i, residue_j)
         if cis_trans is None:
             continue
+
+        logging.debug(
+            f"Matched {residue_i.full_name} with {residue_j.full_name} as {cis_trans} {edges_i} {edges_j}"
+        )
 
         if residue_i < residue_j:
             for edge_i in edges_i:
@@ -383,6 +392,10 @@ def find_stackings(structure: Structure3D, model: int = 1) -> List[Stacking]:
             geometric_center = (sum(xs) / len(xs), sum(ys) / len(ys), sum(zs) / len(zs))
             coordinates.append(geometric_center)
             coordinates_residue_map[geometric_center] = residue
+
+    if len(coordinates) < 2:
+        return []
+
     kdtree = KDTree(coordinates)
 
     # find all stacking interaction
