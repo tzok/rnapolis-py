@@ -41,7 +41,7 @@ from rnapolis.tertiary import (
 )
 
 HYDROGEN_BOND_MAX_DISTANCE = 4.0
-HYDROGEN_BOND_ANGLE_RANGE = (45.0, 135.0)  # 90 degrees is ideal, so allow +- 45 degrees
+HYDROGEN_BOND_ANGLE_RANGE = (60.0, 120.0)  # 90 degrees is ideal, so allow +- 30 degrees
 STACKING_MAX_DISTANCE = 6.0
 STACKING_MAX_ANGLE_BETWEEN_NORMALS = 35.0
 STACKING_MAX_ANGLE_BETWEEN_VECTOR_AND_NORMAL = 45.0
