@@ -571,7 +571,6 @@ class Mapping2D3D:
             if base_pair.is_canonical:
                 base_pairs.append(base_pair)
 
-        breakpoint()
         dbns = self.__generate_dot_bracket_per_strand(base_pairs)
         i = 0
         result = []
