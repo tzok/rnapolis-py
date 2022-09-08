@@ -41,21 +41,12 @@ from rnapolis.tertiary import (
 )
 
 HYDROGEN_BOND_MAX_DISTANCE = 4.0
-HYDROGEN_BOND_MAX_PLANAR_DISTANCE = HYDROGEN_BOND_MAX_DISTANCE / 2.0
+HYDROGEN_BOND_ANGLE_RANGE = (45.0, 135.0)  # 90 degrees is ideal, so allow +- 45 degrees
 STACKING_MAX_DISTANCE = 6.0
 STACKING_MAX_ANGLE_BETWEEN_NORMALS = 35.0
 STACKING_MAX_ANGLE_BETWEEN_VECTOR_AND_NORMAL = 45.0
 
 logging.basicConfig(level=os.getenv("LOGLEVEL", "INFO").upper())
-
-
-def compute_planar_distance(residue_i: Residue3D, atom_i: Atom, atom_j: Atom) -> float:
-    normal_i = residue_i.base_normal_vector
-    if normal_i is None:
-        return math.inf
-
-    vector_ij = atom_i.coordinates - atom_j.coordinates
-    return numpy.linalg.norm(numpy.dot(normal_i, vector_ij)).item()
 
 
 def angle_between_vectors(
@@ -250,12 +241,6 @@ def find_pairs(
             else:
                 donor_residue, acceptor_residue = residue_j, residue_i
                 donor_atom, acceptor_atom = atom_j, atom_i
-            planar_distance = compute_planar_distance(
-                donor_residue, donor_atom, acceptor_atom
-            )
-            logging.debug(f"Planar distance: {planar_distance:.2}")
-            if planar_distance > HYDROGEN_BOND_MAX_PLANAR_DISTANCE:
-                continue
             bph = detect_bph_br_classification(donor_residue, donor_atom, acceptor_atom)
             if bph is not None:
                 base_phosphate_pairs.append((donor_residue, acceptor_residue, bph))
@@ -270,27 +255,30 @@ def find_pairs(
             else:
                 donor_residue, acceptor_residue = residue_j, residue_i
                 donor_atom, acceptor_atom = atom_j, atom_i
-            planar_distance = compute_planar_distance(
-                donor_residue, donor_atom, acceptor_atom
-            )
-            logging.debug(f"Planar distance: {planar_distance:.2}")
-            if planar_distance > HYDROGEN_BOND_MAX_PLANAR_DISTANCE:
-                continue
             br = detect_bph_br_classification(donor_residue, donor_atom, acceptor_atom)
             if br is not None:
                 base_ribose_pairs.append((donor_residue, acceptor_residue, br))
             continue
 
         # check for base-base contacts
+        if residue_i.base_normal_vector is None or residue_j.base_normal_vector is None:
+            continue
+
         logging.debug("Checking base-base interaction")
-        planar_distance = min(
-            [
-                compute_planar_distance(residue_i, atom_i, atom_j),
-                compute_planar_distance(residue_j, atom_i, atom_j),
-            ]
+        vector = atom_i.coordinates - atom_j.coordinates
+        angle1 = math.degrees(
+            angle_between_vectors(residue_i.base_normal_vector, vector)
         )
-        logging.debug(f"Planar distance: {planar_distance:.2}")
-        if planar_distance < HYDROGEN_BOND_MAX_PLANAR_DISTANCE:
+        angle2 = math.degrees(
+            angle_between_vectors(residue_j.base_normal_vector, vector)
+        )
+        logging.debug(
+            f"Angles between normals and hydrogen bond: {angle1:.2} and {angle2:.2}"
+        )
+        if (
+            HYDROGEN_BOND_ANGLE_RANGE[0] < angle1 < HYDROGEN_BOND_ANGLE_RANGE[1]
+            and HYDROGEN_BOND_ANGLE_RANGE[0] < angle2 < HYDROGEN_BOND_ANGLE_RANGE[1]
+        ):
             hydrogen_bonds.append((atom_i, atom_j, residue_i, residue_j))
 
     # match hydrogen bonds with base edges
