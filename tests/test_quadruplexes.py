@@ -4,7 +4,7 @@ from rnapolis.parser import read_3d_structure
 from rnapolis.tertiary import Mapping2D3D
 
 
-# 2HY9 has a quadruplex
+# 2HY9 has a canonical quadruplex
 def test_2HY9():
     with open("tests/2HY9.cif") as f:
         structure3d = read_3d_structure(f, 1)
@@ -55,7 +55,7 @@ def test_2HY9():
     assert {g6, g16}.issubset(mapping.base_pair_graph[g24])  # type: ignore
 
 
-# 6RS3 has a quadruplex
+# 6RS3 has a quadruplex made of modified residues (GF2)
 def test_6RS3():
     with open("tests/6RS3.cif") as f:
         structure3d = read_3d_structure(f, 1)
@@ -98,7 +98,7 @@ def test_6RS3():
     assert {g8, g17}.issubset(mapping.base_pair_graph[g22])  # type: ignore
 
 
-# 1JJP has a quadruplex
+# 1JJP has an inter-locked quadruplex made of two chains
 def test_1JJP():
     with open("tests/1JJP.cif") as f:
         structure3d = read_3d_structure(f, 1)
@@ -168,3 +168,77 @@ def test_1JJP():
     assert {bg6, bg12}.issubset(mapping.base_pair_graph[bg10])  # type: ignore
     assert {bg3, bg10}.issubset(mapping.base_pair_graph[bg6])  # type: ignore
     assert {bg3, bg10}.issubset(mapping.base_pair_graph[bg12])  # type: ignore
+
+
+# 6FC9 has a quadruplex and a duplex
+def test_6FC9():
+    with open("tests/6FC9.cif") as f:
+        structure3d = read_3d_structure(f, 1)
+    structure2d = extract_secondary_structure(structure3d)
+    mapping = Mapping2D3D(structure3d, structure2d)
+
+    g1 = structure3d.find_residue(ResidueLabel("A", 1, "DG"), None)
+    g2 = structure3d.find_residue(ResidueLabel("A", 2, "DG"), None)
+    g5 = structure3d.find_residue(ResidueLabel("A", 5, "DG"), None)
+    g6 = structure3d.find_residue(ResidueLabel("A", 6, "DG"), None)
+    c7 = structure3d.find_residue(ResidueLabel("A", 7, "DC"), None)
+    g8 = structure3d.find_residue(ResidueLabel("A", 8, "DG"), None)
+    c9 = structure3d.find_residue(ResidueLabel("A", 9, "DC"), None)
+    g10 = structure3d.find_residue(ResidueLabel("A", 10, "DG"), None)
+    a11 = structure3d.find_residue(ResidueLabel("A", 11, "DA"), None)
+    a12 = structure3d.find_residue(ResidueLabel("A", 12, "DA"), None)
+    t16 = structure3d.find_residue(ResidueLabel("A", 16, "DT"), None)
+    t17 = structure3d.find_residue(ResidueLabel("A", 17, "DT"), None)
+    c18 = structure3d.find_residue(ResidueLabel("A", 18, "DC"), None)
+    g19 = structure3d.find_residue(ResidueLabel("A", 19, "DG"), None)
+    c20 = structure3d.find_residue(ResidueLabel("A", 20, "DC"), None)
+    g21 = structure3d.find_residue(ResidueLabel("A", 21, "DG"), None)
+    g22 = structure3d.find_residue(ResidueLabel("A", 22, "DG"), None)
+    g23 = structure3d.find_residue(ResidueLabel("A", 23, "DG"), None)
+    g26 = structure3d.find_residue(ResidueLabel("A", 26, "DG"), None)
+    g27 = structure3d.find_residue(ResidueLabel("A", 27, "DG"), None)
+
+    assert all(
+        nt is not None
+        for nt in [
+            g1,
+            g2,
+            g5,
+            g6,
+            c7,
+            g8,
+            c9,
+            g10,
+            a11,
+            a12,
+            t16,
+            t17,
+            c18,
+            g19,
+            c20,
+            g21,
+            g22,
+            g23,
+            g26,
+            g27,
+        ]
+    )
+
+    # tetrad 1
+    assert {g6, g27}.issubset(mapping.base_pair_graph[g1])  # type: ignore
+    assert {g6, g27}.issubset(mapping.base_pair_graph[g22])  # type: ignore
+    assert {g1, g22}.issubset(mapping.base_pair_graph[g6])  # type: ignore
+    assert {g1, g22}.issubset(mapping.base_pair_graph[g27])  # type: ignore
+
+    # tetrad 2
+    assert {g5, g26}.issubset(mapping.base_pair_graph[g2])  # type: ignore
+    assert {g5, g26}.issubset(mapping.base_pair_graph[g23])  # type: ignore
+    assert {g2, g23}.issubset(mapping.base_pair_graph[g5])  # type: ignore
+    assert {g2, g23}.issubset(mapping.base_pair_graph[g26])  # type: ignore
+
+    assert mapping.base_pair_dict[(c7, g21)].is_canonical  # type: ignore
+    assert mapping.base_pair_dict[(g8, c20)].is_canonical  # type: ignore
+    assert mapping.base_pair_dict[(c9, g19)].is_canonical  # type: ignore
+    assert mapping.base_pair_dict[(g10, c18)].is_canonical  # type: ignore
+    assert mapping.base_pair_dict[(a11, t17)].is_canonical  # type: ignore
+    assert mapping.base_pair_dict[(a12, t16)].is_canonical  # type: ignore
