@@ -2,6 +2,8 @@
 import argparse
 import csv
 import math
+import logging
+import os
 from collections import Counter, defaultdict
 from typing import IO, Dict, List, Optional, Tuple
 
@@ -43,6 +45,8 @@ HYDROGEN_BOND_MAX_PLANAR_DISTANCE = HYDROGEN_BOND_MAX_DISTANCE / 2.0
 STACKING_MAX_DISTANCE = 6.0
 STACKING_MAX_ANGLE_BETWEEN_NORMALS = 35.0
 STACKING_MAX_ANGLE_BETWEEN_VECTOR_AND_NORMAL = 45.0
+
+logging.basicConfig(level=os.getenv("LOGLEVEL", "INFO").upper())
 
 
 def compute_planar_distance(residue_i: Residue3D, atom_i: Atom, atom_j: Atom) -> float:
@@ -229,9 +233,13 @@ def find_pairs(
 
         residue_i = coordinates_residue_map[coordinates[i]]
         residue_j = coordinates_residue_map[coordinates[j]]
+        logging.debug(
+            f"Checking pair {residue_i.full_name} {atom_i.name} - {residue_j.full_name} {atom_j.name}"
+        )
 
         # check for base-phosphate contacts
         if atom_i.name in PHOSPHATE_ACCEPTORS or atom_j.name in PHOSPHATE_ACCEPTORS:
+            logging.debug("Checking base-phosphate interaction")
             if type_i == "donor":
                 donor_residue, acceptor_residue = residue_i, residue_j
                 donor_atom, acceptor_atom = atom_i, atom_j
@@ -241,6 +249,7 @@ def find_pairs(
             planar_distance = compute_planar_distance(
                 donor_residue, donor_atom, acceptor_atom
             )
+            logging.debug(f"Planar distance: {planar_distance:.2}")
             if planar_distance > HYDROGEN_BOND_MAX_PLANAR_DISTANCE:
                 continue
             bph = detect_bph_br_classification(donor_residue, donor_atom, acceptor_atom)
@@ -250,6 +259,7 @@ def find_pairs(
 
         # check for base-ribose contacts
         if atom_i.name in RIBOSE_ACCEPTORS or atom_j.name in RIBOSE_ACCEPTORS:
+            logging.debug("Checking base-ribose interaction")
             if type_i == "donor":
                 donor_residue, acceptor_residue = residue_i, residue_j
                 donor_atom, acceptor_atom = atom_i, atom_j
@@ -259,6 +269,7 @@ def find_pairs(
             planar_distance = compute_planar_distance(
                 donor_residue, donor_atom, acceptor_atom
             )
+            logging.debug(f"Planar distance: {planar_distance:.2}")
             if planar_distance > HYDROGEN_BOND_MAX_PLANAR_DISTANCE:
                 continue
             br = detect_bph_br_classification(donor_residue, donor_atom, acceptor_atom)
@@ -267,12 +278,14 @@ def find_pairs(
             continue
 
         # check for base-base contacts
+        logging.debug("Checking base-base interaction")
         planar_distance = min(
             [
                 compute_planar_distance(residue_i, atom_i, atom_j),
                 compute_planar_distance(residue_j, atom_i, atom_j),
             ]
         )
+        logging.debug(f"Planar distance: {planar_distance:.2}")
         if planar_distance < HYDROGEN_BOND_MAX_PLANAR_DISTANCE:
             hydrogen_bonds.append((atom_i, atom_j, residue_i, residue_j))
 
@@ -292,6 +305,10 @@ def find_pairs(
         cis_trans = detect_cis_trans(residue_i, residue_j)
         if cis_trans is None:
             continue
+
+        logging.debug(
+            f"Matched {residue_i.full_name} with {residue_j.full_name} as {cis_trans} {edges_i} {edges_j}"
+        )
 
         if residue_i < residue_j:
             for edge_i in edges_i:
