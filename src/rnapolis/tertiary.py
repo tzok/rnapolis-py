@@ -93,6 +93,8 @@ BASE_EDGES = {
     },
 }
 
+AVERAGE_OXYGEN_PHOSPHORUS_DISTANCE_COVALENT = 1.6
+
 
 @dataclass(frozen=True, order=True)
 class Atom:
@@ -196,6 +198,16 @@ class Residue3D(Residue):
             if atom.name == atom_name:
                 return atom
         return None
+
+    def is_connected(self, next_residue_candidate) -> bool:
+        o3p = self.find_atom("O3'")
+        p = next_residue_candidate.find_atom("P")
+
+        if o3p is not None and p is not None:
+            distance = numpy.linalg.norm(o3p.coordinates - p.coordinates).item()
+            return distance < 1.5 * AVERAGE_OXYGEN_PHOSPHORUS_DISTANCE_COVALENT
+
+        return False
 
     def __chi_purine(self) -> float:
         atoms = [
@@ -442,12 +454,37 @@ class Mapping2D3D:
         return graph
 
     @property
-    def chains_sequences(self) -> Dict[str, str]:
-        chains = defaultdict(list)
-        for residue in self.structure3d.residues:
-            if residue.is_nucleotide:
-                chains[residue.chain].append(residue.one_letter_name)
-        return {chain: "".join(sequence) for chain, sequence in chains.items()}
+    def strands_sequences(self) -> List[Tuple[str, str]]:
+        if len(self.structure3d.residues) == 0:
+            return []
+
+        result = []
+        strand = [self.structure3d.residues[0]]
+
+        for i in range(1, len(self.structure3d.residues)):
+            previous = strand[-1]
+            current = self.structure3d.residues[i]
+
+            if previous.chain == current.chain and previous.is_connected(current):
+                strand.append(current)
+            else:
+                result.append(
+                    (
+                        previous.chain,
+                        "".join([residue.one_letter_name for residue in strand]),
+                    )
+                )
+                strand = [current]
+
+        if len(strand) > 0:
+            result.append(
+                (
+                    strand[0].chain,
+                    "".join([residue.one_letter_name for residue in strand]),
+                )
+            )
+
+        return result
 
     @property
     def bpseq(self) -> str:
@@ -522,7 +559,7 @@ class Mapping2D3D:
 
         i = 0
         result: Dict[str, str] = {}
-        for chain, sequence in self.chains_sequences.items():
+        for chain, sequence in self.strands_sequences:
             result[chain] = "".join(dbn[i : i + len(sequence)])
             i += len(sequence)
         return result
@@ -538,7 +575,7 @@ class Mapping2D3D:
         i = 0
         result = []
 
-        for chain, sequence in self.chains_sequences.items():
+        for chain, sequence in self.strands_sequences:
             result.append(f">strand_{chain}")
             result.append(sequence)
             result.append(chain_dbn[chain])
@@ -566,7 +603,7 @@ class Mapping2D3D:
                     break
 
         result = []
-        for chain, sequence in self.chains_sequences.items():
+        for chain, sequence in self.strands_sequences:
             result.append(f"    >strand_{chain}")
             result.append(f"seq {sequence}")
             for lw, flag in nonempty.items():
