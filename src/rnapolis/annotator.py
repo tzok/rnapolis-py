@@ -200,6 +200,10 @@ def find_pairs(
                     "acceptor" if atom_name in acceptors else "donor"
                 )
                 coordinates_residue_map[xyz] = residue
+
+    if len(coordinates) < 2:
+        return [], [], []
+
     kdtree = KDTree(coordinates)
 
     # find all hydrogen bonds
@@ -400,6 +404,10 @@ def find_stackings(structure: Structure3D, model: int = 1) -> List[Stacking]:
             geometric_center = (sum(xs) / len(xs), sum(ys) / len(ys), sum(zs) / len(zs))
             coordinates.append(geometric_center)
             coordinates_residue_map[geometric_center] = residue
+
+    if len(coordinates) < 2:
+        return []
+
     kdtree = KDTree(coordinates)
 
     # find all stacking interaction
