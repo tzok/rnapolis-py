@@ -509,9 +509,9 @@ class Mapping2D3D:
 
         return "\n".join([" ".join(map(str, line)) for line in result.values()])
 
-    def __generate_dot_bracket_per_chain(
+    def __generate_dot_bracket_per_strand(
         self, base_pairs: List[BasePair3D]
-    ) -> Dict[str, str]:
+    ) -> List[str]:
         dbn = []
         residue_map: Dict[Residue3D, int] = {}
         i = 0
@@ -558,9 +558,9 @@ class Mapping2D3D:
             dbn[nt2] = closing[order]
 
         i = 0
-        result: Dict[str, str] = {}
-        for chain, sequence in self.strands_sequences:
-            result[chain] = "".join(dbn[i : i + len(sequence)])
+        result = []
+        for _, sequence in self.strands_sequences:
+            result.append("".join(dbn[i : i + len(sequence)]))
             i += len(sequence)
         return result
 
@@ -571,44 +571,49 @@ class Mapping2D3D:
             if base_pair.is_canonical:
                 base_pairs.append(base_pair)
 
-        chain_dbn = self.__generate_dot_bracket_per_chain(base_pairs)
+        breakpoint()
+        dbns = self.__generate_dot_bracket_per_strand(base_pairs)
         i = 0
         result = []
 
-        for chain, sequence in self.strands_sequences:
+        for i, pair in enumerate(self.strands_sequences):
+            chain, sequence = pair
             result.append(f">strand_{chain}")
             result.append(sequence)
-            result.append(chain_dbn[chain])
+            result.append(dbns[i])
             i += len(sequence)
         return "\n".join(result)
 
     @property
     def extended_dot_bracket(self) -> str:
-        chain_lw_dbn: Dict[str, Dict[LeontisWesthof, str]] = defaultdict(dict)
+        strand_lw_dbn: List[Dict[LeontisWesthof, str]] = [
+            {} for _ in self.strands_sequences
+        ]
         for lw in LeontisWesthof:
             base_pairs = []
             for base_pair in self.base_pairs:
                 if base_pair.lw == lw:
                     base_pairs.append(base_pair)
 
-            chain_dbn = self.__generate_dot_bracket_per_chain(base_pairs)
-            for chain, dbn in chain_dbn.items():
-                chain_lw_dbn[chain][lw] = dbn
+            dbns = self.__generate_dot_bracket_per_strand(base_pairs)
+            for i in range(len(self.strands_sequences)):
+                strand_lw_dbn[i][lw] = dbns[i]
 
         nonempty = {lw: False for lw in LeontisWesthof}
         for lw in LeontisWesthof:
-            for chain in chain_lw_dbn:
-                if "(" in chain_lw_dbn[chain][lw]:
+            for i in range(len(strand_lw_dbn)):
+                if "(" in strand_lw_dbn[i][lw]:
                     nonempty[lw] = True
                     break
 
         result = []
-        for chain, sequence in self.strands_sequences:
+        for i, pair in enumerate(self.strands_sequences):
+            chain, sequence = pair
             result.append(f"    >strand_{chain}")
             result.append(f"seq {sequence}")
             for lw, flag in nonempty.items():
                 if flag:
-                    result.append(f"{lw.value} {chain_lw_dbn[chain][lw]}")
+                    result.append(f"{lw.value} {strand_lw_dbn[i][lw]}")
         return "\n".join(result)
 
 
