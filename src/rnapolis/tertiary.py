@@ -1,3 +1,4 @@
+from functools import total_ordering
 import itertools
 import logging
 import math
@@ -46,7 +47,7 @@ BASE_ACCEPTORS = {
 
 PHOSPHATE_ACCEPTORS = ["OP1", "OP2", "O5'", "O3'"]
 
-RIBOSE_ACCEPTORS = ["O4'"]
+RIBOSE_ACCEPTORS = ["O4'", "O2'"]
 
 BASE_EDGES = {
     "A": {
@@ -108,7 +109,8 @@ class Atom:
         return numpy.array([self.x, self.y, self.z])
 
 
-@dataclass(frozen=True, order=True)
+@dataclass(frozen=True)
+@total_ordering
 class Residue3D(Residue):
     model: int
     one_letter_name: str
@@ -118,6 +120,14 @@ class Residue3D(Residue):
     outermost_atoms = {"A": "N9", "G": "N9", "C": "N1", "U": "N1", "T": "N1"}
     # Dist representing expected name of atom closest to the tetrad center
     innermost_atoms = {"A": "N6", "G": "O6", "C": "N4", "U": "O4", "T": "O4"}
+
+    def __lt__(self, other):
+        return (self.model, self.chain, self.number, self.icode or " ") < (
+            other.model,
+            other.chain,
+            other.number,
+            other.icode or " ",
+        )
 
     def __hash__(self):
         return hash((self.name, self.model, self.label, self.auth, self.atoms))

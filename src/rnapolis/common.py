@@ -1,6 +1,7 @@
 import string
 from dataclasses import dataclass
 from enum import Enum
+from functools import total_ordering
 from typing import Dict, List, Optional, Tuple
 
 
@@ -15,6 +16,7 @@ class GlycosidicBond(Enum):
     syn = "syn"
 
 
+@total_ordering
 class LeontisWesthof(Enum):
     cWW = "cWW"
     cWH = "cWH"
@@ -38,6 +40,9 @@ class LeontisWesthof(Enum):
     @property
     def reverse(self):
         return LeontisWesthof[f"{self.name[0]}{self.name[2]}{self.name[1]}"]
+
+    def __lt__(self, other):
+        return tuple(self.value) < tuple(other.value)
 
 
 class Saenger(Enum):
@@ -196,10 +201,18 @@ class ResidueAuth:
     name: str
 
 
-@dataclass(frozen=True, order=True)
+@dataclass(frozen=True)
+@total_ordering
 class Residue:
     label: Optional[ResidueLabel]
     auth: Optional[ResidueAuth]
+
+    def __lt__(self, other):
+        return (self.chain, self.number, self.icode or " ") < (
+            other.chain,
+            other.number,
+            other.icode or " ",
+        )
 
     @property
     def chain(self) -> str:
