@@ -455,15 +455,19 @@ class Mapping2D3D:
 
     @property
     def strands_sequences(self) -> List[Tuple[str, str]]:
-        if len(self.structure3d.residues) == 0:
+        nucleotides = [
+            residue for residue in self.structure3d.residues if residue.is_nucleotide
+        ]
+
+        if len(nucleotides) == 0:
             return []
 
         result = []
-        strand = [self.structure3d.residues[0]]
+        strand = [nucleotides[0]]
 
-        for i in range(1, len(self.structure3d.residues)):
+        for i in range(1, len(nucleotides)):
             previous = strand[-1]
-            current = self.structure3d.residues[i]
+            current = nucleotides[i]
 
             if previous.chain == current.chain and previous.is_connected(current):
                 strand.append(current)
