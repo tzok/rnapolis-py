@@ -97,3 +97,46 @@ def test_2HY9():
     assert {g12, g24}.issubset(mapping.base_pair_graph[g16])  # type: ignore
     assert {g6, g16}.issubset(mapping.base_pair_graph[g12])  # type: ignore
     assert {g6, g16}.issubset(mapping.base_pair_graph[g24])  # type: ignore
+
+
+# 6RS3 has a quadruplex
+def test_6RS3():
+    with open("tests/6RS3.cif") as f:
+        structure3d = read_3d_structure(f, 1)
+    structure2d = extract_secondary_structure(structure3d)
+    mapping = Mapping2D3D(structure3d, structure2d)
+
+    g1 = structure3d.find_residue(ResidueLabel("A", 1, "DG"), None)
+    g2 = structure3d.find_residue(ResidueLabel("A", 2, "DG"), None)
+    g6 = structure3d.find_residue(ResidueLabel("A", 6, "DG"), None)
+    g7 = structure3d.find_residue(ResidueLabel("A", 7, "DG"), None)
+    g8 = structure3d.find_residue(ResidueLabel("A", 8, "DG"), None)
+    g14 = structure3d.find_residue(ResidueLabel("A", 14, "GF2"), None)
+    g15 = structure3d.find_residue(ResidueLabel("A", 15, "GF2"), None)
+    g16 = structure3d.find_residue(ResidueLabel("A", 16, "DG"), None)
+    g17 = structure3d.find_residue(ResidueLabel("A", 17, "DG"), None)
+    g20 = structure3d.find_residue(ResidueLabel("A", 20, "DG"), None)
+    g21 = structure3d.find_residue(ResidueLabel("A", 21, "DG"), None)
+    g22 = structure3d.find_residue(ResidueLabel("A", 22, "DG"), None)
+
+    assert all(
+        nt is not None for nt in [g1, g2, g6, g7, g8, g14, g15, g16, g17, g20, g21, g22]
+    )
+
+    # tetrad 1
+    assert {g2, g20}.issubset(mapping.base_pair_graph[g6])  # type: ignore
+    assert {g2, g20}.issubset(mapping.base_pair_graph[g15])  # type: ignore
+    assert {g6, g15}.issubset(mapping.base_pair_graph[g2])  # type: ignore
+    assert {g6, g15}.issubset(mapping.base_pair_graph[g20])  # type: ignore
+
+    # tetrad 2
+    assert {g1, g21}.issubset(mapping.base_pair_graph[g7])  # type: ignore
+    assert {g1, g21}.issubset(mapping.base_pair_graph[g16])  # type: ignore
+    assert {g7, g16}.issubset(mapping.base_pair_graph[g1])  # type: ignore
+    assert {g7, g16}.issubset(mapping.base_pair_graph[g21])  # type: ignore
+
+    # tetrad 3
+    assert {g14, g22}.issubset(mapping.base_pair_graph[g8])  # type: ignore
+    assert {g14, g22}.issubset(mapping.base_pair_graph[g17])  # type: ignore
+    assert {g8, g17}.issubset(mapping.base_pair_graph[g14])  # type: ignore
+    assert {g8, g17}.issubset(mapping.base_pair_graph[g22])  # type: ignore
