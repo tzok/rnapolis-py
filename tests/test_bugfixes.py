@@ -26,3 +26,11 @@ def test_1DFU():
     mapping = Mapping2D3D(structure3d, structure2d)
     assert b2g not in mapping.base_pair_graph[b1u]
     assert b1u not in mapping.base_pair_graph[b2g]
+
+
+def test_4WTI():
+    with open("tests/4WTI_1_T-P.cif") as f:
+        structure3d = read_3d_structure(f, 1)
+    structure2d = extract_secondary_structure(structure3d)
+    mapping = Mapping2D3D(structure3d, structure2d)
+    assert mapping.dot_bracket == ">strand_T\nCGG\n.((\n>strand_P\nCC\n))"
