@@ -41,7 +41,7 @@ from rnapolis.tertiary import (
 )
 
 HYDROGEN_BOND_MAX_DISTANCE = 4.0
-HYDROGEN_BOND_ANGLE_RANGE = (60.0, 120.0)  # 90 degrees is ideal, so allow +- 30 degrees
+HYDROGEN_BOND_ANGLE_RANGE = (50.0, 130.0)  # 90 degrees is ideal, so allow +- 40 degrees
 STACKING_MAX_DISTANCE = 6.0
 STACKING_MAX_ANGLE_BETWEEN_NORMALS = 35.0
 STACKING_MAX_ANGLE_BETWEEN_VECTOR_AND_NORMAL = 45.0
@@ -273,7 +273,7 @@ def find_pairs(
             angle_between_vectors(residue_j.base_normal_vector, vector)
         )
         logging.debug(
-            f"Angles between normals and hydrogen bond: {angle1:.2} and {angle2:.2}"
+            f"Angles between normals and hydrogen bond: {angle1:.2f} and {angle2:.2f}"
         )
         if (
             HYDROGEN_BOND_ANGLE_RANGE[0] < angle1 < HYDROGEN_BOND_ANGLE_RANGE[1]

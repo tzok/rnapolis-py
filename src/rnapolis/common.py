@@ -261,7 +261,10 @@ class Residue:
     @property
     def full_name(self) -> str:
         if self.auth is not None:
-            builder = f"{self.auth.chain}.{self.auth.name}"
+            if self.auth.chain.isspace():
+                builder = f"{self.auth.name}"
+            else:
+                builder = f"{self.auth.chain}.{self.auth.name}"
             if self.auth.name[-1] in string.digits:
                 builder += "/"
             builder += f"{self.auth.number}"
@@ -269,7 +272,10 @@ class Residue:
                 builder += f"^{self.auth.icode}"
             return builder
         elif self.label is not None:
-            builder = f"{self.label.chain}.{self.label.name}"
+            if self.label.chain.isspace():
+                builder = f"{self.label.name}"
+            else:
+                builder = f"{self.label.chain}.{self.label.name}"
             if self.label.name[-1] in string.digits:
                 builder += "/"
             builder += f"{self.label.number}"
