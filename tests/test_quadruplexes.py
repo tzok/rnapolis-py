@@ -1,5 +1,5 @@
 from rnapolis.annotator import extract_secondary_structure
-from rnapolis.common import ResidueLabel
+from rnapolis.common import ResidueAuth, ResidueLabel
 from rnapolis.parser import read_3d_structure
 from rnapolis.tertiary import Mapping2D3D
 
@@ -242,3 +242,109 @@ def test_6FC9():
     assert mapping.base_pair_dict[(g10, c18)].is_canonical  # type: ignore
     assert mapping.base_pair_dict[(a11, t17)].is_canonical  # type: ignore
     assert mapping.base_pair_dict[(a12, t16)].is_canonical  # type: ignore
+
+
+# q-ugg is a quadruplex from molecular dynamics
+def test_UGG_md():
+    with open("tests/q-ugg-5k-salt_400-500ns_frame1065.pdb") as f:
+        structure3d = read_3d_structure(f, 1)
+    structure2d = extract_secondary_structure(structure3d)
+    mapping = Mapping2D3D(structure3d, structure2d)
+
+    u1 = structure3d.find_residue(None, ResidueAuth(" ", 1, None, "U5"))
+    g2 = structure3d.find_residue(None, ResidueAuth(" ", 2, None, "G"))
+    g3 = structure3d.find_residue(None, ResidueAuth(" ", 3, None, "G"))
+    u4 = structure3d.find_residue(None, ResidueAuth(" ", 4, None, "U"))
+    g5 = structure3d.find_residue(None, ResidueAuth(" ", 5, None, "G"))
+    g6 = structure3d.find_residue(None, ResidueAuth(" ", 6, None, "G"))
+
+    u8 = structure3d.find_residue(None, ResidueAuth(" ", 8, None, "U5"))
+    g9 = structure3d.find_residue(None, ResidueAuth(" ", 9, None, "G"))
+    g10 = structure3d.find_residue(None, ResidueAuth(" ", 10, None, "G"))
+    u11 = structure3d.find_residue(None, ResidueAuth(" ", 11, None, "U"))
+    g12 = structure3d.find_residue(None, ResidueAuth(" ", 12, None, "G"))
+    g13 = structure3d.find_residue(None, ResidueAuth(" ", 13, None, "G"))
+
+    u15 = structure3d.find_residue(None, ResidueAuth(" ", 15, None, "U5"))
+    g16 = structure3d.find_residue(None, ResidueAuth(" ", 16, None, "G"))
+    g17 = structure3d.find_residue(None, ResidueAuth(" ", 17, None, "G"))
+    u18 = structure3d.find_residue(None, ResidueAuth(" ", 18, None, "U"))
+    g19 = structure3d.find_residue(None, ResidueAuth(" ", 19, None, "G"))
+    g20 = structure3d.find_residue(None, ResidueAuth(" ", 20, None, "G"))
+
+    u22 = structure3d.find_residue(None, ResidueAuth(" ", 22, None, "U5"))
+    g23 = structure3d.find_residue(None, ResidueAuth(" ", 23, None, "G"))
+    g24 = structure3d.find_residue(None, ResidueAuth(" ", 24, None, "G"))
+    u25 = structure3d.find_residue(None, ResidueAuth(" ", 25, None, "U"))
+    g26 = structure3d.find_residue(None, ResidueAuth(" ", 26, None, "G"))
+    g27 = structure3d.find_residue(None, ResidueAuth(" ", 27, None, "G"))
+
+    assert all(
+        nt is not None
+        for nt in [
+            u1,
+            g2,
+            g3,
+            u4,
+            g5,
+            g6,
+            u8,
+            g9,
+            g10,
+            u11,
+            g12,
+            g13,
+            u15,
+            g16,
+            g17,
+            u18,
+            g19,
+            g20,
+            u22,
+            g23,
+            g24,
+            u25,
+            g26,
+            g27,
+        ]
+    )
+
+    # structure from MD have empty chain name
+    assert u1.full_name == "U5/1"  # type: ignore
+    assert g2.full_name == "G2"  # type: ignore
+
+    # tetrad 1
+    assert {u1, u15}.issubset(mapping.base_pair_graph[u8])  # type: ignore
+    assert {u1, u15}.issubset(mapping.base_pair_graph[u22])  # type: ignore
+    assert {u8, u22}.issubset(mapping.base_pair_graph[u1])  # type: ignore
+    assert {u8, u22}.issubset(mapping.base_pair_graph[u15])  # type: ignore
+
+    # tetrad 2
+    assert {g2, g16}.issubset(mapping.base_pair_graph[g9])  # type: ignore
+    assert {g2, g16}.issubset(mapping.base_pair_graph[g23])  # type: ignore
+    assert {g9, g23}.issubset(mapping.base_pair_graph[g2])  # type: ignore
+    assert {g9, g23}.issubset(mapping.base_pair_graph[g16])  # type: ignore
+
+    # tetrad 3
+    assert {g3, g17}.issubset(mapping.base_pair_graph[g10])  # type: ignore
+    assert {g3, g17}.issubset(mapping.base_pair_graph[g24])  # type: ignore
+    assert {g10, g24}.issubset(mapping.base_pair_graph[g3])  # type: ignore
+    assert {g10, g24}.issubset(mapping.base_pair_graph[g17])  # type: ignore
+
+    # tetrad 4
+    assert {u4, u18}.issubset(mapping.base_pair_graph[u11])  # type: ignore
+    assert {u4, u18}.issubset(mapping.base_pair_graph[u25])  # type: ignore
+    assert {u11, u25}.issubset(mapping.base_pair_graph[u4])  # type: ignore
+    assert {u11, u25}.issubset(mapping.base_pair_graph[u18])  # type: ignore
+
+    # tetrad 5
+    assert {g5, g19}.issubset(mapping.base_pair_graph[g12])  # type: ignore
+    assert {g5, g19}.issubset(mapping.base_pair_graph[g26])  # type: ignore
+    assert {g12, g26}.issubset(mapping.base_pair_graph[g5])  # type: ignore
+    assert {g12, g26}.issubset(mapping.base_pair_graph[g19])  # type: ignore
+
+    # tetrad 6
+    assert {g6, g20}.issubset(mapping.base_pair_graph[g13])  # type: ignore
+    assert {g6, g20}.issubset(mapping.base_pair_graph[g27])  # type: ignore
+    assert {g13, g27}.issubset(mapping.base_pair_graph[g6])  # type: ignore
+    assert {g13, g27}.issubset(mapping.base_pair_graph[g20])  # type: ignore
