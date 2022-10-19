@@ -91,7 +91,14 @@ def parse_cif(
                 x = float(row_dict["Cartn_x"])
                 y = float(row_dict["Cartn_y"])
                 z = float(row_dict["Cartn_z"])
-                atoms.append(Atom(label, auth, model, atom_name, x, y, z))
+
+                occupancy = (
+                    float(row_dict["occupancy"])
+                    if "occupancy" in row_dict and row_dict["occupancy"] != "."
+                    else None
+                )
+
+                atoms.append(Atom(label, auth, model, atom_name, x, y, z, occupancy))
 
         if mod_residue:
             for row in mod_residue.getRowList():
@@ -178,10 +185,11 @@ def parse_pdb(
             x = float(line[30:38].strip())
             y = float(line[38:46].strip())
             z = float(line[46:54].strip())
+            occupancy = float(line[54:60].strip())
             auth = ResidueAuth(
                 chain_identifier, residue_number, insertion_code, residue_name
             )
-            atoms.append(Atom(None, auth, model, atom_name, x, y, z))
+            atoms.append(Atom(None, auth, model, atom_name, x, y, z, occupancy))
         elif line.startswith("MODRES"):
             original_name = line[12:15]
             chain_identifier = line[16]

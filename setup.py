@@ -24,6 +24,11 @@ setup(
         "Programming Language :: Python :: 3",
         "Topic :: Scientific/Engineering :: Bio-Informatics",
     ],
-    entry_points={"console_scripts": ["annotator=rnapolis.annotator:main"]},
+    entry_points={
+        "console_scripts": [
+            "annotator=rnapolis.annotator:main",
+            "clashfinder=rnapolis.clashfinder:main",
+        ]
+    },
     install_requires=["mmcif", "numpy", "orjson", "scipy"],
 )
