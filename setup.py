@@ -28,6 +28,7 @@ setup(
         "console_scripts": [
             "annotator=rnapolis.annotator:main",
             "clashfinder=rnapolis.clashfinder:main",
+            "metareader=rnapolis.metareader:main",
         ]
     },
     install_requires=["mmcif", "numpy", "orjson", "scipy"],
