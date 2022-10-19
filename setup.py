@@ -27,6 +27,7 @@ setup(
     entry_points={
         "console_scripts": [
             "annotator=rnapolis.annotator:main",
+            "clashfinder=rnapolis.clashfinder:main",
             "metareader=rnapolis.metareader:main",
         ]
     },
