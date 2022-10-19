@@ -28,11 +28,11 @@ def main():
         for key in [
             "citation",
             "citation_author",
-            "exptl",
-            "refine",
             "em_3d_reconstruction",
-            "pdbx_database_status",
+            "exptl",
             "pdbx_audit_revision_history",
+            "pdbx_database_status",
+            "refine",
         ]
     }
 
