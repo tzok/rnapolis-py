@@ -5,6 +5,7 @@ import math
 import string
 from collections import defaultdict
 from dataclasses import dataclass, field
+from functools import total_ordering
 from typing import Dict, List, Optional, Set, Tuple, Union
 
 import numpy
@@ -105,6 +106,7 @@ class Atom:
     x: float
     y: float
     z: float
+    occupancy: Optional[float]
 
     @property
     def coordinates(self) -> numpy.typing.NDArray[numpy.floating]:
@@ -252,7 +254,7 @@ class Residue3D(Residue):
         logging.error(
             f"Failed to determine the outermost atom for nucleotide {self}, so an arbitrary atom will be used"
         )
-        yield Atom(self.label, self.auth, self.model, "UNK", 0.0, 0.0, 0.0)
+        yield Atom(self.label, self.auth, self.model, "UNK", 0.0, 0.0, 0.0, None)
 
     def __inner_generator(self):
         # try to find expected atom name
@@ -280,7 +282,7 @@ class Residue3D(Residue):
         logging.error(
             f"Failed to determine the innermost atom for nucleotide {self}, so an arbitrary atom will be used"
         )
-        yield Atom(self.label, self.auth, self.model, "UNK", 0.0, 0.0, 0.0)
+        yield Atom(self.label, self.auth, self.model, "UNK", 0.0, 0.0, 0.0, None)
 
 
 @dataclass(frozen=True, order=True)

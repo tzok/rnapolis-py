@@ -5,7 +5,7 @@ with open("README.md") as f:
 
 setup(
     name="RNApolis",
-    version="0.0.5",
+    version="0.0.6",
     packages=["rnapolis"],
     package_dir={"": "src"},
     author="Tomasz Zok",
@@ -24,6 +24,12 @@ setup(
         "Programming Language :: Python :: 3",
         "Topic :: Scientific/Engineering :: Bio-Informatics",
     ],
-    entry_points={"console_scripts": ["annotator=rnapolis.annotator:main"]},
+    entry_points={
+        "console_scripts": [
+            "annotator=rnapolis.annotator:main",
+            "clashfinder=rnapolis.clashfinder:main",
+            "metareader=rnapolis.metareader:main",
+        ]
+    },
     install_requires=["mmcif", "numpy", "orjson", "scipy"],
 )
