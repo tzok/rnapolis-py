@@ -1,19 +1,33 @@
 #! /usr/bin/env python
 import argparse
-import sys
+
+from typing import Dict, List
+from mmcif.io.PdbxReader import DataContainer
 
 import orjson
 
 from mmcif.io.IoAdapterPy import IoAdapterPy
 
 
-def convert_category(data, category_name):
+def convert_category(data: List[DataContainer], category_name: str) -> List[Dict]:
     category = data[0].getObj(category_name)
     if category:
         return [
             dict(zip(category.getAttributeList(), row)) for row in category.getRowList()
         ]
     return []
+
+
+def read_metadata(path: str, categories: List[str]) -> Dict:
+    adapter = IoAdapterPy()
+    data = adapter.readFile(path)
+    return {key: convert_category(data, key) for key in categories}
+
+
+def list_metadata(path: str) -> List[str]:
+    adapter = IoAdapterPy()
+    data = adapter.readFile(path)
+    return data[0].getObjNameList()
 
 
 def main():
@@ -34,17 +48,12 @@ def main():
     )
     args = parser.parse_args()
 
-    adapter = IoAdapterPy()
-    data = adapter.readFile(args.path)
-
     if args.list_categories:
-        for name in data[0].getObjNameList():
+        for name in list_metadata(args.path):
             print(name)
-        sys.exit()
-
-    result = {key: convert_category(data, key) for key in args.category}
-
-    print(orjson.dumps(result).decode("utf-8"))
+    else:
+        result = read_metadata(args.path, args.category)
+        print(orjson.dumps(result).decode("utf-8"))
 
 
 if __name__ == "__main__":
