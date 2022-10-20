@@ -1,5 +1,6 @@
 #! /usr/bin/env python
 import argparse
+import sys
 
 import orjson
 
@@ -18,23 +19,30 @@ def convert_category(data, category_name):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("path", help="path to mmCIF file")
+    parser.add_argument(
+        "--category",
+        "-c",
+        help="an mmCIF category to extract, you can provide as many as you want (default=struct)",
+        action="append",
+        default=["struct"],
+    )
+    parser.add_argument(
+        "--list-categories",
+        "-l",
+        help="read the mmCIF file and list categories available inside",
+        action="store_true",
+    )
     args = parser.parse_args()
 
     adapter = IoAdapterPy()
     data = adapter.readFile(args.path)
 
-    result = {
-        key: convert_category(data, key)
-        for key in [
-            "citation",
-            "citation_author",
-            "em_3d_reconstruction",
-            "exptl",
-            "pdbx_audit_revision_history",
-            "pdbx_database_status",
-            "refine",
-        ]
-    }
+    if args.list_categories:
+        for name in data[0].getObjNameList():
+            print(name)
+        sys.exit()
+
+    result = {key: convert_category(data, key) for key in args.category}
 
     print(orjson.dumps(result).decode("utf-8"))
 
