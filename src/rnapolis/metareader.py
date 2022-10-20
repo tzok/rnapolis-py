@@ -1,62 +1,57 @@
 #! /usr/bin/env python
 import argparse
-import json
-import math
+from typing import Dict, List
 
+import orjson
 from mmcif.io.IoAdapterPy import IoAdapterPy
+from mmcif.io.PdbxReader import DataContainer
 
 
-def find_values(data, category_name, obj_name):
+def convert_category(data: List[DataContainer], category_name: str) -> List[Dict]:
     category = data[0].getObj(category_name)
-
     if category:
-        for row in category.getRowList():
-            row_dict = dict(zip(category.getAttributeList(), row))
-            obj = row_dict.get(obj_name, None)
+        return [
+            dict(zip(category.getAttributeList(), row)) for row in category.getRowList()
+        ]
+    return []
 
-            if obj:
-                yield obj
+
+def read_metadata(path: str, categories: List[str]) -> Dict:
+    adapter = IoAdapterPy()
+    data = adapter.readFile(path)
+    return {key: convert_category(data, key) for key in categories}
+
+
+def list_metadata(path: str) -> List[str]:
+    adapter = IoAdapterPy()
+    data = adapter.readFile(path)
+    return data[0].getObjNameList()
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("path", help="path to mmCIF file")
+    parser.add_argument(
+        "--category",
+        "-c",
+        help="an mmCIF category to extract, you can provide as many as you want (default=struct)",
+        action="append",
+        default=["struct"],
+    )
+    parser.add_argument(
+        "--list-categories",
+        "-l",
+        help="read the mmCIF file and list categories available inside",
+        action="store_true",
+    )
     args = parser.parse_args()
 
-    adapter = IoAdapterPy()
-    data = adapter.readFile(args.path)
-    result = {
-        "method": None,
-        "resolution": math.nan,
-        "title": None,
-        "depositionDate": None,
-        "releaseDate": None,
-        "revisionDate": None,
-    }
-
-    if data:
-        result["method"] = next(find_values(data, "exptl", "method"), None)
-        result["resolution"] = min(
-            map(
-                float,
-                list(find_values(data, "refine", "ls_d_res_high"))
-                + list(find_values(data, "em_3d_reconstruction", "resolution"))
-                + [math.nan],
-            )
-        )
-        result["title"] = next(find_values(data, "struct", "title"), None)
-        result["depositionDate"] = next(
-            find_values(data, "pdbx_database_status", "recvd_initial_deposition_date"),
-            None,
-        )
-        revision_dates = sorted(
-            find_values(data, "pdbx_audit_revision_history", "revision_date")
-        )
-        if revision_dates:
-            result["releaseDate"] = revision_dates[0]
-            result["revisionDate"] = revision_dates[-1]
-
-    print(json.dumps(result))
+    if args.list_categories:
+        for name in list_metadata(args.path):
+            print(name)
+    else:
+        result = read_metadata(args.path, args.category)
+        print(orjson.dumps(result).decode("utf-8"))
 
 
 if __name__ == "__main__":

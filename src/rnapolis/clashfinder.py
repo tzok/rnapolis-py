@@ -1,13 +1,13 @@
 import argparse
 import logging
 import os
-
 from enum import Enum
-from scipy.spatial import KDTree
 from typing import List
 
-from rnapolis.tertiary import Atom, Residue3D
+from scipy.spatial import KDTree
+
 from rnapolis.parser import read_3d_structure
+from rnapolis.tertiary import Atom, Residue3D
 
 CARBON_RADIUS = 0.6
 NITROGEN_RADIUS = 0.54
