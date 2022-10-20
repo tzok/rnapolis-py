@@ -1,10 +1,10 @@
-from functools import total_ordering
 import itertools
 import logging
 import math
 import string
 from collections import defaultdict
 from dataclasses import dataclass, field
+from functools import total_ordering
 from typing import Dict, List, Optional, Set, Tuple, Union
 
 import numpy

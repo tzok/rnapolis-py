@@ -1,8 +1,8 @@
 #! /usr/bin/env python
 import argparse
 import csv
-import math
 import logging
+import math
 import os
 from collections import Counter, defaultdict
 from typing import IO, Dict, List, Optional, Tuple

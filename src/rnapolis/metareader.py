@@ -1,12 +1,10 @@
 #! /usr/bin/env python
 import argparse
-
 from typing import Dict, List
-from mmcif.io.PdbxReader import DataContainer
 
 import orjson
-
 from mmcif.io.IoAdapterPy import IoAdapterPy
+from mmcif.io.PdbxReader import DataContainer
 
 
 def convert_category(data: List[DataContainer], category_name: str) -> List[Dict]:
