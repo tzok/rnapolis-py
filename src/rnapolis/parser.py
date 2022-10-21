@@ -6,12 +6,14 @@ from rnapolis.common import ResidueAuth, ResidueLabel
 from rnapolis.tertiary import BASE_ATOMS, Atom, Residue3D, Structure3D
 
 
-def read_3d_structure(cif_or_pdb: IO[str], model: int) -> Structure3D:
+def read_3d_structure(
+    cif_or_pdb: IO[str], model: int = 1, nucleic_acid_only: bool = False
+) -> Structure3D:
     atoms, modified, sequence = (
         parse_cif(cif_or_pdb) if is_cif(cif_or_pdb) else parse_pdb(cif_or_pdb)
     )
     atoms = list(filter(lambda atom: atom.model == model, atoms))
-    return group_atoms(atoms, modified, sequence)
+    return group_atoms(atoms, modified, sequence, nucleic_acid_only)
 
 
 def is_cif(cif_or_pdb: IO[str]) -> bool:
@@ -208,6 +210,7 @@ def group_atoms(
     atoms: List[Atom],
     modified: Dict[Union[ResidueLabel, ResidueAuth], str],
     sequence: Dict[Tuple[str, int], str],
+    nucleic_acid_only: bool,
 ) -> Structure3D:
     if not atoms:
         return Structure3D([])
@@ -228,9 +231,11 @@ def group_atoms(
             one_letter_name = get_one_letter_name(label, sequence, name)
             if one_letter_name not in "ACGUT":
                 one_letter_name = detect_one_letter_name(residue_atoms)
-            residues.append(
-                Residue3D(label, auth, model, one_letter_name, tuple(residue_atoms))
+            residue = Residue3D(
+                label, auth, model, one_letter_name, tuple(residue_atoms)
             )
+            if not nucleic_acid_only or (nucleic_acid_only and residue.is_nucleotide):
+                residues.append(residue)
             key_previous = key
             residue_atoms = [atom]
 
@@ -241,9 +246,9 @@ def group_atoms(
     one_letter_name = get_one_letter_name(label, sequence, name)
     if one_letter_name not in "ACGUT":
         one_letter_name = detect_one_letter_name(residue_atoms)
-    residues.append(
-        Residue3D(label, auth, model, one_letter_name, tuple(residue_atoms))
-    )
+    residue = Residue3D(label, auth, model, one_letter_name, tuple(residue_atoms))
+    if not nucleic_acid_only or (nucleic_acid_only and residue.is_nucleotide):
+        residues.append(residue)
 
     return Structure3D(residues)
 
