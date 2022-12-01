@@ -1,10 +1,12 @@
 import argparse
+import csv
 import logging
 import os
 from enum import Enum
-from typing import List
+from typing import List, Optional
 
 from scipy.spatial import KDTree
+from rnapolis.metareader import read_metadata
 
 from rnapolis.parser import read_3d_structure
 from rnapolis.tertiary import Atom, Residue3D
@@ -45,6 +47,7 @@ def find_clashes(
     ignore_occupancy: bool,
     ignore_autoclashes: bool,
     nucleic_acid_only: bool,
+    require_same_atom_name: bool,
 ):
     reference_residues = []
     reference_atoms = []
@@ -74,6 +77,8 @@ def find_clashes(
 
         if ignore_autoclashes is True and ri == rj:
             continue
+        if require_same_atom_name is True and ai.name != aj.name:
+            continue
 
         if (
             ignore_occupancy is True
@@ -84,6 +89,19 @@ def find_clashes(
             )
 
     return result
+
+
+def classify_clash(atom_i: Atom, atom_j: Atom, occupancy: float) -> Optional[str]:
+    if atom_i.name == "O3'" and atom_j.name in (
+        "OP1",
+        "OP2",
+        "OP3",
+        "O1P",
+        "O2P",
+        "O3P",
+    ):
+        return "O3'"
+    return None
 
 
 def main():
@@ -104,15 +122,20 @@ def main():
         help="By default clashes will be reported even in scope of the same residue, but you can disable this behaviour",
         action="store_true",
     )
+    parser.add_argument(
+        "--require-same-atom-name",
+        help="By default any two clashing atoms are reported (e.g. P vs OP1), but when this is set only report those clashes of the same atom name (e.g. P vs P)",
+        action="store_true",
+    )
+    parser.add_argument("--csv", help="Store result in CSV format")
     args = parser.parse_args()
 
     with open(args.input) as f:
         structure3d = read_3d_structure(f, 1)
 
-    clashing_residues = set()
-    clashing_chains = set()
-    max_occupancy_residues = dict()
-    max_occupancy_chains = dict()
+    clashing_chains = {}
+    max_occupancy_residues = {}
+    max_occupancy_chains = {}
 
     for atom_type in AtomType:
         clashes = find_clashes(
@@ -121,6 +144,7 @@ def main():
             args.ignore_occupancy,
             args.ignore_autoclashes,
             args.nucleic_acid_only,
+            args.require_same_atom_name,
         )
 
         if clashes:
@@ -129,8 +153,14 @@ def main():
             for pi, pj, occupancy in clashes:
                 ri, ai = pi
                 rj, aj = pj
-                clashing_residues.add((ri, rj))
-                clashing_chains.add((ri.chain, rj.chain))
+
+                chain_key = (ri.chain, rj.chain)
+                residue_key = (ri, rj)
+                if chain_key not in clashing_chains:
+                    clashing_chains[chain_key] = {}
+                if residue_key not in clashing_chains[chain_key]:
+                    clashing_chains[chain_key][residue_key] = set()
+                clashing_chains[chain_key][residue_key].add((ai, aj, occupancy))
 
                 max_occupancy_residues[(ri, rj)] = max(
                     [max_occupancy_residues.get((ri, rj), 0.0), occupancy]
@@ -139,20 +169,53 @@ def main():
                     [max_occupancy_residues.get((ri.chain, rj.chain), 0.0), occupancy]
                 )
 
-                logging.debug(
-                    f"  {ri} atom {ai.name} with {rj} atom {aj.name} (sum of occupancies: {occupancy})"
-                )
-
     if clashing_chains:
         for ci, cj in sorted(clashing_chains):
             print(
                 f"Clashes found between chains {ci} and {cj} with occupancy sum of clashing atoms at maximum {max_occupancy_chains[(ci,cj)]}"
             )
-        print()
-        for ri, rj in sorted(clashing_residues):
-            print(
-                f"Clashes found between residues {ri} and {rj} with occupancy sum of clashing atoms at maximum {max_occupancy_residues[(ri,rj)]}"
-            )
+            for ri, rj in clashing_chains[(ci, cj)]:
+                print(
+                    f"    Clashes found between residues {ri} and {rj} with occupancy sum of clashing atoms at maximum {max_occupancy_residues[(ri,rj)]}"
+                )
+                for ai, aj, occupancy in sorted(clashing_chains[(ci, cj)][(ri, rj)]):
+                    print(
+                        f"        Clashes found between atoms {ai.name} and {aj.name} with occupancy sum of {occupancy}"
+                    )
+
+        if args.csv:
+            metadata = read_metadata(args.input, ["exptl", "refine"])
+
+            with open(args.csv, "w") as f:
+                writer = csv.writer(f)
+                writer.writerow(
+                    [
+                        "Filename",
+                        "Experimental method",
+                        "Resolution",
+                        "Atom 1",
+                        "Atom 2",
+                        "Occupancy sum",
+                        "Classification",
+                    ]
+                )
+
+                for ci, cj in sorted(clashing_chains):
+                    for ri, rj in clashing_chains[(ci, cj)]:
+                        for ai, aj, occupancy in sorted(
+                            clashing_chains[(ci, cj)][(ri, rj)]
+                        ):
+                            writer.writerow(
+                                [
+                                    f"{os.path.splitext(os.path.basename(args.input))[0]}",
+                                    metadata["exptl"][0]["method"],
+                                    metadata["refine"][0]["ls_d_res_high"],
+                                    f"{ri} {ai.name}",
+                                    f"{rj} {aj.name}",
+                                    occupancy,
+                                    classify_clash(ai, aj, occupancy),
+                                ]
+                            )
 
 
 if __name__ == "__main__":
