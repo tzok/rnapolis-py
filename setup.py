@@ -29,6 +29,7 @@ setup(
             "annotator=rnapolis.annotator:main",
             "clashfinder=rnapolis.clashfinder:main",
             "metareader=rnapolis.metareader:main",
+            "transformer=rnapolis.transformer:main",
         ]
     },
     install_requires=["mmcif", "numpy", "orjson", "scipy"],
