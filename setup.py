@@ -5,7 +5,7 @@ with open("README.md") as f:
 
 setup(
     name="RNApolis",
-    version="0.0.7",
+    version="0.0.8",
     packages=["rnapolis"],
     package_dir={"": "src"},
     author="Tomasz Zok",
@@ -29,6 +29,7 @@ setup(
             "annotator=rnapolis.annotator:main",
             "clashfinder=rnapolis.clashfinder:main",
             "metareader=rnapolis.metareader:main",
+            "transformer=rnapolis.transformer:main",
         ]
     },
     install_requires=["mmcif", "numpy", "orjson", "scipy"],
