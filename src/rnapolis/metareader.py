@@ -1,10 +1,12 @@
 #! /usr/bin/env python
 import argparse
-from typing import Dict, List
+from typing import Dict, IO, List
 
 import orjson
 from mmcif.io.IoAdapterPy import IoAdapterPy
 from mmcif.io.PdbxReader import DataContainer
+
+from rnapolis.util import handle_input_file
 
 
 def convert_category(data: List[DataContainer], category_name: str) -> List[Dict]:
@@ -16,15 +18,15 @@ def convert_category(data: List[DataContainer], category_name: str) -> List[Dict
     return []
 
 
-def read_metadata(path: str, categories: List[str]) -> Dict:
+def read_metadata(file: IO[str], categories: List[str]) -> Dict:
     adapter = IoAdapterPy()
-    data = adapter.readFile(path)
+    data = adapter.readFile(file.name)
     return {key: convert_category(data, key) for key in categories}
 
 
-def list_metadata(path: str) -> List[str]:
+def list_metadata(file: IO[str]) -> List[str]:
     adapter = IoAdapterPy()
-    data = adapter.readFile(path)
+    data = adapter.readFile(file.name)
     return data[0].getObjNameList()
 
 
@@ -46,11 +48,13 @@ def main():
     )
     args = parser.parse_args()
 
+    file = handle_input_file(args.path)
+
     if args.list_categories:
-        for name in list_metadata(args.path):
+        for name in list_metadata(file):
             print(name)
     else:
-        result = read_metadata(args.path, args.category)
+        result = read_metadata(file, args.category)
         print(orjson.dumps(result).decode("utf-8"))
 
 
