@@ -33,28 +33,30 @@ def main():
         sys.exit(1)
 
     category = data[0].getObj(args.category)
+    attributes = category.getAttributeList()
 
-    if (
-        args.copy_from not in category.getAttributeList()
-        or args.copy_to not in category.getAttributeList()
-    ):
+    if args.copy_from not in attributes:
         print(
-            f"Failed to find data item {args.copy_from} or {args.copy_to} in {args.category}",
+            f"Failed to find data item {args.copy_from} in {args.category}",
             file=sys.stderr,
         )
         sys.exit(1)
 
     transformed = []
 
+    if args.copy_to not in attributes:
+        attributes.append(args.copy_to)
+
     for row in category.getRowList():
-        i = category.getAttributeList().index(args.copy_from)
-        j = category.getAttributeList().index(args.copy_to)
-        row[j] = row[i]
+        i = attributes.index(args.copy_from)
+        j = attributes.index(args.copy_to)
+        if j >= len(row):
+            row.append(row[i])
+        else:
+            row[j] = row[i]
         transformed.append(row)
 
-    data[0].replace(
-        DataCategory(args.category, category.getAttributeList(), transformed)
-    )
+    data[0].replace(DataCategory(args.category, attributes, transformed))
 
     adapter.writeFile(args.output, data)
 

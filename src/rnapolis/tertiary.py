@@ -384,6 +384,7 @@ class Structure3D:
 class Mapping2D3D:
     structure3d: Structure3D
     structure2d: Structure2D
+    find_gaps: bool
 
     @property
     def base_pairs(self) -> List[BasePair3D]:
@@ -470,7 +471,9 @@ class Mapping2D3D:
             previous = strand[-1]
             current = nucleotides[i]
 
-            if previous.chain == current.chain and previous.is_connected(current):
+            if previous.chain == current.chain and (
+                self.find_gaps == False or previous.is_connected(current)
+            ):
                 strand.append(current)
             else:
                 result.append(
