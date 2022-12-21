@@ -6,8 +6,8 @@ from enum import Enum
 from typing import List, Optional
 
 from scipy.spatial import KDTree
-from rnapolis.metareader import read_metadata
 
+from rnapolis.metareader import read_metadata
 from rnapolis.parser import read_3d_structure
 from rnapolis.tertiary import Atom, Residue3D
 

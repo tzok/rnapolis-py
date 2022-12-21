@@ -1,4 +1,4 @@
-mmcif==0.79
-numpy==1.23.5
-orjson==3.8.2
+mmcif==0.80.1
+numpy==1.24.0
+orjson==3.8.3
 scipy==1.9.3

@@ -27,6 +27,7 @@ from rnapolis.common import (
 )
 from rnapolis.parser import read_3d_structure
 from rnapolis.tertiary import (
+    AVERAGE_OXYGEN_PHOSPHORUS_DISTANCE_COVALENT,
     BASE_ACCEPTORS,
     BASE_ATOMS,
     BASE_DONORS,
@@ -39,6 +40,7 @@ from rnapolis.tertiary import (
     Structure3D,
     torsion_angle,
 )
+from rnapolis.util import handle_input_file
 
 HYDROGEN_BOND_MAX_DISTANCE = 4.0
 HYDROGEN_BOND_ANGLE_RANGE = (50.0, 130.0)  # 90 degrees is ideal, so allow +- 40 degrees
@@ -539,11 +541,16 @@ def main():
         action="store_true",
         help="(optional) if set, the program will print extended secondary structure to the standard output",
     )
+    parser.add_argument(
+        "--find-gaps",
+        action="store_true",
+        help=f"(optional) if set, the program will detect gaps and break the PDB chain into two or more strands; "
+        "the gap is defined as O3'-P distance greater then {1.5 * AVERAGE_OXYGEN_PHOSPHORUS_DISTANCE_COVALENT}",
+    )
     args = parser.parse_args()
 
-    with open(args.input) as f:
-        structure3d = read_3d_structure(f, 1)
-
+    file = handle_input_file(args.input)
+    structure3d = read_3d_structure(file, 1)
     structure2d = extract_secondary_structure(structure3d)
 
     if args.csv:
@@ -552,7 +559,7 @@ def main():
     if args.json:
         write_json(args.json, structure2d)
 
-    mapping = Mapping2D3D(structure3d, structure2d)
+    mapping = Mapping2D3D(structure3d, structure2d, args.find_gaps)
 
     if args.bpseq:
         write_bpseq(args.bpseq, mapping)
