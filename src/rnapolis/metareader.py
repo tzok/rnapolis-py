@@ -1,6 +1,6 @@
 #! /usr/bin/env python
 import argparse
-from typing import Dict, IO, List
+from typing import IO, Dict, List
 
 import orjson
 from mmcif.io.IoAdapterPy import IoAdapterPy
