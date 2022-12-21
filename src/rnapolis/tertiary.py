@@ -133,7 +133,7 @@ class Residue3D(Residue):
         )
 
     def __hash__(self):
-        return hash((self.name, self.model, self.label, self.auth, self.atoms))
+        return hash((self.name, self.model, self.label, self.auth))
 
     def __repr__(self):
         return f"{self.full_name}"
