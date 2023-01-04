@@ -3,6 +3,7 @@ import csv
 import logging
 import os
 from enum import Enum
+from functools import cached_property
 from typing import List, Optional
 
 from scipy.spatial import KDTree
@@ -25,7 +26,7 @@ class AtomType(Enum):
     O = "O"
     P = "P"
 
-    @property
+    @cached_property
     def radius(self) -> float:
         if self.value == "C":
             return CARBON_RADIUS
