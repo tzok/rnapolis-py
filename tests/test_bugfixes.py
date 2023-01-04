@@ -1,5 +1,5 @@
 from rnapolis.annotator import extract_secondary_structure
-from rnapolis.common import ResidueLabel
+from rnapolis.common import ResidueAuth, ResidueLabel
 from rnapolis.parser import read_3d_structure
 from rnapolis.tertiary import Mapping2D3D
 
@@ -46,3 +46,11 @@ def test_1HMH():
     structure2d = extract_secondary_structure(structure3d)
     mapping = Mapping2D3D(structure3d, structure2d, True)
     assert mapping.dot_bracket == ">strand_E\nUG\n.."
+
+
+# in 6INQ the residues T.DC0 and N.DG0 were not found by RNApolis
+def test_6INQ():
+    with open("tests/6INQ.cif") as f:
+        structure3d = read_3d_structure(f, 1)
+    assert structure3d.find_residue(ResidueLabel("N", 73, "DC"), None) is not None
+    assert structure3d.find_residue(None, ResidueAuth("T", 0, None, "DC")) is not None

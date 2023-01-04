@@ -1,0 +1,48 @@
+data_XXXX
+
+loop_
+_atom_site.group_PDB 
+_atom_site.id 
+_atom_site.type_symbol 
+_atom_site.label_atom_id 
+_atom_site.label_alt_id 
+_atom_site.label_comp_id 
+_atom_site.label_asym_id 
+_atom_site.label_entity_id 
+_atom_site.label_seq_id 
+_atom_site.pdbx_PDB_ins_code 
+_atom_site.Cartn_x 
+_atom_site.Cartn_y 
+_atom_site.Cartn_z 
+_atom_site.occupancy 
+_atom_site.B_iso_or_equiv 
+_atom_site.Cartn_x_esd 
+_atom_site.Cartn_y_esd 
+_atom_site.Cartn_z_esd 
+_atom_site.occupancy_esd 
+_atom_site.B_iso_or_equiv_esd 
+_atom_site.pdbx_formal_charge 
+_atom_site.auth_seq_id 
+_atom_site.auth_comp_id 
+_atom_site.auth_asym_id 
+_atom_site.auth_atom_id 
+_atom_site.pdbx_PDB_model_num 
+ATOM   32892 P  P     . DC  N  14 73   ? 193.782 193.303 89.950  1.00 173.33 ? ? ? ? ? ? 0    DC  T P     1 
+ATOM   32893 O  OP1   . DC  N  14 73   ? 195.024 192.883 89.270  1.00 173.33 ? ? ? ? ? ? 0    DC  T OP1   1 
+ATOM   32894 O  OP2   . DC  N  14 73   ? 193.356 192.595 91.175  1.00 173.33 ? ? ? ? ? ? 0    DC  T OP2   1 
+ATOM   32895 O  "O5'" . DC  N  14 73   ? 193.895 194.864 90.261  1.00 173.33 ? ? ? ? ? ? 0    DC  T "O5'" 1 
+ATOM   32896 C  "C5'" . DC  N  14 73   ? 193.910 195.788 89.181  1.00 173.33 ? ? ? ? ? ? 0    DC  T "C5'" 1 
+ATOM   32897 C  "C4'" . DC  N  14 73   ? 193.946 197.205 89.697  1.00 173.33 ? ? ? ? ? ? 0    DC  T "C4'" 1 
+ATOM   32898 O  "O4'" . DC  N  14 73   ? 192.603 197.646 89.983  1.00 173.33 ? ? ? ? ? ? 0    DC  T "O4'" 1 
+ATOM   32899 C  "C3'" . DC  N  14 73   ? 194.743 197.377 90.984  1.00 173.33 ? ? ? ? ? ? 0    DC  T "C3'" 1 
+ATOM   32900 O  "O3'" . DC  N  14 73   ? 195.844 198.227 90.756  1.00 173.33 ? ? ? ? ? ? 0    DC  T "O3'" 1 
+ATOM   32901 C  "C2'" . DC  N  14 73   ? 193.752 197.981 91.982  1.00 173.33 ? ? ? ? ? ? 0    DC  T "C2'" 1 
+ATOM   32902 C  "C1'" . DC  N  14 73   ? 192.620 198.477 91.106  1.00 173.33 ? ? ? ? ? ? 0    DC  T "C1'" 1 
+ATOM   32903 N  N1    . DC  N  14 73   ? 191.349 198.331 91.756  1.00 173.33 ? ? ? ? ? ? 0    DC  T N1    1 
+ATOM   32904 C  C2    . DC  N  14 73   ? 190.607 199.453 92.065  1.00 173.33 ? ? ? ? ? ? 0    DC  T C2    1 
+ATOM   32905 O  O2    . DC  N  14 73   ? 191.034 200.558 91.750  1.00 173.33 ? ? ? ? ? ? 0    DC  T O2    1 
+ATOM   32906 N  N3    . DC  N  14 73   ? 189.421 199.296 92.671  1.00 173.33 ? ? ? ? ? ? 0    DC  T N3    1 
+ATOM   32907 C  C4    . DC  N  14 73   ? 188.999 198.085 92.992  1.00 173.33 ? ? ? ? ? ? 0    DC  T C4    1 
+ATOM   32908 N  N4    . DC  N  14 73   ? 187.825 197.977 93.589  1.00 173.33 ? ? ? ? ? ? 0    DC  T N4    1 
+ATOM   32909 C  C5    . DC  N  14 73   ? 189.758 196.922 92.704  1.00 173.33 ? ? ? ? ? ? 0    DC  T C5    1 
+ATOM   32910 C  C6    . DC  N  14 73   ? 190.916 197.093 92.082  1.00 173.33 ? ? ? ? ? ? 0    DC  T C6    1 
