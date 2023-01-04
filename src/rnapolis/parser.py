@@ -74,13 +74,21 @@ def parse_cif(
                     )
 
                 label = None
-                if label_chain_name and label_residue_number and label_residue_name:
+                if (
+                    label_chain_name is not None
+                    and label_residue_number is not None
+                    and label_residue_name is not None
+                ):
                     label = ResidueLabel(
                         label_chain_name, label_residue_number, label_residue_name
                     )
 
                 auth = None
-                if auth_chain_name and auth_residue_number and auth_residue_name:
+                if (
+                    auth_chain_name is not None
+                    and auth_residue_number is not None
+                    and auth_residue_name is not None
+                ):
                     auth = ResidueAuth(
                         auth_chain_name,
                         auth_residue_number,
@@ -115,17 +123,21 @@ def parse_cif(
                 insertion_code = row_dict.get("PDB_ins_code", None)
 
                 label = None
-                if label_chain_name and label_residue_number and label_residue_name:
+                if (
+                    label_chain_name is not None
+                    and label_residue_number is not None
+                    and label_residue_name is not None
+                ):
                     label = ResidueLabel(
                         label_chain_name, label_residue_number, label_residue_name
                     )
 
                 auth = None
                 if (
-                    auth_chain_name
-                    and auth_residue_number
-                    and auth_residue_name
-                    and insertion_code
+                    auth_chain_name is not None
+                    and auth_residue_number is not None
+                    and auth_residue_name is not None
+                    and insertion_code is not None
                 ):
                     auth = ResidueAuth(
                         auth_chain_name,
