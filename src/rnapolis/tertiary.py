@@ -5,7 +5,7 @@ import math
 import string
 from collections import defaultdict
 from dataclasses import dataclass, field
-from functools import total_ordering
+from functools import cached_property, total_ordering
 from typing import Dict, List, Optional, Set, Tuple, Union
 
 import numpy
@@ -108,7 +108,7 @@ class Atom:
     z: float
     occupancy: Optional[float]
 
-    @property
+    @cached_property
     def coordinates(self) -> numpy.typing.NDArray[numpy.floating]:
         return numpy.array([self.x, self.y, self.z])
 
@@ -134,12 +134,12 @@ class Residue3D(Residue):
         )
 
     def __hash__(self):
-        return hash((self.name, self.model, self.label, self.auth))
+        return hash((self.model, self.label, self.auth))
 
     def __repr__(self):
         return f"{self.full_name}"
 
-    @property
+    @cached_property
     def chi(self) -> float:
         if self.one_letter_name.upper() in ("A", "G"):
             return self.__chi_purine()
@@ -152,7 +152,7 @@ class Residue3D(Residue):
         return torsion
 
     # TODO: the ranges could be modified to match Saenger
-    @property
+    @cached_property
     def chi_class(self) -> Optional[GlycosidicBond]:
         if math.isnan(self.chi):
             return None
@@ -160,21 +160,21 @@ class Residue3D(Residue):
             return GlycosidicBond.syn
         return GlycosidicBond.anti
 
-    @property
+    @cached_property
     def outermost_atom(self) -> Atom:
         return next(filter(None, self.__outer_generator()))
 
-    @property
+    @cached_property
     def innermost_atom(self) -> Atom:
         return next(filter(None, self.__inner_generator()))
 
-    @property
+    @cached_property
     def is_nucleotide(self) -> bool:
         return len(self.atoms) > 1 and any(
             [atom for atom in self.atoms if atom.name == "C1'"]
         )
 
-    @property
+    @cached_property
     def base_normal_vector(self) -> Optional[numpy.typing.NDArray[numpy.floating]]:
         if self.one_letter_name in "AG":
             n9 = self.find_atom("N9")
@@ -311,7 +311,7 @@ class BasePair3D(BasePair):
         LeontisWesthof.tSS: 18,
     }
 
-    @property
+    @cached_property
     def reverse(self):
         return BasePair3D(
             self.nt2,
@@ -322,11 +322,11 @@ class BasePair3D(BasePair):
             self.nt1_3d,
         )
 
-    @property
+    @cached_property
     def score(self) -> int:
         return self.score_table.get(self.lw, 20)
 
-    @property
+    @cached_property
     def is_canonical(self) -> bool:
         if self.saenger is not None:
             return self.saenger.is_canonical
@@ -349,7 +349,7 @@ class Stacking3D(Stacking):
     nt1_3d: Residue3D
     nt2_3d: Residue3D
 
-    @property
+    @cached_property
     def reverse(self):
         if self.topology is None:
             return self
@@ -387,7 +387,7 @@ class Mapping2D3D:
     structure2d: Structure2D
     find_gaps: bool
 
-    @property
+    @cached_property
     def base_pairs(self) -> List[BasePair3D]:
         result = []
         used = set()
@@ -411,7 +411,7 @@ class Mapping2D3D:
                     used.add(bp.reverse)
         return result
 
-    @property
+    @cached_property
     def base_pair_graph(
         self,
     ) -> Dict[Residue3D, Set[Residue3D]]:
@@ -421,7 +421,7 @@ class Mapping2D3D:
             graph[pair.nt2_3d].add(pair.nt1_3d)
         return graph
 
-    @property
+    @cached_property
     def base_pair_dict(self) -> Dict[Tuple[Residue3D, Residue3D], BasePair3D]:
         result = {}
         for base_pair in self.base_pairs:
@@ -431,7 +431,7 @@ class Mapping2D3D:
             result[(residue_j, residue_i)] = base_pair.reverse
         return result
 
-    @property
+    @cached_property
     def stackings(self) -> List[Stacking3D]:
         result = []
         used = set()
@@ -448,7 +448,7 @@ class Mapping2D3D:
                     used.add(st.reverse)
         return result
 
-    @property
+    @cached_property
     def stacking_graph(self) -> Dict[Residue3D, Set[Residue3D]]:
         graph = defaultdict(set)
         for pair in self.stackings:
@@ -456,7 +456,7 @@ class Mapping2D3D:
             graph[pair.nt2_3d].add(pair.nt1_3d)
         return graph
 
-    @property
+    @cached_property
     def strands_sequences(self) -> List[Tuple[str, str]]:
         nucleotides = [
             residue for residue in self.structure3d.residues if residue.is_nucleotide
@@ -495,7 +495,7 @@ class Mapping2D3D:
 
         return result
 
-    @property
+    @cached_property
     def bpseq(self) -> str:
         result: Dict[int, List] = {}
         residue_map: Dict[Residue3D, int] = {}
@@ -573,7 +573,7 @@ class Mapping2D3D:
             i += len(sequence)
         return result
 
-    @property
+    @cached_property
     def dot_bracket(self) -> str:
         base_pairs = []
         for base_pair in self.base_pairs:
@@ -592,7 +592,7 @@ class Mapping2D3D:
             i += len(sequence)
         return "\n".join(result)
 
-    @property
+    @cached_property
     def extended_dot_bracket(self) -> str:
         strand_lw_dbn: List[Dict[LeontisWesthof, str]] = [
             {} for _ in self.strands_sequences
