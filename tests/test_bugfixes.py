@@ -54,3 +54,5 @@ def test_6INQ():
         structure3d = read_3d_structure(f, 1)
     assert structure3d.find_residue(ResidueLabel("N", 73, "DC"), None) is not None
     assert structure3d.find_residue(None, ResidueAuth("T", 0, None, "DC")) is not None
+    assert structure3d.find_residue(ResidueLabel("O", 126, "DG"), None) is not None
+    assert structure3d.find_residue(None, ResidueAuth("N", 0, None, "DG")) is not None
