@@ -215,24 +215,20 @@ class Residue:
         )
 
     @cached_property
-    def chain(self) -> str:
+    def chain(self) -> Optional[str]:
         if self.auth is not None:
             return self.auth.chain
         if self.label is not None:
             return self.label.chain
-        raise RuntimeError(
-            "Unknown chain name, both ResidueAuth and ResidueLabel are empty"
-        )
+        return None
 
     @cached_property
-    def number(self) -> int:
+    def number(self) -> Optional[int]:
         if self.auth is not None:
             return self.auth.number
         if self.label is not None:
             return self.label.number
-        raise RuntimeError(
-            "Unknown residue number, both ResidueAuth and ResidueLabel are empty"
-        )
+        return None
 
     @cached_property
     def icode(self) -> Optional[str]:
@@ -241,31 +237,30 @@ class Residue:
         return None
 
     @cached_property
-    def name(self) -> str:
+    def name(self) -> Optional[str]:
         if self.auth is not None:
             return self.auth.name
         if self.label is not None:
             return self.label.name
-        raise RuntimeError(
-            "Unknown residue name, both ResidueAuth and ResidueLabel are empty"
-        )
+        return None
 
     @cached_property
     def molecule_type(self) -> Molecule:
-        if self.name.upper() in ("A", "C", "G", "U"):
-            return Molecule.RNA
-        if self.name.upper() in ("DA", "DC", "DG", "DT"):
-            return Molecule.DNA
+        if self.name is not None:
+            if self.name.upper() in ("A", "C", "G", "U"):
+                return Molecule.RNA
+            if self.name.upper() in ("DA", "DC", "DG", "DT"):
+                return Molecule.DNA
         return Molecule.Other
 
     @cached_property
-    def full_name(self) -> str:
+    def full_name(self) -> Optional[str]:
         if self.auth is not None:
             if self.auth.chain.isspace():
                 builder = f"{self.auth.name}"
             else:
                 builder = f"{self.auth.chain}.{self.auth.name}"
-            if self.auth.name[-1] in string.digits:
+            if len(self.auth.name) > 0 and self.auth.name[-1] in string.digits:
                 builder += "/"
             builder += f"{self.auth.number}"
             if self.auth.icode:
@@ -276,13 +271,11 @@ class Residue:
                 builder = f"{self.label.name}"
             else:
                 builder = f"{self.label.chain}.{self.label.name}"
-            if self.label.name[-1] in string.digits:
+            if len(self.label.name) > 0 and self.label.name[-1] in string.digits:
                 builder += "/"
             builder += f"{self.label.number}"
             return builder
-        raise RuntimeError(
-            "Unknown full residue name, both ResidueAuth and ResidueLabel are empty"
-        )
+        return None
 
 
 @dataclass(frozen=True, order=True)
