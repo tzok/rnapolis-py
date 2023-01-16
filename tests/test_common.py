@@ -43,11 +43,18 @@ def test_rnapdbee_adapters_api_compliance_interaction(obj):
 
 @given(st.from_type(BasePair))
 def test_rnapdbee_adapters_api_compliance_base_pair(obj):
+    # explicitly use all properties to make sure they are not added to __dict__ as @cached_property
+    obj.lw.reverse
+    if obj.saenger is not None:
+        obj.saenger.is_canonical
     assert obj.__dict__.keys() == {"nt1", "nt2", "lw", "saenger"}
 
 
 @given(st.from_type(Stacking))
 def test_rnapdbee_adapters_api_compliance_stacking(obj):
+    # explicitly use all properties to make sure they are not added to __dict__ as @cached_property
+    if obj.topology is not None:
+        obj.topology.reverse
     assert obj.__dict__.keys() == {"nt1", "nt2", "topology"}
 
 

@@ -1,7 +1,7 @@
 import string
 from dataclasses import dataclass
 from enum import Enum
-from functools import cached_property, total_ordering
+from functools import cache, total_ordering
 from typing import Dict, List, Optional, Tuple
 
 
@@ -37,7 +37,7 @@ class LeontisWesthof(Enum):
     tSH = "tSH"
     tSS = "tSS"
 
-    @cached_property
+    @property
     def reverse(self):
         return LeontisWesthof[f"{self.name[0]}{self.name[2]}{self.name[1]}"]
 
@@ -140,7 +140,7 @@ class Saenger(Enum):
             ("TG", "cWW"): "XXVIII",
         }
 
-    @cached_property
+    @property
     def is_canonical(self) -> bool:
         return self == Saenger.XIX or self == Saenger.XX or self == Saenger.XXVIII
 
@@ -151,7 +151,7 @@ class StackingTopology(Enum):
     inward = "inward"
     outward = "outward"
 
-    @cached_property
+    @property
     def reverse(self):
         if self == StackingTopology.upward:
             return StackingTopology.downward
@@ -214,7 +214,7 @@ class Residue:
             other.icode or " ",
         )
 
-    @cached_property
+    @property
     def chain(self) -> Optional[str]:
         if self.auth is not None:
             return self.auth.chain
@@ -222,7 +222,7 @@ class Residue:
             return self.label.chain
         return None
 
-    @cached_property
+    @property
     def number(self) -> Optional[int]:
         if self.auth is not None:
             return self.auth.number
@@ -230,13 +230,13 @@ class Residue:
             return self.label.number
         return None
 
-    @cached_property
+    @property
     def icode(self) -> Optional[str]:
         if self.auth is not None:
             return self.auth.icode if self.auth.icode not in (" ", "?") else None
         return None
 
-    @cached_property
+    @property
     def name(self) -> Optional[str]:
         if self.auth is not None:
             return self.auth.name
@@ -244,7 +244,7 @@ class Residue:
             return self.label.name
         return None
 
-    @cached_property
+    @property
     def molecule_type(self) -> Molecule:
         if self.name is not None:
             if self.name.upper() in ("A", "C", "G", "U"):
@@ -253,7 +253,8 @@ class Residue:
                 return Molecule.DNA
         return Molecule.Other
 
-    @cached_property
+    @property
+    @cache
     def full_name(self) -> Optional[str]:
         if self.auth is not None:
             if self.auth.chain.isspace():
