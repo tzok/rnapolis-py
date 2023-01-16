@@ -1,7 +1,7 @@
 import string
 from dataclasses import dataclass
 from enum import Enum
-from functools import cached_property, total_ordering
+from functools import cache, total_ordering
 from typing import Dict, List, Optional, Tuple
 
 
@@ -37,7 +37,7 @@ class LeontisWesthof(Enum):
     tSH = "tSH"
     tSS = "tSS"
 
-    @cached_property
+    @property
     def reverse(self):
         return LeontisWesthof[f"{self.name[0]}{self.name[2]}{self.name[1]}"]
 
@@ -140,7 +140,7 @@ class Saenger(Enum):
             ("TG", "cWW"): "XXVIII",
         }
 
-    @cached_property
+    @property
     def is_canonical(self) -> bool:
         return self == Saenger.XIX or self == Saenger.XX or self == Saenger.XXVIII
 
@@ -151,7 +151,7 @@ class StackingTopology(Enum):
     inward = "inward"
     outward = "outward"
 
-    @cached_property
+    @property
     def reverse(self):
         if self == StackingTopology.upward:
             return StackingTopology.downward
@@ -214,58 +214,54 @@ class Residue:
             other.icode or " ",
         )
 
-    @cached_property
-    def chain(self) -> str:
+    @property
+    def chain(self) -> Optional[str]:
         if self.auth is not None:
             return self.auth.chain
         if self.label is not None:
             return self.label.chain
-        raise RuntimeError(
-            "Unknown chain name, both ResidueAuth and ResidueLabel are empty"
-        )
+        return None
 
-    @cached_property
-    def number(self) -> int:
+    @property
+    def number(self) -> Optional[int]:
         if self.auth is not None:
             return self.auth.number
         if self.label is not None:
             return self.label.number
-        raise RuntimeError(
-            "Unknown residue number, both ResidueAuth and ResidueLabel are empty"
-        )
+        return None
 
-    @cached_property
+    @property
     def icode(self) -> Optional[str]:
         if self.auth is not None:
             return self.auth.icode if self.auth.icode not in (" ", "?") else None
         return None
 
-    @cached_property
-    def name(self) -> str:
+    @property
+    def name(self) -> Optional[str]:
         if self.auth is not None:
             return self.auth.name
         if self.label is not None:
             return self.label.name
-        raise RuntimeError(
-            "Unknown residue name, both ResidueAuth and ResidueLabel are empty"
-        )
+        return None
 
-    @cached_property
+    @property
     def molecule_type(self) -> Molecule:
-        if self.name.upper() in ("A", "C", "G", "U"):
-            return Molecule.RNA
-        if self.name.upper() in ("DA", "DC", "DG", "DT"):
-            return Molecule.DNA
+        if self.name is not None:
+            if self.name.upper() in ("A", "C", "G", "U"):
+                return Molecule.RNA
+            if self.name.upper() in ("DA", "DC", "DG", "DT"):
+                return Molecule.DNA
         return Molecule.Other
 
-    @cached_property
-    def full_name(self) -> str:
+    @property
+    @cache
+    def full_name(self) -> Optional[str]:
         if self.auth is not None:
             if self.auth.chain.isspace():
                 builder = f"{self.auth.name}"
             else:
                 builder = f"{self.auth.chain}.{self.auth.name}"
-            if self.auth.name[-1] in string.digits:
+            if len(self.auth.name) > 0 and self.auth.name[-1] in string.digits:
                 builder += "/"
             builder += f"{self.auth.number}"
             if self.auth.icode:
@@ -276,13 +272,11 @@ class Residue:
                 builder = f"{self.label.name}"
             else:
                 builder = f"{self.label.chain}.{self.label.name}"
-            if self.label.name[-1] in string.digits:
+            if len(self.label.name) > 0 and self.label.name[-1] in string.digits:
                 builder += "/"
             builder += f"{self.label.number}"
             return builder
-        raise RuntimeError(
-            "Unknown full residue name, both ResidueAuth and ResidueLabel are empty"
-        )
+        return None
 
 
 @dataclass(frozen=True, order=True)
