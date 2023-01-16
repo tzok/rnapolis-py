@@ -9,12 +9,12 @@ def handle_input_file(path) -> IO[str]:
 
     if ext == ".gz":
         root, ext = os.path.splitext(root)
-        file = tempfile.NamedTemporaryFile("w+", suffix=ext)
+        file = tempfile.NamedTemporaryFile("wt+", suffix=ext)
         with gzip.open(path, "rt") as f:
             file.write(f.read())
             file.seek(0)
     else:
-        file = tempfile.NamedTemporaryFile("w+", suffix=ext)
+        file = tempfile.NamedTemporaryFile("wt+", suffix=ext)
         with open(path) as f:
             file.write(f.read())
             file.seek(0)
