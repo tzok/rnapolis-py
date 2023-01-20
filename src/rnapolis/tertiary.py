@@ -151,13 +151,15 @@ class Residue3D(Residue):
             return self.__chi_pyrimidine()
         return torsion
 
-    # TODO: the ranges could be modified to match Saenger
     @cached_property
     def chi_class(self) -> Optional[GlycosidicBond]:
         if math.isnan(self.chi):
             return None
-        if -math.pi / 2 < self.chi < math.pi / 2:
+        # syn is between -30 and 120 degress
+        # this complies with Neidle "Principles of Nucleic Acid Structure" and with own research
+        if math.radians(-30) < self.chi < math.radians(120):
             return GlycosidicBond.syn
+        # the rest is anti
         return GlycosidicBond.anti
 
     @cached_property
