@@ -1,3 +1,6 @@
+from hypothesis import given
+from hypothesis import strategies as st
+
 from rnapolis.common import (
     BasePair,
     BasePhosphate,
@@ -10,8 +13,6 @@ from rnapolis.common import (
     Stacking,
     Structure2D,
 )
-from hypothesis import given
-from hypothesis import strategies as st
 
 
 @given(st.from_type(ResidueLabel))

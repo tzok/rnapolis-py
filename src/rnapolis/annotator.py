@@ -5,11 +5,12 @@ import logging
 import math
 import os
 from collections import Counter, defaultdict
-from typing import IO, Dict, List, Optional, Tuple
+from typing import IO, Dict, List, Optional, Set, Tuple
 
 import numpy
 import numpy.typing
 import orjson
+from ordered_set import OrderedSet
 from scipy.spatial import KDTree
 
 from rnapolis.common import (
@@ -148,21 +149,26 @@ def detect_bph_br_classification(
 
 def merge_and_clean_bph_br(
     pairs: List[Tuple[Residue3D, Residue3D, int]]
-) -> Dict[Tuple[Residue3D, Residue3D], List[int]]:
-    bph_br_map = defaultdict(list)
+) -> Dict[Tuple[Residue3D, Residue3D], OrderedSet[int]]:
+    bph_br_map: Dict[Tuple[Residue3D, Residue3D], OrderedSet[int]] = defaultdict(
+        OrderedSet
+    )
     for residue_i, residue_j, classification in pairs:
-        bph_br_map[(residue_i, residue_j)].append(classification)
+        bph_br_map[(residue_i, residue_j)].add(classification)
     for bphs_brs in bph_br_map.values():
         # 3BPh and 5BPh simultanously means that it is actually 4BPh
         if 3 in bphs_brs and 5 in bphs_brs:
             bphs_brs.remove(3)
             bphs_brs.remove(5)
-            bphs_brs.append(4)
+            bphs_brs.add(4)
         # 7BPh and 9BPh simultanously means that it is actually 8BPh
         if 7 in bphs_brs and 9 in bphs_brs:
             bphs_brs.remove(7)
             bphs_brs.remove(9)
-            bphs_brs.append(8)
+            bphs_brs.add(8)
+    for key, bphs_brs in bph_br_map.items():
+        if len(bphs_brs) > 1:
+            bph_br_map[key] = OrderedSet([bphs_brs[0]])
     return bph_br_map
 
 
@@ -203,6 +209,7 @@ def find_pairs(
     hydrogen_bonds = []
     base_phosphate_pairs = []
     base_ribose_pairs = []
+    used_atoms: Set[Atom] = set()
     for i, j in kdtree.query_pairs(HYDROGEN_BOND_MAX_DISTANCE):
         type_i = coordinates_type_map[coordinates[i]]
         type_j = coordinates_type_map[coordinates[j]]
@@ -235,7 +242,11 @@ def find_pairs(
         )
 
         # check for base-phosphate contacts
-        if atom_i.name in PHOSPHATE_ACCEPTORS or atom_j.name in PHOSPHATE_ACCEPTORS:
+        if (
+            (atom_i.name in PHOSPHATE_ACCEPTORS or atom_j.name in PHOSPHATE_ACCEPTORS)
+            and atom_i not in used_atoms
+            and atom_j not in used_atoms
+        ):
             logging.debug("Checking base-phosphate interaction")
             if type_i == "donor":
                 donor_residue, acceptor_residue = residue_i, residue_j
@@ -245,11 +256,17 @@ def find_pairs(
                 donor_atom, acceptor_atom = atom_j, atom_i
             bph = detect_bph_br_classification(donor_residue, donor_atom, acceptor_atom)
             if bph is not None:
+                used_atoms.add(atom_i)
+                used_atoms.add(atom_j)
                 base_phosphate_pairs.append((donor_residue, acceptor_residue, bph))
             continue
 
         # check for base-ribose contacts
-        if atom_i.name in RIBOSE_ACCEPTORS or atom_j.name in RIBOSE_ACCEPTORS:
+        if (
+            (atom_i.name in RIBOSE_ACCEPTORS or atom_j.name in RIBOSE_ACCEPTORS)
+            and atom_i not in used_atoms
+            and atom_j not in used_atoms
+        ):
             logging.debug("Checking base-ribose interaction")
             if type_i == "donor":
                 donor_residue, acceptor_residue = residue_i, residue_j
@@ -259,6 +276,8 @@ def find_pairs(
                 donor_atom, acceptor_atom = atom_j, atom_i
             br = detect_bph_br_classification(donor_residue, donor_atom, acceptor_atom)
             if br is not None:
+                used_atoms.add(atom_i)
+                used_atoms.add(atom_j)
                 base_ribose_pairs.append((donor_residue, acceptor_residue, br))
             continue
 
