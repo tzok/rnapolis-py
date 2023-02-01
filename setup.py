@@ -5,7 +5,7 @@ with open("README.md") as f:
 
 setup(
     name="RNApolis",
-    version="0.0.13",
+    version="0.0.14",
     packages=["rnapolis"],
     package_dir={"": "src"},
     author="Tomasz Zok",
@@ -32,5 +32,5 @@ setup(
             "transformer=rnapolis.transformer:main",
         ]
     },
-    install_requires=["mmcif", "numpy", "orjson", "scipy"],
+    install_requires=["mmcif", "numpy", "ordered-set", "orjson", "scipy"],
 )
