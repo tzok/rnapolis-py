@@ -3,7 +3,7 @@ import string
 from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import Enum
-from functools import cache, total_ordering
+from functools import cache, cached_property, total_ordering
 from typing import Dict, List, Optional, Tuple
 
 
@@ -448,6 +448,7 @@ class BpSeq:
             ei == ej for ei, ej in zip(self.entries, other.entries)
         )
 
+    @cached_property
     def sequence(self) -> str:
         return "".join(entry.sequence for entry in self.entries)
 
@@ -457,6 +458,7 @@ class BpSeq:
             result = filter(lambda entry: entry.index_ < entry.pair, result)
         return result
 
+    @cached_property
     def stems(self) -> List:
         result = []
         strand5p: List[Entry] = []
@@ -480,21 +482,23 @@ class BpSeq:
 
         return result
 
+    @cached_property
     def hairpins(self) -> List:
         hairpins = []
 
         for entry in self.paired(only5to3=True):
-            if all([self.pairs[i] == 0 for i in range(entry.index_ + 1, entry.pair)]):
-                entries = list(
-                    filter(
-                        lambda e: entry.index_ <= e.index_ <= entry.pair, self.entries
-                    )
-                )
-                strand = Strand.from_bpseq_entries(entries)
+            candidate = [
+                other
+                for other in self.entries
+                if entry.index_ <= other.index_ <= entry.pair
+            ]
+            if all([other.pair == 0 for other in candidate[1:-1]]):
+                strand = Strand.from_bpseq_entries(candidate)
                 hairpins.append(Hairpin(strand))
 
         return hairpins
 
+    @cached_property
     def single_strands(self):
         stops = set()
         n = len(self.entries)
@@ -546,10 +550,11 @@ class BpSeq:
 
         return single_strands
 
+    @cached_property
     def fcfs(self):
         stems = [
             (stem.strand5p.first, stem.strand3p.first, len(stem.strand5p.sequence))
-            for stem in self.stems()
+            for stem in self.stems
         ]
         orders = [0 for i in range(len(stems))]
 
@@ -567,7 +572,7 @@ class BpSeq:
             order = next(filter(lambda i: available[i] is True, range(len(available))))
             orders[i] = order
 
-        sequence = self.sequence()
+        sequence = self.sequence
         structure = ["." for i in range(len(sequence))]
         brackets = ["()", "[]", "{}", "<>", "Aa", "Bb", "Cc"]
 
