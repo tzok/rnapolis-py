@@ -523,10 +523,10 @@ class BpSeq:
             j, k = stops[i - 1], stops[i]
             entry_j, entry_k = self.entries[j], self.entries[k]
 
-            if entry_j.pair != entry_k.index and entry_j.index != entry_k.index - 1:
+            if entry_j.pair != entry_k.index_ and entry_j.index_ != entry_k.index_ - 1:
                 entries = list(
                     filter(
-                        lambda e: entry_j.index <= e.index <= entry_k.index,
+                        lambda e: entry_j.index_ <= e.index_ <= entry_k.index_,
                         self.entries,
                     )
                 )
@@ -537,14 +537,14 @@ class BpSeq:
         # 5'
         if stops[0] != 0:
             entry = self.entries[stops[0]]
-            entries = list(filter(lambda e: e.index <= entry.index, self.entries))
+            entries = list(filter(lambda e: e.index_ <= entry.index_, self.entries))
             strand = Strand.from_bpseq_entries(entries)
             single_strands.insert(0, SingleStrand(strand))
 
         # 3'
         if stops[-1] != len(self.entries) - 1:
             entry = self.entries[stops[-1]]
-            entries = list(filter(lambda e: entry.index <= e.index, self.entries))
+            entries = list(filter(lambda e: entry.index_ <= e.index_, self.entries))
             strand = Strand.from_bpseq_entries(entries)
             single_strands.append(SingleStrand(strand))
 

@@ -108,3 +108,12 @@ def test_stems():
     bpseq = BpSeq.from_dotbracket(DotBracket.from_file("tests/5O60-A.dbn"))
     actual = "\n".join([str(stem) for stem in bpseq.stems])
     assert expected == actual
+
+
+def test_single_strands():
+    with open("tests/5O60-A.strands") as f:
+        expected = f.read().strip()
+
+    bpseq = BpSeq.from_dotbracket(DotBracket.from_file("tests/5O60-A.dbn"))
+    actual = "\n".join([str(strand) for strand in bpseq.single_strands])
+    assert expected == actual
