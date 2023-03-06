@@ -99,3 +99,12 @@ def test_hairpins():
     bpseq = BpSeq.from_dotbracket(DotBracket.from_file("tests/5O60-A.dbn"))
     actual = "\n".join([str(hairpin) for hairpin in bpseq.hairpins])
     assert expected == actual
+
+
+def test_stems():
+    with open("tests/5O60-A.stems") as f:
+        expected = f.read().strip()
+
+    bpseq = BpSeq.from_dotbracket(DotBracket.from_file("tests/5O60-A.dbn"))
+    actual = "\n".join([str(stem) for stem in bpseq.stems])
+    assert expected == actual
