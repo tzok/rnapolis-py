@@ -422,6 +422,17 @@ class BpSeq:
                 entries.append(entry)
         return BpSeq(entries)
 
+    @staticmethod
+    def from_dotbracket(dot_bracket):
+        entries = [
+            Entry(i + 1, dot_bracket.sequence[i], 0)
+            for i in range(len(dot_bracket.sequence))
+        ]
+        for i, j in dot_bracket.pairs:
+            entries[i].pair = j + 1
+            entries[j].pair = i + 1
+        return BpSeq(entries)
+
     def __post_init__(self):
         self.pairs = {}
         for i, _, j in self.entries:
@@ -582,6 +593,16 @@ class DotBracket:
     structure: str
 
     @staticmethod
+    def from_file(path: str):
+        with open(path) as f:
+            lines = f.readlines()
+        if len(lines) == 2:
+            return DotBracket.from_string(lines[0].rstrip(), lines[1].rstrip())
+        if len(lines) == 3:
+            return DotBracket.from_string(lines[1].rstrip(), lines[2].rstrip())
+        raise RuntimeError(f"Failed to read DotBracket from file: {path}")
+
+    @staticmethod
     def from_string(sequence: str, structure: str):
         if len(sequence) != len(structure):
             raise ValueError(
@@ -597,7 +618,6 @@ class DotBracket:
         closing = ")]}>abc"
         begins = {bracket: list() for bracket in opening}
         matches = {end: begin for begin, end in zip(opening, closing)}
-        pairs = []
 
         for i in range(len(self.structure)):
             c = self.structure[i]
@@ -605,14 +625,7 @@ class DotBracket:
                 begins[c].append(i)
             elif c in closing:
                 begin = matches[c]
-                pairs.append((begins[begin].pop(), i))
+                self.pairs.append((begins[begin].pop(), i))
 
     def __str__(self):
         return f"{self.sequence}\n{self.structure}"
-
-    def to_bpseq(self) -> BpSeq:
-        entries = [Entry(i + 1, self.sequence[i], 0) for i in range(len(self.sequence))]
-        for i, j in self.pairs:
-            entries[i][2] = j + 1
-            entries[j][2] = i + 1
-        return BpSeq(entries)

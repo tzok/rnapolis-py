@@ -1,10 +1,11 @@
 from hypothesis import given
 from hypothesis import strategies as st
-
 from rnapolis.common import (
     BasePair,
     BasePhosphate,
     BaseRibose,
+    BpSeq,
+    DotBracket,
     Interaction,
     OtherInteraction,
     Residue,
@@ -83,3 +84,9 @@ def test_rnapdbee_adapters_api_compliance_structure2d(obj):
         "basePhosphateInteractions",
         "otherInteractions",
     }
+
+
+def test_bpseq_from_dotbracket():
+    expected = BpSeq.from_file("tests/1ET4-A.bpseq")
+    actual = BpSeq.from_dotbracket(DotBracket.from_file(f"tests/1ET4-A.dbn"))
+    assert expected == actual
