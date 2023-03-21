@@ -599,7 +599,8 @@ class BpSeq:
                     break
 
             if self.entries[loop[0].first - 1].pair == loop[-1].last:
-                elements.append(Loop(loop))
+                if not all([strand.last - strand.first <= 1 for strand in loop]):
+                    elements.append(Loop(loop))
 
         for i in range(len(loop_candidates)):
             if i not in used:
