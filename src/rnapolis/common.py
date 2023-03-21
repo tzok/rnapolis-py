@@ -1,5 +1,6 @@
 import logging
 import string
+from collections import defaultdict
 from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import Enum
@@ -344,14 +345,17 @@ class Entry(Sequence):
         return f"{self.index_} {self.sequence} {self.pair}"
 
 
-@dataclass
+@dataclass(frozen=True)
 class Strand:
     first: int
     last: int
     sequence: str
+    structure: str
 
     @staticmethod
-    def from_bpseq_entries(entries: List[Entry], reverse: bool = False):
+    def from_bpseq_entries(
+        entries: List[Entry], dotbracket: str, reverse: bool = False
+    ):
         first = entries[0].index_
         last = first + len(entries) - 1
         if reverse:
@@ -362,47 +366,69 @@ class Strand:
                 for entry in (entries if not reverse else reversed(entries))
             ]
         )
-        return Strand(first, last, sequence)
+        structure = dotbracket[first - 1 : last]
+        return Strand(first, last, sequence, structure)
 
     def __str__(self):
         return f"{self.first}-{self.sequence}-{self.last}"
 
 
-@dataclass
+@dataclass(frozen=True)
+class SingleStrand:
+    strand: Strand
+    is5p: bool
+    is3p: bool
+
+    def __str__(self):
+        if self.is5p:
+            return f"SingleStrand5p {self.strand.first} {self.strand.last} {self.strand.sequence} {self.strand.structure}"
+        if self.is3p:
+            return f"SingleStrand3p {self.strand.first} {self.strand.last} {self.strand.sequence} {self.strand.structure}"
+        return f"SingleStrand {self.strand.first} {self.strand.last} {self.strand.sequence} {self.strand.structure}"
+
+
+@dataclass(frozen=True)
 class Stem:
     strand5p: Strand
     strand3p: Strand
 
     @staticmethod
-    def from_bpseq_entries(strand5p_entries: List[Entry], all_entries: List):
+    def from_bpseq_entries(
+        strand5p_entries: List[Entry], all_entries: List, dotbracket: str
+    ):
         paired = set([entry[2] for entry in strand5p_entries])
         strand3p_entries = list(filter(lambda entry: entry[0] in paired, all_entries))
         return Stem(
-            Strand.from_bpseq_entries(strand5p_entries),
-            Strand.from_bpseq_entries(strand3p_entries, reverse=True),
+            Strand.from_bpseq_entries(strand5p_entries, dotbracket),
+            Strand.from_bpseq_entries(strand3p_entries, dotbracket),
         )
 
     def __str__(self):
-        return f"{self.strand5p} {self.strand3p}"
+        return f"Stem {self.strand5p.first} {self.strand5p.last} {self.strand5p.sequence} {self.strand5p.structure} {self.strand3p.first} {self.strand3p.last} {self.strand3p.sequence} {self.strand3p.structure}"
 
 
-@dataclass
+@dataclass(frozen=True)
 class Hairpin:
     strand: Strand
 
     def __str__(self):
-        return f"{self.strand}"
+        return f"Hairpin {self.strand.first} {self.strand.last} {self.strand.sequence} {self.strand.structure}"
 
 
-@dataclass
-class SingleStrand:
-    strand: Strand
-
-    def __init__(self, strand: Strand):
-        self.strand = strand
+@dataclass(frozen=True)
+class Loop:
+    strands: List[Strand]
 
     def __str__(self):
-        return f"{self.strand}"
+        desc = " ".join(
+            [
+                "{} {} {} {}".format(
+                    strand.first, strand.last, strand.sequence, strand.structure
+                )
+                for strand in self.strands
+            ]
+        )
+        return f"Loop {desc}"
 
 
 @dataclass
@@ -459,7 +485,7 @@ class BpSeq:
         return result
 
     @cached_property
-    def stems(self) -> List:
+    def __stems(self) -> List:
         result = []
         strand5p: List[Entry] = []
 
@@ -474,88 +500,116 @@ class BpSeq:
                 strand5p.append(entry)
                 continue
 
-            result.append(Stem.from_bpseq_entries(strand5p, self.entries))
+            result.append(
+                Stem.from_bpseq_entries(strand5p, self.entries, self.fcfs.structure)
+            )
             strand5p = [entry]
 
         if strand5p:
-            result.append(Stem.from_bpseq_entries(strand5p, self.entries))
+            result.append(
+                Stem.from_bpseq_entries(strand5p, self.entries, self.fcfs.structure)
+            )
 
         return result
 
     @cached_property
-    def hairpins(self) -> List:
-        hairpins = []
-
-        for entry in self.paired(only5to3=True):
-            candidate = [
-                other
-                for other in self.entries
-                if entry.index_ <= other.index_ <= entry.pair
-            ]
-            if all([other.pair == 0 for other in candidate[1:-1]]):
-                strand = Strand.from_bpseq_entries(candidate)
-                hairpins.append(Hairpin(strand))
-
-        return hairpins
-
-    @cached_property
-    def single_strands(self):
+    def elements(self):
         stops = set()
-        n = len(self.entries)
 
-        for i in range(n):
-            if i > 0 and self.entries[i].pair == 0 and self.entries[i - 1].pair != 0:
-                stops.add(i - 1)
-            if (
-                i < n - 1
-                and self.entries[i].pair == 0
-                and self.entries[i + 1].pair != 0
-            ):
-                stops.add(i + 1)
+        for stem in self.__stems:
+            stops.add(stem.strand5p.first - 1)
+            stops.add(stem.strand5p.last - 1)
+            stops.add(stem.strand3p.first - 1)
+            stops.add(stem.strand3p.last - 1)
 
         if not stops:
             return []
 
         stops = sorted(stops)
-        single_strands = []
+        elements = [stem for stem in self.__stems]
+        loop_candidates = []
 
-        for i in range(1, len(stops)):
-            j, k = stops[i - 1], stops[i]
-            entry_j, entry_k = self.entries[j], self.entries[k]
-
-            if entry_j.pair != entry_k.index_ and entry_j.index_ != entry_k.index_ - 1:
-                entries = list(
-                    filter(
-                        lambda e: entry_j.index_ <= e.index_ <= entry_k.index_,
-                        self.entries,
-                    )
+        # 5' single strand
+        if stops[0] > 0:
+            elements.append(
+                SingleStrand(
+                    Strand.from_bpseq_entries(
+                        self.entries[: stops[0] + 1], self.fcfs.structure
+                    ),
+                    True,
+                    False,
                 )
-                if all([entry.pair == 0 for entry in entries[1:-1]]):
-                    strand = Strand.from_bpseq_entries(entries)
-                    single_strands.append(SingleStrand(strand))
+            )
 
-        # 5'
-        if stops[0] != 0:
-            entry = self.entries[stops[0]]
-            entries = list(filter(lambda e: e.index_ <= entry.index_, self.entries))
-            strand = Strand.from_bpseq_entries(entries)
-            single_strands.insert(0, SingleStrand(strand))
+        # single strands
+        for i in range(1, len(stops)):
+            candidate = self.entries[stops[i - 1] : stops[i] + 1]
+            if all([entry.pair == 0 for entry in candidate[1:-1]]):
+                if candidate[0].pair == candidate[-1].index_:
+                    elements.append(
+                        Hairpin(
+                            Strand.from_bpseq_entries(candidate, self.fcfs.structure)
+                        )
+                    )
+                else:
+                    loop_candidates.append(
+                        Strand.from_bpseq_entries(candidate, self.fcfs.structure)
+                    )
 
-        # 3'
-        if stops[-1] != len(self.entries) - 1:
-            entry = self.entries[stops[-1]]
-            entries = list(filter(lambda e: entry.index_ <= e.index_, self.entries))
-            strand = Strand.from_bpseq_entries(entries)
-            single_strands.append(SingleStrand(strand))
+        # 3' single strand
+        if stops[-1] < len(self.entries) - 1:
+            elements.append(
+                SingleStrand(
+                    Strand.from_bpseq_entries(
+                        self.entries[stops[-1] :], self.fcfs.structure
+                    ),
+                    False,
+                    True,
+                )
+            )
 
-        return single_strands
+        graph = defaultdict(set)
+
+        for i in range(len(loop_candidates)):
+            for j in range(i + 1, len(loop_candidates)):
+                i_first, i_last = loop_candidates[i].first, loop_candidates[i].last
+                j_first, j_last = loop_candidates[j].first, loop_candidates[j].last
+                if self.entries[i_last - 1].pair == j_first:
+                    graph[i].add(j)
+                if self.entries[j_last - 1].pair == i_first:
+                    graph[j].add(i)
+
+        used = set()
+
+        for i in range(len(loop_candidates)):
+            if i in used:
+                continue
+
+            loop = [loop_candidates[i]]
+            used.add(i)
+
+            while True:
+                for j in graph[i]:
+                    if j not in used:
+                        loop.append(loop_candidates[j])
+                        used.add(j)
+                        i = j
+                        break
+                else:
+                    break
+
+            if self.entries[loop[0].first - 1].pair == loop[-1].last:
+                elements.append(Loop(loop))
+
+        for i in range(len(loop_candidates)):
+            if i not in used:
+                elements.append(SingleStrand(loop_candidates[i]))
+
+        return elements
 
     @cached_property
     def fcfs(self):
-        stems = [
-            (stem.strand5p.first, stem.strand3p.first, len(stem.strand5p.sequence))
-            for stem in self.stems
-        ]
+        stems = [(entry.index_, entry.pair, 1) for entry in self.paired(only5to3=True)]
         orders = [0 for i in range(len(stems))]
 
         for i in range(1, len(stems)):
@@ -573,7 +627,7 @@ class BpSeq:
             orders[i] = order
 
         sequence = self.sequence
-        structure = ["." for i in range(len(sequence))]
+        structure = ["." for _ in range(len(sequence))]
         brackets = ["()", "[]", "{}", "<>", "Aa", "Bb", "Cc"]
 
         for i, stem in enumerate(stems):
