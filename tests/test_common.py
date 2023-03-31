@@ -1,16 +1,21 @@
-from hypothesis import given
+from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
-
 from rnapolis.common import (
     BasePair,
     BasePhosphate,
     BaseRibose,
+    BpSeq,
+    DotBracket,
+    Hairpin,
     Interaction,
+    Loop,
     OtherInteraction,
     Residue,
     ResidueAuth,
     ResidueLabel,
+    SingleStrand,
     Stacking,
+    Stem,
     Structure2D,
 )
 
@@ -75,6 +80,7 @@ def test_rnapdbee_adapters_api_compliance_other(obj):
 
 
 @given(st.from_type(Structure2D))
+@settings(suppress_health_check=[HealthCheck.too_slow])
 def test_rnapdbee_adapters_api_compliance_structure2d(obj):
     assert obj.__dict__.keys() == {
         "basePairs",
@@ -83,3 +89,24 @@ def test_rnapdbee_adapters_api_compliance_structure2d(obj):
         "basePhosphateInteractions",
         "otherInteractions",
     }
+
+
+def test_bpseq_from_dotbracket():
+    expected = BpSeq.from_file("tests/1ET4-A.bpseq")
+    actual = BpSeq.from_dotbracket(DotBracket.from_file(f"tests/1ET4-A.dbn"))
+    assert expected == actual
+
+
+def test_elements():
+    bpseq = BpSeq.from_dotbracket(DotBracket.from_file("tests/1EHZ.dbn"))
+    stems = [element for element in bpseq.elements if isinstance(element, Stem)]
+    single_strands = [
+        element for element in bpseq.elements if isinstance(element, SingleStrand)
+    ]
+    hairpins = [element for element in bpseq.elements if isinstance(element, Hairpin)]
+    loops = [element for element in bpseq.elements if isinstance(element, Loop)]
+
+    assert len(stems) == 5
+    assert len(single_strands) == 1
+    assert len(hairpins) == 1
+    assert len(loops) == 2
