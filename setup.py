@@ -5,7 +5,7 @@ with open("README.md") as f:
 
 setup(
     name="RNApolis",
-    version="0.0.14",
+    version="0.0.15",
     packages=["rnapolis"],
     package_dir={"": "src"},
     author="Tomasz Zok",
@@ -30,6 +30,7 @@ setup(
             "clashfinder=rnapolis.clashfinder:main",
             "metareader=rnapolis.metareader:main",
             "transformer=rnapolis.transformer:main",
+            "motif-extractor=rnapolis.motif_extractor:main",
         ]
     },
     install_requires=["mmcif", "numpy", "ordered-set", "orjson", "scipy"],
