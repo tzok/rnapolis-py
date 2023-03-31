@@ -514,6 +514,9 @@ class BpSeq:
 
     @cached_property
     def elements(self):
+        if not self.__stems:
+            return []
+
         stops = set()
 
         for stem in self.__stems:
@@ -521,9 +524,6 @@ class BpSeq:
             stops.add(stem.strand5p.last - 1)
             stops.add(stem.strand3p.first - 1)
             stops.add(stem.strand3p.last - 1)
-
-        if not stops:
-            return []
 
         stops = sorted(stops)
         elements = [stem for stem in self.__stems]

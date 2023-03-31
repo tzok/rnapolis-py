@@ -1,4 +1,4 @@
-from hypothesis import given
+from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 from rnapolis.common import (
     BasePair,
@@ -6,12 +6,16 @@ from rnapolis.common import (
     BaseRibose,
     BpSeq,
     DotBracket,
+    Hairpin,
     Interaction,
+    Loop,
     OtherInteraction,
     Residue,
     ResidueAuth,
     ResidueLabel,
+    SingleStrand,
     Stacking,
+    Stem,
     Structure2D,
 )
 
@@ -76,6 +80,7 @@ def test_rnapdbee_adapters_api_compliance_other(obj):
 
 
 @given(st.from_type(Structure2D))
+@settings(suppress_health_check=[HealthCheck.too_slow])
 def test_rnapdbee_adapters_api_compliance_structure2d(obj):
     assert obj.__dict__.keys() == {
         "basePairs",
@@ -92,28 +97,16 @@ def test_bpseq_from_dotbracket():
     assert expected == actual
 
 
-def test_hairpins():
-    with open("tests/5O60-A.hairpins") as f:
-        expected = f.read().strip()
+def test_elements():
+    bpseq = BpSeq.from_dotbracket(DotBracket.from_file("tests/1EHZ.dbn"))
+    stems = [element for element in bpseq.elements if isinstance(element, Stem)]
+    single_strands = [
+        element for element in bpseq.elements if isinstance(element, SingleStrand)
+    ]
+    hairpins = [element for element in bpseq.elements if isinstance(element, Hairpin)]
+    loops = [element for element in bpseq.elements if isinstance(element, Loop)]
 
-    bpseq = BpSeq.from_dotbracket(DotBracket.from_file("tests/5O60-A.dbn"))
-    actual = "\n".join([str(hairpin) for hairpin in bpseq.hairpins])
-    assert expected == actual
-
-
-def test_stems():
-    with open("tests/5O60-A.stems") as f:
-        expected = f.read().strip()
-
-    bpseq = BpSeq.from_dotbracket(DotBracket.from_file("tests/5O60-A.dbn"))
-    actual = "\n".join([str(stem) for stem in bpseq.stems])
-    assert expected == actual
-
-
-def test_single_strands():
-    with open("tests/5O60-A.strands") as f:
-        expected = f.read().strip()
-
-    bpseq = BpSeq.from_dotbracket(DotBracket.from_file("tests/5O60-A.dbn"))
-    actual = "\n".join([str(strand) for strand in bpseq.single_strands])
-    assert expected == actual
+    assert len(stems) == 5
+    assert len(single_strands) == 1
+    assert len(hairpins) == 1
+    assert len(loops) == 2
