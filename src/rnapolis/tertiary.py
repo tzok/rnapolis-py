@@ -12,6 +12,8 @@ import numpy.typing
 
 from rnapolis.common import (
     BasePair,
+    BpSeq,
+    Entry,
     GlycosidicBond,
     LeontisWesthof,
     Residue,
@@ -497,7 +499,16 @@ class Mapping2D3D:
         return result
 
     @cached_property
-    def bpseq(self) -> str:
+    def bpseq(self) -> BpSeq:
+        return self.__generate_bpseq(
+            [
+                base_pair
+                for base_pair in self.base_pairs
+                if base_pair.is_canonical and base_pair.nt1 < base_pair.nt2
+            ]
+        )
+
+    def __generate_bpseq(self, base_pairs):
         result: Dict[int, List] = {}
         residue_map: Dict[Residue3D, int] = {}
         i = 1
@@ -507,9 +518,7 @@ class Mapping2D3D:
                 residue_map[residue] = i
                 i += 1
 
-        for base_pair in self.base_pairs:
-            if not base_pair.is_canonical:
-                continue
+        for base_pair in base_pairs:
             j = residue_map.get(base_pair.nt1_3d, None)
             k = residue_map.get(base_pair.nt2_3d, None)
             if j is None or k is None or j > k:
@@ -517,71 +526,16 @@ class Mapping2D3D:
             result[j][2] = k
             result[k][2] = j
 
-        return "\n".join([" ".join(map(str, line)) for line in result.values()])
-
-    def __generate_dot_bracket_per_strand(
-        self, base_pairs: List[BasePair3D]
-    ) -> List[str]:
-        dbn = []
-        residue_map: Dict[Residue3D, int] = {}
-        i = 0
-        for residue in self.structure3d.residues:
-            if residue.is_nucleotide:
-                dbn.append(".")
-                residue_map[residue] = i
-                i += 1
-
-        pairs = []
-        for base_pair in base_pairs:
-            j = residue_map.get(base_pair.nt1_3d, None)
-            k = residue_map.get(base_pair.nt2_3d, None)
-            if j is None or k is None or j > k:
-                continue
-            pairs.append((j, k))
-
-        queue = list(pairs)
-        removed: List[Tuple[int, int]] = []
-        orders: Dict[Tuple[int, int], int] = {}
-        order = 0
-        while queue:
-            conflicts = defaultdict(list)
-            for pi, pj in itertools.combinations(queue, 2):
-                i, j = pi
-                k, l = pj
-                if i < k < j < l or k < i < l < j:
-                    conflicts[pi].append(pj)
-                    conflicts[pj].append(pi)
-            if conflicts:
-                pair = max(conflicts, key=lambda pair: (len(conflicts[pair]), pair))
-                removed.append(pair)
-                queue.remove(pair)
-            else:
-                orders.update({pair: order for pair in queue})
-                queue, removed = removed, []
-                order += 1
-
-        opening = list("([{<" + string.ascii_uppercase)
-        closing = list(")]}>" + string.ascii_lowercase)
-        for pair, order in orders.items():
-            nt1, nt2 = pair
-            dbn[nt1] = opening[order]
-            dbn[nt2] = closing[order]
-
-        i = 0
-        result = []
-        for _, sequence in self.strands_sequences:
-            result.append("".join(dbn[i : i + len(sequence)]))
-            i += len(sequence)
-        return result
+        return BpSeq(
+            [
+                Entry(index_, sequence, pair)
+                for index_, sequence, pair in result.values()
+            ]
+        )
 
     @cached_property
     def dot_bracket(self) -> str:
-        base_pairs = []
-        for base_pair in self.base_pairs:
-            if base_pair.is_canonical:
-                base_pairs.append(base_pair)
-
-        dbns = self.__generate_dot_bracket_per_strand(base_pairs)
+        dbns = self.__generate_dot_bracket_per_strand(self.bpseq)
         i = 0
         result = []
 
@@ -593,37 +547,45 @@ class Mapping2D3D:
             i += len(sequence)
         return "\n".join(result)
 
+    def __generate_dot_bracket_per_strand(self, bpseq: BpSeq) -> List[str]:
+        dbn = bpseq.to_dot_bracket.structure
+        i = 0
+        result = []
+
+        for _, sequence in self.strands_sequences:
+            result.append("".join(dbn[i : i + len(sequence)]))
+            i += len(sequence)
+        return result
+
     @cached_property
     def extended_dot_bracket(self) -> str:
-        strand_lw_dbn: List[Dict[LeontisWesthof, str]] = [
-            {} for _ in self.strands_sequences
+        result = [
+            [f"    >strand_{chain}", f"seq {sequence}"]
+            for chain, sequence in self.strands_sequences
         ]
+
         for lw in LeontisWesthof:
-            base_pairs = []
+            row1, row2 = [], []
+            used = set()
+
             for base_pair in self.base_pairs:
-                if base_pair.lw == lw:
-                    base_pairs.append(base_pair)
+                if base_pair.lw == lw and base_pair.nt1 < base_pair.nt2:
+                    if base_pair.nt1 not in used and base_pair.nt2 not in used:
+                        row1.append(base_pair)
+                        used.add(base_pair.nt1)
+                        used.add(base_pair.nt2)
+                    else:
+                        row2.append(base_pair)
 
-            dbns = self.__generate_dot_bracket_per_strand(base_pairs)
-            for i in range(len(self.strands_sequences)):
-                strand_lw_dbn[i][lw] = dbns[i]
+            for row in [row1, row2]:
+                if row:
+                    bpseq = self.__generate_bpseq(row)
+                    dbns = self.__generate_dot_bracket_per_strand(bpseq)
 
-        nonempty = {lw: False for lw in LeontisWesthof}
-        for lw in LeontisWesthof:
-            for i in range(len(strand_lw_dbn)):
-                if "(" in strand_lw_dbn[i][lw]:
-                    nonempty[lw] = True
-                    break
+                    for i in range(len(self.strands_sequences)):
+                        result[i].append(f"{lw.value} {dbns[i]}")
 
-        result = []
-        for i, pair in enumerate(self.strands_sequences):
-            chain, sequence = pair
-            result.append(f"    >strand_{chain}")
-            result.append(f"seq {sequence}")
-            for lw, flag in nonempty.items():
-                if flag:
-                    result.append(f"{lw.value} {strand_lw_dbn[i][lw]}")
-        return "\n".join(result)
+        return "\n".join(["\n".join(r) for r in result])
 
 
 def torsion_angle(a1: Atom, a2: Atom, a3: Atom, a4: Atom) -> float:
