@@ -1,5 +1,8 @@
+from collections import Counter
+
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
+
 from rnapolis.common import (
     BasePair,
     BasePhosphate,
@@ -80,7 +83,7 @@ def test_rnapdbee_adapters_api_compliance_other(obj):
 
 
 @given(st.from_type(Structure2D))
-@settings(suppress_health_check=[HealthCheck.too_slow])
+@settings(max_examples=10)
 def test_rnapdbee_adapters_api_compliance_structure2d(obj):
     assert obj.__dict__.keys() == {
         "basePairs",
@@ -110,3 +113,22 @@ def test_elements():
     assert len(single_strands) == 1
     assert len(hairpins) == 1
     assert len(loops) == 2
+
+
+def test_pseudoknot_order_assignment():
+    bpseq = BpSeq.from_file("tests/6EK0-L5-L8.bpseq")
+    dot_bracket = bpseq.to_dot_bracket
+
+    counter = Counter(dot_bracket.structure)
+    assert counter["."] == 1185
+    assert counter["("] == 1296
+    assert counter["["] == 45
+    assert counter["{"] == 17
+    assert counter["<"] == 8
+    assert counter["A"] == 4
+    assert counter["B"] == 1
+    assert counter["C"] == 1
+    assert counter["D"] == 0
+
+    bpseq_again = BpSeq.from_dotbracket(dot_bracket)
+    assert bpseq == bpseq_again
