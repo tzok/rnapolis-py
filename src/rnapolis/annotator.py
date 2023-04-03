@@ -543,7 +543,7 @@ def write_csv(path: str, structure2d: Structure2D):
 
 def write_bpseq(path: str, mapping: Mapping2D3D):
     with open(path, "w") as f:
-        f.write(mapping.bpseq)
+        f.write(str(mapping.bpseq))
 
 
 def main():
