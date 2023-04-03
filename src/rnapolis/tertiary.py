@@ -1,4 +1,3 @@
-from functools import total_ordering
 import itertools
 import logging
 import math

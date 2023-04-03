@@ -9,18 +9,7 @@ from enum import Enum
 from functools import cache, cached_property, total_ordering
 from typing import Dict, List, Optional, Tuple
 
-from pulp import (
-    listSolvers,
-    LpProblem,
-    LpMaximize,
-    LpVariable,
-    LpInteger,
-    lpSum,
-    LpStatusOptimal,
-    LpSolver,
-    LpSolverDefault,
-    PulpSolverError,
-)
+import pulp
 
 LOGLEVEL = os.environ.get("LOGLEVEL", "INFO").upper()
 logging.basicConfig(level=LOGLEVEL)
@@ -641,12 +630,12 @@ class BpSeq:
 
     @cached_property
     def to_dot_bracket(self):
-        LpSolverDefault.msg = False
-        return self.convert_to_dot_bracket(LpSolverDefault)
+        pulp.LpSolverDefault.msg = False
+        return self.convert_to_dot_bracket(pulp.LpSolverDefault)
 
-    def convert_to_dot_bracket(self, solver: LpSolver):
+    def convert_to_dot_bracket(self, solver: pulp.LpSolver):
         # if PuLP solvers are not installed, use FCFS
-        if len(listSolvers(onlyAvailable=True)) == 0:
+        if len(pulp.listSolvers(onlyAvailable=True)) == 0:
             return self.fcfs()
 
         # build conflict graph
@@ -671,7 +660,7 @@ class BpSeq:
         max_order = max(map(len, graph.values())) + 1
 
         # define the problem
-        problem = LpProblem("POA", LpMaximize)
+        problem = pulp.LpProblem("POA", pulp.LpMaximize)
 
         # create decision variables
         variables = []
@@ -681,7 +670,7 @@ class BpSeq:
         region_by_var = {}
         for i in range(len(regions)):
             for j in range(max_order):
-                variable = LpVariable(f"y_{i}_{j}", 0, 1, LpInteger)
+                variable = pulp.LpVariable(f"x_{i}_{j}", 0, 1, pulp.LpInteger)
                 variables.append(variable)
                 vars_by_region[i].append(variable)
                 vars_by_order[j].append(variable)
@@ -700,11 +689,11 @@ class BpSeq:
                     terms.append(-1 * var * length * order)
 
         # define objective function
-        problem += lpSum(terms)
+        problem += pulp.lpSum(terms)
 
         # define constraints that each region is assigned to exactly one order
         for region_vars in vars_by_region.values():
-            problem += lpSum(region_vars) == 1
+            problem += pulp.lpSum(region_vars) == 1
 
         # define constraints that no two adjacent regions are assigned to the same order
         for i in graph.keys():
@@ -719,14 +708,14 @@ class BpSeq:
         # solve the problem
         try:
             problem.solve(solver)
-        except PulpSolverError:
+        except pulp.PulpSolverError:
             logging.warning(
                 "POA: failed to solve problem using MILP approach, fallback to FCFS"
             )
             return self.fcfs()
 
         # if problem is infeasible, fallback to FCFS
-        if problem.status != LpStatusOptimal:
+        if problem.status != pulp.LpStatusOptimal:
             logging.warning("POA: problem is infeasible, fallback to FCFS")
             return self.fcfs()
 
