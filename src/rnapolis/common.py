@@ -1,4 +1,6 @@
+import itertools
 import logging
+import os
 import string
 from collections import defaultdict
 from collections.abc import Sequence
@@ -6,6 +8,22 @@ from dataclasses import dataclass
 from enum import Enum
 from functools import cache, cached_property, total_ordering
 from typing import Dict, List, Optional, Tuple
+
+from pulp import (
+    listSolvers,
+    LpProblem,
+    LpMaximize,
+    LpVariable,
+    LpInteger,
+    lpSum,
+    LpStatusOptimal,
+    LpSolver,
+    LpSolverDefault,
+    PulpSolverError,
+)
+
+LOGLEVEL = os.environ.get("LOGLEVEL", "INFO").upper()
+logging.basicConfig(level=LOGLEVEL)
 
 
 class Molecule(Enum):
@@ -485,48 +503,49 @@ class BpSeq:
         return result
 
     @cached_property
-    def __stems(self) -> List:
-        result = []
-        strand5p: List[Entry] = []
+    def __stems_entries(self) -> List[List[Entry]]:
+        stems = []
+        entries: List[Entry] = []
 
         for entry in self.paired(only5to3=True):
-            if not strand5p:
-                strand5p.append(entry)
+            if not entries:
+                entries.append(entry)
                 continue
 
             i, _, j = entry
-            k, _, l = strand5p[-1]
+            k, _, l = entries[-1]
             if i == k + 1 and j == l - 1:
-                strand5p.append(entry)
+                entries.append(entry)
                 continue
 
-            result.append(
-                Stem.from_bpseq_entries(strand5p, self.entries, self.fcfs.structure)
-            )
-            strand5p = [entry]
+            stems.append(entries)
+            entries = [entry]
 
-        if strand5p:
-            result.append(
-                Stem.from_bpseq_entries(strand5p, self.entries, self.fcfs.structure)
-            )
+        if entries:
+            stems.append(entries)
 
-        return result
+        return stems
 
     @cached_property
     def elements(self):
-        if not self.__stems:
+        if not self.__stems_entries:
             return []
 
+        elements = []
         stops = set()
 
-        for stem in self.__stems:
+        # stems
+        for stem_entries in self.__stems_entries:
+            stem = Stem.from_bpseq_entries(
+                stem_entries, self.entries, self.to_dot_bracket.structure
+            )
+            elements.append(stem)
             stops.add(stem.strand5p.first - 1)
             stops.add(stem.strand5p.last - 1)
             stops.add(stem.strand3p.first - 1)
             stops.add(stem.strand3p.last - 1)
 
         stops = sorted(stops)
-        elements = [stem for stem in self.__stems]
         loop_candidates = []
 
         # 5' single strand
@@ -534,7 +553,8 @@ class BpSeq:
             elements.append(
                 SingleStrand(
                     Strand.from_bpseq_entries(
-                        self.entries[: stops[0] + 1], self.fcfs.structure
+                        self.entries[: stops[0] + 1],
+                        self.to_dot_bracket.structure,
                     ),
                     True,
                     False,
@@ -548,12 +568,16 @@ class BpSeq:
                 if candidate[0].pair == candidate[-1].index_:
                     elements.append(
                         Hairpin(
-                            Strand.from_bpseq_entries(candidate, self.fcfs.structure)
+                            Strand.from_bpseq_entries(
+                                candidate, self.to_dot_bracket.structure
+                            )
                         )
                     )
                 else:
                     loop_candidates.append(
-                        Strand.from_bpseq_entries(candidate, self.fcfs.structure)
+                        Strand.from_bpseq_entries(
+                            candidate, self.to_dot_bracket.structure
+                        )
                     )
 
         # 3' single strand
@@ -561,7 +585,7 @@ class BpSeq:
             elements.append(
                 SingleStrand(
                     Strand.from_bpseq_entries(
-                        self.entries[stops[-1] :], self.fcfs.structure
+                        self.entries[stops[-1] :], self.to_dot_bracket.structure
                     ),
                     False,
                     True,
@@ -609,29 +633,137 @@ class BpSeq:
         return elements
 
     @cached_property
-    def fcfs(self):
-        stems = [(entry.index_, entry.pair, 1) for entry in self.paired(only5to3=True)]
-        orders = [0 for i in range(len(stems))]
+    def __regions(self) -> List[Tuple[int, int, int]]:
+        return [
+            (stem_entries[0].index_, stem_entries[0].pair, len(stem_entries))
+            for stem_entries in self.__stems_entries
+        ]
 
-        for i in range(1, len(stems)):
-            k, l, _ = stems[i]
-            available = [True for i in range(10)]
+    @cached_property
+    def to_dot_bracket(self):
+        LpSolverDefault.msg = False
+        return self.convert_to_dot_bracket(LpSolverDefault)
 
-            for j in range(i):
-                m, n, _ = stems[j]
-                conflicted = (k < m < l < n) or (m < k < n < l)
+    def convert_to_dot_bracket(self, solver: LpSolver):
+        # if PuLP solvers are not installed, use FCFS
+        if len(listSolvers(onlyAvailable=True)) == 0:
+            return self.fcfs()
 
-                if conflicted:
-                    available[orders[j]] = False
+        # build conflict graph
+        regions = self.__regions
+        graph = defaultdict(set)
 
-            order = next(filter(lambda i: available[i] is True, range(len(available))))
-            orders[i] = order
+        for i, j in itertools.combinations(range(len(regions)), 2):
+            ri, rj = regions[i], regions[j]
+            k, l, _ = ri
+            m, n, _ = rj
 
+            # is pseudoknot?
+            if (k < m < l < n) or (m < k < n < l):
+                graph[i].add(j)
+                graph[j].add(i)
+
+        # return all non-pseudoknotted if the graph is empty
+        if not graph:
+            return self.__make_dot_bracket(regions, [0 for _ in range(len(regions))])
+
+        # determine maximum pseudoknot order as chromatic number bound equal to maximum vertex degree + 1
+        max_order = max(map(len, graph.values())) + 1
+
+        # define the problem
+        problem = LpProblem("POA", LpMaximize)
+
+        # create decision variables
+        variables = []
+        vars_by_region = defaultdict(list)
+        vars_by_order = defaultdict(list)
+        var_by_region_order = {}
+        region_by_var = {}
+        for i in range(len(regions)):
+            for j in range(max_order):
+                variable = LpVariable(f"y_{i}_{j}", 0, 1, LpInteger)
+                variables.append(variable)
+                vars_by_region[i].append(variable)
+                vars_by_order[j].append(variable)
+                var_by_region_order[(i, j)] = variable
+                region_by_var[variable] = i
+
+        # define objective function terms
+        terms = []
+
+        for order, vars in vars_by_order.items():
+            for var in vars:
+                length = len(regions[region_by_var[var]])
+                if order == 0:
+                    terms.append(var * length)
+                else:
+                    terms.append(-1 * var * length * order)
+
+        # define objective function
+        problem += lpSum(terms)
+
+        # define constraints that each region is assigned to exactly one order
+        for region_vars in vars_by_region.values():
+            problem += lpSum(region_vars) == 1
+
+        # define constraints that no two adjacent regions are assigned to the same order
+        for i in graph.keys():
+            for j in graph[i]:
+                for order in range(max_order):
+                    problem += (
+                        var_by_region_order[(i, order)]
+                        + var_by_region_order[(j, order)]
+                        <= 1
+                    )
+
+        # solve the problem
+        try:
+            problem.solve(solver)
+        except PulpSolverError:
+            logging.warning(
+                "POA: failed to solve problem using MILP approach, fallback to FCFS"
+            )
+            return self.fcfs()
+
+        # if problem is infeasible, fallback to FCFS
+        if problem.status != LpStatusOptimal:
+            logging.warning("POA: problem is infeasible, fallback to FCFS")
+            return self.fcfs()
+
+        # log solver time statistics
+        logging.info(
+            f"POA: solver {solver.name} took {round(problem.solutionTime, 2)} seconds"
+        )
+
+        # map variable values to orders
+        orders = [0 for _ in range(len(regions))]
+        for variable in problem.variables():
+            if variable.varValue == 1:
+                name = variable.getName()
+                i, order = map(int, name.split("_")[1:])
+                orders[i] = order
+
+        return self.__make_dot_bracket(regions, orders)
+
+    def __make_dot_bracket(self, regions, orders):
+        # build dot-bracket
         sequence = self.sequence
         structure = ["." for _ in range(len(sequence))]
-        brackets = ["()", "[]", "{}", "<>", "Aa", "Bb", "Cc"]
+        brackets = [
+            "()",
+            "[]",
+            "{}",
+            "<>",
+            "Aa",
+            "Bb",
+            "Cc",
+            "Dd",
+            "Ee",
+            "Ff",
+            "Gg",
+        ]
 
-        for i, stem in enumerate(stems):
+        for i, stem in enumerate(regions):
             bracket = brackets[orders[i]]
             j, k, n = stem
 
@@ -643,8 +775,31 @@ class BpSeq:
                 n -= 1
 
         structure = "".join(structure)
-
         return DotBracket.from_string(sequence, structure)
+
+    @cached_property
+    def fcfs(self):
+        regions = [
+            (stem_entries[0].index_, stem_entries[0].pair, len(stem_entries))
+            for stem_entries in self.__stems_entries
+        ]
+        orders = [0 for i in range(len(regions))]
+
+        for i in range(1, len(regions)):
+            k, l, _ = regions[i]
+            available = [True for i in range(10)]
+
+            for j in range(i):
+                m, n, _ = regions[j]
+                conflicted = (k < m < l < n) or (m < k < n < l)
+
+                if conflicted:
+                    available[orders[j]] = False
+
+            order = next(filter(lambda i: available[i] is True, range(len(available))))
+            orders[i] = order
+
+        return self.__make_dot_bracket(regions, orders)
 
 
 @dataclass
