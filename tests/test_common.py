@@ -1,3 +1,5 @@
+from collections import Counter
+
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
@@ -113,8 +115,20 @@ def test_elements():
     assert len(loops) == 2
 
 
-def test_bpseq_dotbracket_bpseq_again():
+def test_pseudoknot_order_assignment():
     bpseq = BpSeq.from_file("tests/6EK0-L5-L8.bpseq")
     dot_bracket = bpseq.to_dot_bracket
+
+    counter = Counter(dot_bracket.structure)
+    assert counter["."] == 1185
+    assert counter["("] == 1296
+    assert counter["["] == 45
+    assert counter["{"] == 17
+    assert counter["<"] == 8
+    assert counter["A"] == 4
+    assert counter["B"] == 1
+    assert counter["C"] == 1
+    assert counter["D"] == 0
+
     bpseq_again = BpSeq.from_dotbracket(dot_bracket)
     assert bpseq == bpseq_again
