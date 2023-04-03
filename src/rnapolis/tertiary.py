@@ -521,7 +521,7 @@ class Mapping2D3D:
         for base_pair in base_pairs:
             j = residue_map.get(base_pair.nt1_3d, None)
             k = residue_map.get(base_pair.nt2_3d, None)
-            if j is None or k is None or j > k:
+            if j is None or k is None:
                 continue
             result[j][2] = k
             result[k][2] = j
