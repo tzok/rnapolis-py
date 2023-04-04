@@ -19,6 +19,7 @@ from rnapolis.common import (
     BasePhosphate,
     BaseRibose,
     BPh,
+    BpSeq,
     LeontisWesthof,
     Residue,
     Saenger,
@@ -471,11 +472,26 @@ def find_stackings(structure: Structure3D, model: int = 1) -> List[Stacking]:
 
 
 def extract_secondary_structure(
-    tertiary_structure: Structure3D, model: int = 1
+    tertiary_structure: Structure3D, model: int = 1, find_gaps: bool = False
 ) -> Structure2D:
     base_pairs, base_phosphate, base_ribose = find_pairs(tertiary_structure, model)
     stackings = find_stackings(tertiary_structure, model)
-    return Structure2D(base_pairs, stackings, base_ribose, base_phosphate, [])
+    mapping = Mapping2D3D(tertiary_structure, base_pairs, stackings, find_gaps)
+    stems, single_strands, hairpins, loops = mapping.bpseq.elements
+    return Structure2D(
+        base_pairs,
+        stackings,
+        base_ribose,
+        base_phosphate,
+        [],
+        str(mapping.bpseq),
+        mapping.dot_bracket,
+        mapping.extended_dot_bracket,
+        stems,
+        single_strands,
+        hairpins,
+        loops,
+    )
 
 
 def write_json(path: str, structure2d: Structure2D):
@@ -541,9 +557,9 @@ def write_csv(path: str, structure2d: Structure2D):
             )
 
 
-def write_bpseq(path: str, mapping: Mapping2D3D):
+def write_bpseq(path: str, bpseq: BpSeq):
     with open(path, "w") as f:
-        f.write(str(mapping.bpseq))
+        f.write(str(bpseq))
 
 
 def main():
@@ -563,14 +579,14 @@ def main():
     parser.add_argument(
         "--find-gaps",
         action="store_true",
-        help=f"(optional) if set, the program will detect gaps and break the PDB chain into two or more strands; "
-        "the gap is defined as O3'-P distance greater then {1.5 * AVERAGE_OXYGEN_PHOSPHORUS_DISTANCE_COVALENT}",
+        help="(optional) if set, the program will detect gaps and break the PDB chain into two or more strands; "
+        f"the gap is defined as O3'-P distance greater then {1.5 * AVERAGE_OXYGEN_PHOSPHORUS_DISTANCE_COVALENT}",
     )
     args = parser.parse_args()
 
     file = handle_input_file(args.input)
     structure3d = read_3d_structure(file, 1)
-    structure2d = extract_secondary_structure(structure3d)
+    structure2d = extract_secondary_structure(structure3d, 1, args.find_gaps)
 
     if args.csv:
         write_csv(args.csv, structure2d)
@@ -578,15 +594,13 @@ def main():
     if args.json:
         write_json(args.json, structure2d)
 
-    mapping = Mapping2D3D(structure3d, structure2d, args.find_gaps)
-
     if args.bpseq:
-        write_bpseq(args.bpseq, mapping)
+        write_bpseq(args.bpseq, structure2d.bpseq)
 
     if args.extended:
-        print(mapping.extended_dot_bracket)
+        print(structure2d.extendedDotBracket)
     else:
-        print(mapping.dot_bracket)
+        print(structure2d.dotBracket)
 
 
 if __name__ == "__main__":
