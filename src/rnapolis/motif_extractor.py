@@ -1,5 +1,6 @@
 #! /usr/bin/env python
 import argparse
+import itertools
 from typing import IO, Dict, List
 
 import orjson
@@ -24,7 +25,10 @@ def main():
         parser.print_help()
         return
 
-    for element in bpseq.elements:
+    print(f"Full dot-bracket:\n{bpseq.to_dot_bracket}")
+    stems, single_strands, hairpins, loops = bpseq.elements
+
+    for element in itertools.chain(stems, single_strands, hairpins, loops):
         print(element)
 
 
