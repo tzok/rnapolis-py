@@ -9,7 +9,9 @@ def test_2HY9():
     with open("tests/2HY9.cif") as f:
         structure3d = read_3d_structure(f, 1)
     structure2d = extract_secondary_structure(structure3d)
-    mapping = Mapping2D3D(structure3d, structure2d, True)
+    mapping = Mapping2D3D(
+        structure3d, structure2d.basePairs, structure2d.stackings, True
+    )
 
     # tract 1
     g4 = structure3d.find_residue(ResidueLabel("A", 4, "DG"), None)
@@ -60,7 +62,9 @@ def test_6RS3():
     with open("tests/6RS3.cif") as f:
         structure3d = read_3d_structure(f, 1)
     structure2d = extract_secondary_structure(structure3d)
-    mapping = Mapping2D3D(structure3d, structure2d, True)
+    mapping = Mapping2D3D(
+        structure3d, structure2d.basePairs, structure2d.stackings, True
+    )
 
     g1 = structure3d.find_residue(ResidueLabel("A", 1, "DG"), None)
     g2 = structure3d.find_residue(ResidueLabel("A", 2, "DG"), None)
@@ -103,7 +107,9 @@ def test_1JJP():
     with open("tests/1JJP.cif") as f:
         structure3d = read_3d_structure(f, 1)
     structure2d = extract_secondary_structure(structure3d)
-    mapping = Mapping2D3D(structure3d, structure2d, True)
+    mapping = Mapping2D3D(
+        structure3d, structure2d.basePairs, structure2d.stackings, True
+    )
 
     ag1 = structure3d.find_residue(ResidueLabel("A", 1, "DG"), None)
     ag2 = structure3d.find_residue(ResidueLabel("A", 2, "DG"), None)
@@ -175,7 +181,9 @@ def test_6FC9():
     with open("tests/6FC9.cif") as f:
         structure3d = read_3d_structure(f, 1)
     structure2d = extract_secondary_structure(structure3d)
-    mapping = Mapping2D3D(structure3d, structure2d, True)
+    mapping = Mapping2D3D(
+        structure3d, structure2d.basePairs, structure2d.stackings, True
+    )
 
     g1 = structure3d.find_residue(ResidueLabel("A", 1, "DG"), None)
     g2 = structure3d.find_residue(ResidueLabel("A", 2, "DG"), None)
@@ -249,7 +257,9 @@ def test_UGG_md():
     with open("tests/q-ugg-5k-salt_400-500ns_frame1065.pdb") as f:
         structure3d = read_3d_structure(f, 1)
     structure2d = extract_secondary_structure(structure3d)
-    mapping = Mapping2D3D(structure3d, structure2d, True)
+    mapping = Mapping2D3D(
+        structure3d, structure2d.basePairs, structure2d.stackings, True
+    )
 
     u1 = structure3d.find_residue(None, ResidueAuth(" ", 1, None, "U5"))
     g2 = structure3d.find_residue(None, ResidueAuth(" ", 2, None, "G"))

@@ -387,14 +387,15 @@ class Structure3D:
 @dataclass
 class Mapping2D3D:
     structure3d: Structure3D
-    structure2d: Structure2D
+    base_pairs2d: List[BasePair]
+    stackings2d: List[Stacking]
     find_gaps: bool
 
     @cached_property
     def base_pairs(self) -> List[BasePair3D]:
         result = []
         used = set()
-        for base_pair in self.structure2d.basePairs:
+        for base_pair in self.base_pairs2d:
             nt1 = self.structure3d.find_residue(base_pair.nt1.label, base_pair.nt1.auth)
             nt2 = self.structure3d.find_residue(base_pair.nt2.label, base_pair.nt2.auth)
             if nt1 is not None and nt2 is not None:
@@ -438,7 +439,7 @@ class Mapping2D3D:
     def stackings(self) -> List[Stacking3D]:
         result = []
         used = set()
-        for stacking in self.structure2d.stackings:
+        for stacking in self.stackings2d:
             nt1 = self.structure3d.find_residue(stacking.nt1.label, stacking.nt1.auth)
             nt2 = self.structure3d.find_residue(stacking.nt2.label, stacking.nt2.auth)
             if nt1 is not None and nt2 is not None:
