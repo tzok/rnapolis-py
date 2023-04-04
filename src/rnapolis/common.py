@@ -680,14 +680,14 @@ class BpSeq:
                 vars_by_region[i].append(variable)
                 vars_by_order[j].append(variable)
                 var_by_region_order[(i, j)] = variable
-                region_by_var[variable] = i
+                region_by_var[variable] = regions[i]
 
         # define objective function terms
         terms = []
 
         for order, vars in vars_by_order.items():
             for var in vars:
-                length = len(regions[region_by_var[var]])
+                length = region_by_var[var][2]
                 if order == 0:
                     terms.append(var * length)
                 else:
@@ -712,6 +712,7 @@ class BpSeq:
 
         # solve the problem
         try:
+            logging.debug(f"POA: problem formulation\n{problem}")
             problem.solve(solver)
         except pulp.PulpSolverError:
             logging.warning(
@@ -725,7 +726,7 @@ class BpSeq:
             return self.fcfs()
 
         # log solver time statistics
-        logging.info(
+        logging.debug(
             f"POA: solver {solver.name} took {round(problem.solutionTime, 2)} seconds"
         )
 
