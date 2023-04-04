@@ -9,7 +9,9 @@ def test_1E7K():
     with open("tests/1E7K_1_C.cif") as f:
         structure3d = read_3d_structure(f, 1)
     structure2d = extract_secondary_structure(structure3d)
-    mapping = Mapping2D3D(structure3d, structure2d, True)
+    mapping = Mapping2D3D(
+        structure3d, structure2d.basePairs, structure2d.stackings, True
+    )
     assert len(mapping.strands_sequences) == 2
 
 
@@ -25,7 +27,9 @@ def test_1DFU():
     assert b2g is not None
 
     structure2d = extract_secondary_structure(structure3d)
-    mapping = Mapping2D3D(structure3d, structure2d, True)
+    mapping = Mapping2D3D(
+        structure3d, structure2d.basePairs, structure2d.stackings, True
+    )
     assert b2g not in mapping.base_pair_graph[b1u]
     assert b1u not in mapping.base_pair_graph[b2g]
 
@@ -35,7 +39,9 @@ def test_4WTI():
     with open("tests/4WTI_1_T-P.cif") as f:
         structure3d = read_3d_structure(f, 1)
     structure2d = extract_secondary_structure(structure3d)
-    mapping = Mapping2D3D(structure3d, structure2d, True)
+    mapping = Mapping2D3D(
+        structure3d, structure2d.basePairs, structure2d.stackings, True
+    )
     assert mapping.dot_bracket == ">strand_T\nCGG\n.((\n>strand_P\nCC\n))"
 
 
@@ -44,7 +50,9 @@ def test_1HMH():
     with open("tests/1HMH_1_E.cif") as f:
         structure3d = read_3d_structure(f, 1)
     structure2d = extract_secondary_structure(structure3d)
-    mapping = Mapping2D3D(structure3d, structure2d, True)
+    mapping = Mapping2D3D(
+        structure3d, structure2d.basePairs, structure2d.stackings, True
+    )
     assert mapping.dot_bracket == ">strand_E\nUG\n.."
 
 

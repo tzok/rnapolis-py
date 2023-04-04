@@ -321,15 +321,6 @@ class OtherInteraction(Interaction):
     pass
 
 
-@dataclass(frozen=True, order=True)
-class Structure2D:
-    basePairs: List[BasePair]
-    stackings: List[Stacking]
-    baseRiboseInteractions: List[BaseRibose]
-    basePhosphateInteractions: List[BasePhosphate]
-    otherInteractions: List[OtherInteraction]
-
-
 @dataclass
 class Entry(Sequence):
     index_: int
@@ -380,11 +371,14 @@ class Strand:
         return f"{self.first}-{self.sequence}-{self.last}"
 
 
-@dataclass(frozen=True)
+@dataclass
 class SingleStrand:
     strand: Strand
     is5p: bool
     is3p: bool
+
+    def __post_init__(self):
+        self.description = str(self)
 
     def __str__(self):
         if self.is5p:
@@ -394,7 +388,7 @@ class SingleStrand:
         return f"SingleStrand {self.strand.first} {self.strand.last} {self.strand.sequence} {self.strand.structure}"
 
 
-@dataclass(frozen=True)
+@dataclass
 class Stem:
     strand5p: Strand
     strand3p: Strand
@@ -410,21 +404,30 @@ class Stem:
             Strand.from_bpseq_entries(strand3p_entries, dotbracket),
         )
 
+    def __post_init__(self):
+        self.description = str(self)
+
     def __str__(self):
         return f"Stem {self.strand5p.first} {self.strand5p.last} {self.strand5p.sequence} {self.strand5p.structure} {self.strand3p.first} {self.strand3p.last} {self.strand3p.sequence} {self.strand3p.structure}"
 
 
-@dataclass(frozen=True)
+@dataclass
 class Hairpin:
     strand: Strand
+
+    def __post_init__(self):
+        self.description = str(self)
 
     def __str__(self):
         return f"Hairpin {self.strand.first} {self.strand.last} {self.strand.sequence} {self.strand.structure}"
 
 
-@dataclass(frozen=True)
+@dataclass
 class Loop:
     strands: List[Strand]
+
+    def __post_init__(self):
+        self.description = str(self)
 
     def __str__(self):
         desc = " ".join(
@@ -516,30 +519,32 @@ class BpSeq:
         return stems
 
     @cached_property
-    def elements(self):
+    def elements(
+        self,
+    ) -> Tuple[List[Stem], List[SingleStrand], List[Hairpin], List[Loop]]:
         if not self.__stems_entries:
-            return []
+            return [], [], [], []
 
-        elements = []
-        stops = set()
+        stems, single_strands, hairpins, loops = [], [], [], []
+        stopset = set()
 
         # stems
         for stem_entries in self.__stems_entries:
             stem = Stem.from_bpseq_entries(
                 stem_entries, self.entries, self.to_dot_bracket.structure
             )
-            elements.append(stem)
-            stops.add(stem.strand5p.first - 1)
-            stops.add(stem.strand5p.last - 1)
-            stops.add(stem.strand3p.first - 1)
-            stops.add(stem.strand3p.last - 1)
+            stems.append(stem)
+            stopset.add(stem.strand5p.first - 1)
+            stopset.add(stem.strand5p.last - 1)
+            stopset.add(stem.strand3p.first - 1)
+            stopset.add(stem.strand3p.last - 1)
 
-        stops = sorted(stops)
+        stops = sorted(stopset)
         loop_candidates = []
 
         # 5' single strand
         if stops[0] > 0:
-            elements.append(
+            single_strands.append(
                 SingleStrand(
                     Strand.from_bpseq_entries(
                         self.entries[: stops[0] + 1],
@@ -555,7 +560,7 @@ class BpSeq:
             candidate = self.entries[stops[i - 1] : stops[i] + 1]
             if all([entry.pair == 0 for entry in candidate[1:-1]]):
                 if candidate[0].pair == candidate[-1].index_:
-                    elements.append(
+                    hairpins.append(
                         Hairpin(
                             Strand.from_bpseq_entries(
                                 candidate, self.to_dot_bracket.structure
@@ -571,7 +576,7 @@ class BpSeq:
 
         # 3' single strand
         if stops[-1] < len(self.entries) - 1:
-            elements.append(
+            single_strands.append(
                 SingleStrand(
                     Strand.from_bpseq_entries(
                         self.entries[stops[-1] :], self.to_dot_bracket.structure
@@ -613,13 +618,13 @@ class BpSeq:
 
             if self.entries[loop[0].first - 1].pair == loop[-1].last:
                 if not all([strand.last - strand.first <= 1 for strand in loop]):
-                    elements.append(Loop(loop))
+                    loops.append(Loop(loop))
 
         for i in range(len(loop_candidates)):
             if i not in used:
-                elements.append(SingleStrand(loop_candidates[i]))
+                single_strands.append(SingleStrand(loop_candidates[i], False, False))
 
-        return elements
+        return stems, single_strands, hairpins, loops
 
     @cached_property
     def __regions(self) -> List[Tuple[int, int, int]]:
@@ -675,14 +680,14 @@ class BpSeq:
                 vars_by_region[i].append(variable)
                 vars_by_order[j].append(variable)
                 var_by_region_order[(i, j)] = variable
-                region_by_var[variable] = i
+                region_by_var[variable] = regions[i]
 
         # define objective function terms
         terms = []
 
         for order, vars in vars_by_order.items():
             for var in vars:
-                length = len(regions[region_by_var[var]])
+                length = region_by_var[var][2]
                 if order == 0:
                     terms.append(var * length)
                 else:
@@ -707,6 +712,7 @@ class BpSeq:
 
         # solve the problem
         try:
+            logging.debug(f"POA: problem formulation\n{problem}")
             problem.solve(solver)
         except pulp.PulpSolverError:
             logging.warning(
@@ -720,7 +726,7 @@ class BpSeq:
             return self.fcfs()
 
         # log solver time statistics
-        logging.info(
+        logging.debug(
             f"POA: solver {solver.name} took {round(problem.solutionTime, 2)} seconds"
         )
 
@@ -833,3 +839,19 @@ class DotBracket:
 
     def __str__(self):
         return f"{self.sequence}\n{self.structure}"
+
+
+@dataclass(frozen=True, order=True)
+class Structure2D:
+    basePairs: List[BasePair]
+    stackings: List[Stacking]
+    baseRiboseInteractions: List[BaseRibose]
+    basePhosphateInteractions: List[BasePhosphate]
+    otherInteractions: List[OtherInteraction]
+    bpseq: str
+    dotBracket: str
+    extendedDotBracket: str
+    stems: List[Stem]
+    singleStrands: List[SingleStrand]
+    hairpins: List[Hairpin]
+    loops: List[Loop]

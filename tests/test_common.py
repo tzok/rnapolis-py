@@ -85,7 +85,7 @@ def test_rnapdbee_adapters_api_compliance_other(obj):
 @given(st.from_type(Structure2D))
 @settings(max_examples=10)
 def test_rnapdbee_adapters_api_compliance_structure2d(obj):
-    assert obj.__dict__.keys() == {
+    assert obj.__dict__.keys() >= {
         "basePairs",
         "stackings",
         "baseRiboseInteractions",
@@ -102,13 +102,7 @@ def test_bpseq_from_dotbracket():
 
 def test_elements():
     bpseq = BpSeq.from_dotbracket(DotBracket.from_file("tests/1EHZ.dbn"))
-    stems = [element for element in bpseq.elements if isinstance(element, Stem)]
-    single_strands = [
-        element for element in bpseq.elements if isinstance(element, SingleStrand)
-    ]
-    hairpins = [element for element in bpseq.elements if isinstance(element, Hairpin)]
-    loops = [element for element in bpseq.elements if isinstance(element, Loop)]
-
+    stems, single_strands, hairpins, loops = bpseq.elements
     assert len(stems) == 5
     assert len(single_strands) == 1
     assert len(hairpins) == 1
@@ -121,10 +115,10 @@ def test_pseudoknot_order_assignment():
 
     counter = Counter(dot_bracket.structure)
     assert counter["."] == 1185
-    assert counter["("] == 1296
-    assert counter["["] == 45
+    assert counter["("] == 1298
+    assert counter["["] == 44
     assert counter["{"] == 17
-    assert counter["<"] == 8
+    assert counter["<"] == 7
     assert counter["A"] == 4
     assert counter["B"] == 1
     assert counter["C"] == 1
