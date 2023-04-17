@@ -1,4 +1,4 @@
-mmcif==0.80.1
+mmcif==0.81
 numpy==1.24.2
 ordered-set==4.1.0
 orjson==3.8.9
