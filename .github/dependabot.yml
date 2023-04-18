@@ -6,11 +6,10 @@ updates:
       interval: "weekly"
     commit-message:
       prefix: "build"
-    target-branch: "develop"
+
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
     commit-message:
       prefix: "build"
-    target-branch: "develop"

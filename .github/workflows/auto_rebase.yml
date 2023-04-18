@@ -1,0 +1,23 @@
+name: Auto Rebase
+
+on:
+  push:
+    branches: ["main"]
+
+jobs:
+  auto-rebase-dependabot-branches:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0 # otherwise, you will fail to push refs to dest repo
+
+      - run: |
+          for ref in $(gh pr list --author 'app/dependabot' --json 'baseRefName,headRefName' | jq -r '.[] | select(.baseRefName == "main") | .headRefName'); do
+            git checkout "${ref}"
+            git rebase main
+            git push origin --force
+          done
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
