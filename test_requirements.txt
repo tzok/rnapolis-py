@@ -1,1 +1,1 @@
-hypothesis==6.75.3
+hypothesis==6.75.6
