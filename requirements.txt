@@ -1,5 +1,5 @@
 mmcif==0.81
-numpy==1.25.0
+numpy==1.25.1
 ordered-set==4.1.0
 orjson==3.9.2
 pulp==2.7.0
