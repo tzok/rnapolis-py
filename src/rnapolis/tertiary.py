@@ -1,4 +1,3 @@
-from functools import total_ordering
 import itertools
 import logging
 import math
@@ -550,7 +549,7 @@ class Mapping2D3D:
         return "\n".join(result)
 
     def __generate_dot_bracket_per_strand(self, bpseq: BpSeq) -> List[str]:
-        dbn = bpseq.to_dot_bracket.structure
+        dbn = bpseq.dot_bracket.structure
         i = 0
         result = []
 

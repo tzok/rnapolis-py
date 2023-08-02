@@ -111,7 +111,7 @@ def test_elements():
 
 def test_pseudoknot_order_assignment():
     bpseq = BpSeq.from_file("tests/6EK0-L5-L8.bpseq")
-    dot_bracket = bpseq.to_dot_bracket
+    dot_bracket = bpseq.dot_bracket
 
     counter = Counter(dot_bracket.structure)
     assert counter["."] == 1185
