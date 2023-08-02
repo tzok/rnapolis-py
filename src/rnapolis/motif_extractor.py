@@ -25,7 +25,7 @@ def main():
         parser.print_help()
         return
 
-    print(f"Full dot-bracket:\n{bpseq.to_dot_bracket}")
+    print(f"Full dot-bracket:\n{bpseq.dot_bracket}")
     stems, single_strands, hairpins, loops = bpseq.elements
 
     for element in itertools.chain(stems, single_strands, hairpins, loops):

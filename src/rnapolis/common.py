@@ -449,7 +449,10 @@ class BpSeq:
     def from_string(bpseq_str: str):
         entries = []
         for line in bpseq_str.splitlines():
-            fields = line.strip().split()
+            line = line.strip()
+            if len(line) == 0:
+                continue
+            fields = line.split()
             if len(fields) != 3:
                 logging.warning("Failed to find 3 columns in BpSeq line: {}", line)
                 continue
@@ -535,7 +538,7 @@ class BpSeq:
         # stems
         for stem_entries in self.__stems_entries:
             stem = Stem.from_bpseq_entries(
-                stem_entries, self.entries, self.to_dot_bracket.structure
+                stem_entries, self.entries, self.dot_bracket.structure
             )
             stems.append(stem)
             stopset.add(stem.strand5p.first - 1)
@@ -552,7 +555,7 @@ class BpSeq:
                 SingleStrand(
                     Strand.from_bpseq_entries(
                         self.entries[: stops[0] + 1],
-                        self.to_dot_bracket.structure,
+                        self.dot_bracket.structure,
                     ),
                     True,
                     False,
@@ -567,15 +570,13 @@ class BpSeq:
                     hairpins.append(
                         Hairpin(
                             Strand.from_bpseq_entries(
-                                candidate, self.to_dot_bracket.structure
+                                candidate, self.dot_bracket.structure
                             )
                         )
                     )
                 else:
                     loop_candidates.append(
-                        Strand.from_bpseq_entries(
-                            candidate, self.to_dot_bracket.structure
-                        )
+                        Strand.from_bpseq_entries(candidate, self.dot_bracket.structure)
                     )
 
         # 3' single strand
@@ -583,7 +584,7 @@ class BpSeq:
             single_strands.append(
                 SingleStrand(
                     Strand.from_bpseq_entries(
-                        self.entries[stops[-1] :], self.to_dot_bracket.structure
+                        self.entries[stops[-1] :], self.dot_bracket.structure
                     ),
                     False,
                     True,
@@ -638,7 +639,7 @@ class BpSeq:
         ]
 
     @cached_property
-    def to_dot_bracket(self):
+    def dot_bracket(self):
         pulp.LpSolverDefault.msg = False
         return self.convert_to_dot_bracket(pulp.LpSolverDefault)
 
