@@ -446,17 +446,21 @@ class BpSeq:
     entries: List[Entry]
 
     @staticmethod
-    def from_file(bpseq_path: str):
+    def from_string(bpseq_str: str):
         entries = []
-        with open(bpseq_path) as fd:
-            for line in fd:
-                fields = line.strip().split()
-                if len(fields) != 3:
-                    logging.warning("Failed to find 3 columns in BpSeq line: {}", line)
-                    continue
-                entry = Entry(int(fields[0]), fields[1], int(fields[2]))
-                entries.append(entry)
+        for line in bpseq_str.splitlines():
+            fields = line.strip().split()
+            if len(fields) != 3:
+                logging.warning("Failed to find 3 columns in BpSeq line: {}", line)
+                continue
+            entry = Entry(int(fields[0]), fields[1], int(fields[2]))
+            entries.append(entry)
         return BpSeq(entries)
+
+    @staticmethod
+    def from_file(bpseq_path: str):
+        with open(bpseq_path) as f:
+            return BpSeq.from_string(f.read())
 
     @staticmethod
     def from_dotbracket(dot_bracket):
