@@ -125,6 +125,13 @@ class Residue3D(Residue):
     outermost_atoms = {"A": "N9", "G": "N9", "C": "N1", "U": "N1", "T": "N1"}
     # Dist representing expected name of atom closest to the tetrad center
     innermost_atoms = {"A": "N6", "G": "O6", "C": "N4", "U": "O4", "T": "O4"}
+    # Heavy atoms for each main nucleobase
+    nucleobase_heavy_atoms = {
+        "A": set(["N1", "C2", "N3", "C4", "C5", "C6", "N6", "N7", "C8", "N9"]),
+        "G": set(["N1", "C2", "N2", "N3", "C4", "C5", "C6", "O6", "N7", "C8", "N9"]),
+        "C": set(["N1", "C2", "O2", "N3", "C4", "N4", "C5", "C6"]),
+        "U": set(["N1", "C2", "O2", "N3", "C4", "O4", "C5", "C6"]),
+    }
 
     def __lt__(self, other):
         return (self.model, self.chain, self.number, self.icode or " ") < (
@@ -197,6 +204,14 @@ class Residue3D(Residue):
             v2 = o2.coordinates - n1.coordinates
         normal: numpy.typing.NDArray[numpy.floating] = numpy.cross(v1, v2)
         return normal / numpy.linalg.norm(normal)
+
+    @cached_property
+    def has_all_nucleobase_heavy_atoms(self) -> bool:
+        if self.one_letter_name in "ACGU":
+            present_atom_names = set([atom.name for atom in self.atoms])
+            expected_atom_names = Residue3D.nucleobase_heavy_atoms[self.one_letter_name]
+            return expected_atom_names.issubset(present_atom_names)
+        return False
 
     def find_atom(self, atom_name: str) -> Optional[Atom]:
         for atom in self.atoms:

@@ -1,5 +1,6 @@
 import math
 
+from rnapolis.parser import read_3d_structure
 from rnapolis.tertiary import Atom, torsion_angle
 
 
@@ -10,4 +11,17 @@ def test_torsion_angle():
     a4 = Atom(None, None, 1, "C4'", 50.97, 49.23, 54.31, None)
     assert math.isclose(
         math.degrees(torsion_angle(a1, a2, a3, a4)), -127.83976634524326
+    )
+
+
+def test_nucleobase_atoms():
+    with open("tests/1E7K_1_C.cif") as f:
+        structure3d = read_3d_structure(f)
+    for residue in structure3d.residues:
+        assert residue.has_all_nucleobase_heavy_atoms
+
+    with open("tests/1E7K_1_C_modified.cif") as f:
+        structure3d = read_3d_structure(f)
+    assert all(
+        not residue.has_all_nucleobase_heavy_atoms for residue in structure3d.residues
     )
