@@ -127,10 +127,10 @@ class Residue3D(Residue):
     innermost_atoms = {"A": "N6", "G": "O6", "C": "N4", "U": "O4", "T": "O4"}
     # Heavy atoms for each main nucleobase
     nucleobase_heavy_atoms = {
-        "A": ["N1", "C2", "N3", "C4", "C5", "C6", "N6", "N7", "C8", "N9"],
-        "G": ["N1", "C2", "N2", "N3", "C4", "C5", "C6", "O6", "N7", "C8", "N9"],
-        "C": ["N1", "C2", "O2", "N3", "C4", "N4", "C5", "C6"],
-        "U": ["N1", "C2", "O2", "N3", "C4", "O4", "C5", "C6"],
+        "A": set(["N1", "C2", "N3", "C4", "C5", "C6", "N6", "N7", "C8", "N9"]),
+        "G": set(["N1", "C2", "N2", "N3", "C4", "C5", "C6", "O6", "N7", "C8", "N9"]),
+        "C": set(["N1", "C2", "O2", "N3", "C4", "N4", "C5", "C6"]),
+        "U": set(["N1", "C2", "O2", "N3", "C4", "O4", "C5", "C6"]),
     }
 
     def __lt__(self, other):
@@ -208,9 +208,9 @@ class Residue3D(Residue):
     @cached_property
     def has_all_nucleobase_heavy_atoms(self) -> bool:
         if self.one_letter_name in "ACGU":
-            present_atom_names = [atom.name for atom in self.atoms]
+            present_atom_names = set([atom.name for atom in self.atoms])
             expected_atom_names = Residue3D.nucleobase_heavy_atoms[self.one_letter_name]
-            return set(expected_atom_names) in set(present_atom_names)
+            return expected_atom_names.issubset(present_atom_names)
         return False
 
     def find_atom(self, atom_name: str) -> Optional[Atom]:
