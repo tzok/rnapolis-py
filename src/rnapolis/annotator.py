@@ -582,6 +582,7 @@ def main():
         help="(optional) if set, the program will detect gaps and break the PDB chain into two or more strands; "
         f"the gap is defined as O3'-P distance greater then {1.5 * AVERAGE_OXYGEN_PHOSPHORUS_DISTANCE_COVALENT}",
     )
+    parser.add_argument("--dot", help="(optional) path to output DOT file")
     args = parser.parse_args()
 
     file = handle_input_file(args.input)
@@ -601,6 +602,9 @@ def main():
         print(structure2d.extendedDotBracket)
     else:
         print(structure2d.dotBracket)
+
+    if args.dot:
+        print(BpSeq.from_string(structure2d.bpseq).graphviz)
 
 
 if __name__ == "__main__":

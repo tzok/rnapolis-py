@@ -9,6 +9,7 @@ from enum import Enum
 from functools import cache, cached_property, total_ordering
 from typing import Dict, List, Optional, Tuple
 
+import graphviz
 import pulp
 
 LOGLEVEL = os.environ.get("LOGLEVEL", "INFO").upper()
@@ -609,13 +610,14 @@ class BpSeq:
                 continue
 
             loop = [loop_candidates[i]]
-            used.add(i)
 
             while True:
                 for j in graph[i]:
-                    if j not in used:
+                    if (
+                        loop_candidates[j] not in used
+                        and loop_candidates[j] not in loop
+                    ):
                         loop.append(loop_candidates[j])
-                        used.add(j)
                         i = j
                         break
                 else:
@@ -624,12 +626,70 @@ class BpSeq:
             if self.entries[loop[0].first - 1].pair == loop[-1].last:
                 if not all([strand.last - strand.first <= 1 for strand in loop]):
                     loops.append(Loop(loop))
+                    used.update(loop)
 
-        for i in range(len(loop_candidates)):
-            if i not in used:
-                single_strands.append(SingleStrand(loop_candidates[i], False, False))
+        for loop_candidate in loop_candidates:
+            if loop_candidate not in used:
+                single_strands.append(SingleStrand(loop_candidate, False, False))
 
         return stems, single_strands, hairpins, loops
+
+    @cached_property
+    def graphviz(self):
+        stems, single_strands, hairpins, loops = self.elements
+        graph = defaultdict(set)
+        dot = graphviz.Graph()
+
+        for single_strand in single_strands:
+            graph[str(single_strand)].update(
+                [
+                    single_strand.strand.first,
+                    single_strand.strand.last,
+                ]
+            )
+
+        for stem in stems:
+            if stem.strand5p.first == stem.strand5p.last:
+                continue
+            graph[str(stem)].update(
+                [
+                    stem.strand5p.first,
+                    stem.strand5p.last,
+                    stem.strand3p.first,
+                    stem.strand3p.last,
+                ]
+            )
+
+        for hairpin in hairpins:
+            graph[str(hairpin)].update(
+                [
+                    hairpin.strand.first,
+                    hairpin.strand.last,
+                ]
+            )
+
+        for loop in loops:
+            stops = set()
+            for strand in loop.strands:
+                stops.update(
+                    [
+                        strand.first,
+                        strand.last,
+                    ]
+                )
+            graph[str(loop)].update(stops)
+
+        for i, element in enumerate(graph.keys()):
+            dot.node(f"E{i}", str(element))
+
+        keys = list(graph.keys())
+
+        for i in range(len(keys)):
+            for j in range(i + 1, len(keys)):
+                if graph[keys[i]].intersection(graph[keys[j]]):
+                    dot.edge(f"E{i}", f"E{j}")
+
+        return dot.render()
 
     @cached_property
     def __regions(self) -> List[Tuple[int, int, int]]:
