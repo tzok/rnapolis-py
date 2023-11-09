@@ -809,18 +809,8 @@ class BpSeq:
         # build dot-bracket
         sequence = self.sequence
         structure = ["." for _ in range(len(sequence))]
-        brackets = [
-            "()",
-            "[]",
-            "{}",
-            "<>",
-            "Aa",
-            "Bb",
-            "Cc",
-            "Dd",
-            "Ee",
-            "Ff",
-            "Gg",
+        brackets = ["()", "[]", "{}", "<>"] + [
+            "".join(p) for p in zip(string.ascii_uppercase, string.ascii_lowercase)
         ]
 
         for i, stem in enumerate(regions):
@@ -889,8 +879,8 @@ class DotBracket:
     def __post_init__(self):
         self.pairs = []
 
-        opening = "([{<ABC"
-        closing = ")]}>abc"
+        opening = "([{<" + string.ascii_uppercase
+        closing = ")]}>" + string.ascii_lowercase
         begins = {bracket: list() for bracket in opening}
         matches = {end: begin for begin, end in zip(opening, closing)}
 
