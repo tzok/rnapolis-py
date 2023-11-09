@@ -5,7 +5,7 @@ import logging
 import math
 import os
 from collections import Counter, defaultdict
-from typing import IO, Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 
 import numpy
 import numpy.typing
@@ -15,6 +15,7 @@ from scipy.spatial import KDTree
 
 from rnapolis.common import (
     BR,
+    BaseInteractions,
     BasePair,
     BasePhosphate,
     BaseRibose,
@@ -471,19 +472,27 @@ def find_stackings(structure: Structure3D, model: int = 1) -> List[Stacking]:
     return stackings
 
 
-def extract_secondary_structure(
-    tertiary_structure: Structure3D, model: int = 1, find_gaps: bool = False
-) -> Structure2D:
+def extract_base_interactions(
+    tertiary_structure: Structure3D, model: int = 1
+) -> BaseInteractions:
     base_pairs, base_phosphate, base_ribose = find_pairs(tertiary_structure, model)
     stackings = find_stackings(tertiary_structure, model)
-    mapping = Mapping2D3D(tertiary_structure, base_pairs, stackings, find_gaps)
+    return BaseInteractions(base_pairs, stackings, base_ribose, base_phosphate, [])
+
+
+def extract_secondary_structure(
+    tertiary_structure: Structure3D, model: int = 1, find_gaps: bool = False
+) -> BaseInteractions:
+    base_interactions = extract_base_interactions(tertiary_structure, model)
+    mapping = Mapping2D3D(
+        tertiary_structure,
+        base_interactions.basePairs,
+        base_interactions.stackings,
+        find_gaps,
+    )
     stems, single_strands, hairpins, loops = mapping.bpseq.elements
     return Structure2D(
-        base_pairs,
-        stackings,
-        base_ribose,
-        base_phosphate,
-        [],
+        base_interactions,
         str(mapping.bpseq),
         mapping.dot_bracket,
         mapping.extended_dot_bracket,
@@ -494,12 +503,12 @@ def extract_secondary_structure(
     )
 
 
-def write_json(path: str, structure2d: Structure2D):
+def write_json(path: str, structure2d: BaseInteractions):
     with open(path, "wb") as f:
         f.write(orjson.dumps(structure2d))
 
 
-def write_csv(path: str, structure2d: Structure2D):
+def write_csv(path: str, structure2d: BaseInteractions):
     with open(path, "w") as f:
         writer = csv.writer(f)
         writer.writerow(["nt1", "nt2", "type", "classification-1", "classification-2"])

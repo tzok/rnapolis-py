@@ -1,7 +1,5 @@
-import itertools
 import logging
 import math
-import string
 from collections import defaultdict
 from dataclasses import dataclass, field
 from functools import cached_property, total_ordering
@@ -20,7 +18,6 @@ from rnapolis.common import (
     ResidueAuth,
     ResidueLabel,
     Stacking,
-    Structure2D,
 )
 
 BASE_ATOMS = {

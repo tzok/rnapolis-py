@@ -1,25 +1,21 @@
 from collections import Counter
 
-from hypothesis import HealthCheck, given, settings
+from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from rnapolis.common import (
+    BaseInteractions,
     BasePair,
     BasePhosphate,
     BaseRibose,
     BpSeq,
     DotBracket,
-    Hairpin,
     Interaction,
-    Loop,
     OtherInteraction,
     Residue,
     ResidueAuth,
     ResidueLabel,
-    SingleStrand,
     Stacking,
-    Stem,
-    Structure2D,
 )
 
 
@@ -82,7 +78,7 @@ def test_rnapdbee_adapters_api_compliance_other(obj):
     assert obj.__dict__.keys() == {"nt1", "nt2"}
 
 
-@given(st.from_type(Structure2D))
+@given(st.from_type(BaseInteractions))
 @settings(max_examples=10)
 def test_rnapdbee_adapters_api_compliance_structure2d(obj):
     assert obj.__dict__.keys() >= {
