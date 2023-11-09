@@ -1,14 +1,8 @@
 #! /usr/bin/env python
 import argparse
 import itertools
-from typing import IO, Dict, List
-
-import orjson
-from mmcif.io.IoAdapterPy import IoAdapterPy
-from mmcif.io.PdbxReader import DataContainer
 
 from rnapolis.common import BpSeq, DotBracket
-from rnapolis.util import handle_input_file
 
 
 def main():

@@ -897,12 +897,17 @@ class DotBracket:
 
 
 @dataclass(frozen=True, order=True)
-class Structure2D:
+class BaseInteractions:
     basePairs: List[BasePair]
     stackings: List[Stacking]
     baseRiboseInteractions: List[BaseRibose]
     basePhosphateInteractions: List[BasePhosphate]
     otherInteractions: List[OtherInteraction]
+
+
+@dataclass(frozen=True, order=True)
+class Structure2D:
+    baseInteractions: BaseInteractions
     bpseq: str
     dotBracket: str
     extendedDotBracket: str

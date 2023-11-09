@@ -1,4 +1,4 @@
-from rnapolis.annotator import extract_secondary_structure
+from rnapolis.annotator import extract_base_interactions
 from rnapolis.common import ResidueAuth, ResidueLabel
 from rnapolis.parser import read_3d_structure
 from rnapolis.tertiary import Mapping2D3D
@@ -8,9 +8,9 @@ from rnapolis.tertiary import Mapping2D3D
 def test_1E7K():
     with open("tests/1E7K_1_C.cif") as f:
         structure3d = read_3d_structure(f, 1)
-    structure2d = extract_secondary_structure(structure3d)
+    base_interaction = extract_base_interactions(structure3d)
     mapping = Mapping2D3D(
-        structure3d, structure2d.basePairs, structure2d.stackings, True
+        structure3d, base_interaction.basePairs, base_interaction.stackings, True
     )
     assert len(mapping.strands_sequences) == 2
 
@@ -26,9 +26,9 @@ def test_1DFU():
     b2g = structure3d.find_residue(ResidueLabel("B", 2, "G"), None)
     assert b2g is not None
 
-    structure2d = extract_secondary_structure(structure3d)
+    base_interactions = extract_base_interactions(structure3d)
     mapping = Mapping2D3D(
-        structure3d, structure2d.basePairs, structure2d.stackings, True
+        structure3d, base_interactions.basePairs, base_interactions.stackings, True
     )
     assert b2g not in mapping.base_pair_graph[b1u]
     assert b1u not in mapping.base_pair_graph[b2g]
@@ -38,9 +38,9 @@ def test_1DFU():
 def test_4WTI():
     with open("tests/4WTI_1_T-P.cif") as f:
         structure3d = read_3d_structure(f, 1)
-    structure2d = extract_secondary_structure(structure3d)
+    base_interactions = extract_base_interactions(structure3d)
     mapping = Mapping2D3D(
-        structure3d, structure2d.basePairs, structure2d.stackings, True
+        structure3d, base_interactions.basePairs, base_interactions.stackings, True
     )
     assert mapping.dot_bracket == ">strand_T\nCGG\n.((\n>strand_P\nCC\n))"
 
@@ -49,9 +49,9 @@ def test_4WTI():
 def test_1HMH():
     with open("tests/1HMH_1_E.cif") as f:
         structure3d = read_3d_structure(f, 1)
-    structure2d = extract_secondary_structure(structure3d)
+    base_interactions = extract_base_interactions(structure3d)
     mapping = Mapping2D3D(
-        structure3d, structure2d.basePairs, structure2d.stackings, True
+        structure3d, base_interactions.basePairs, base_interactions.stackings, True
     )
     assert mapping.dot_bracket == ">strand_E\nUG\n.."
 

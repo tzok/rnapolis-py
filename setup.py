@@ -5,7 +5,7 @@ with open("README.md") as f:
 
 setup(
     name="RNApolis",
-    version="0.1.5",
+    version="0.2.0",
     packages=["rnapolis"],
     package_dir={"": "src"},
     author="Tomasz Zok",
@@ -33,5 +33,5 @@ setup(
             "motif-extractor=rnapolis.motif_extractor:main",
         ]
     },
-    install_requires=["mmcif", "numpy", "ordered-set", "orjson", "pulp", "scipy"],
+    install_requires=["graphviz", "mmcif", "numpy", "ordered-set", "orjson", "pulp", "scipy"],
 )
