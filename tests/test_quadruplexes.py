@@ -1,4 +1,4 @@
-from rnapolis.annotator import extract_secondary_structure
+from rnapolis.annotator import extract_base_interactions
 from rnapolis.common import ResidueAuth, ResidueLabel
 from rnapolis.parser import read_3d_structure
 from rnapolis.tertiary import Mapping2D3D
@@ -8,9 +8,9 @@ from rnapolis.tertiary import Mapping2D3D
 def test_2HY9():
     with open("tests/2HY9.cif") as f:
         structure3d = read_3d_structure(f, 1)
-    structure2d = extract_secondary_structure(structure3d)
+    base_interactions = extract_base_interactions(structure3d)
     mapping = Mapping2D3D(
-        structure3d, structure2d.basePairs, structure2d.stackings, True
+        structure3d, base_interactions.basePairs, base_interactions.stackings, True
     )
 
     # tract 1
@@ -61,9 +61,9 @@ def test_2HY9():
 def test_6RS3():
     with open("tests/6RS3.cif") as f:
         structure3d = read_3d_structure(f, 1)
-    structure2d = extract_secondary_structure(structure3d)
+    base_interactions = extract_base_interactions(structure3d)
     mapping = Mapping2D3D(
-        structure3d, structure2d.basePairs, structure2d.stackings, True
+        structure3d, base_interactions.basePairs, base_interactions.stackings, True
     )
 
     g1 = structure3d.find_residue(ResidueLabel("A", 1, "DG"), None)
@@ -106,9 +106,9 @@ def test_6RS3():
 def test_1JJP():
     with open("tests/1JJP.cif") as f:
         structure3d = read_3d_structure(f, 1)
-    structure2d = extract_secondary_structure(structure3d)
+    base_interactions = extract_base_interactions(structure3d)
     mapping = Mapping2D3D(
-        structure3d, structure2d.basePairs, structure2d.stackings, True
+        structure3d, base_interactions.basePairs, base_interactions.stackings, True
     )
 
     ag1 = structure3d.find_residue(ResidueLabel("A", 1, "DG"), None)
@@ -180,9 +180,9 @@ def test_1JJP():
 def test_6FC9():
     with open("tests/6FC9.cif") as f:
         structure3d = read_3d_structure(f, 1)
-    structure2d = extract_secondary_structure(structure3d)
+    base_interactions = extract_base_interactions(structure3d)
     mapping = Mapping2D3D(
-        structure3d, structure2d.basePairs, structure2d.stackings, True
+        structure3d, base_interactions.basePairs, base_interactions.stackings, True
     )
 
     g1 = structure3d.find_residue(ResidueLabel("A", 1, "DG"), None)
@@ -256,9 +256,9 @@ def test_6FC9():
 def test_UGG_md():
     with open("tests/q-ugg-5k-salt_400-500ns_frame1065.pdb") as f:
         structure3d = read_3d_structure(f, 1)
-    structure2d = extract_secondary_structure(structure3d)
+    base_interactions = extract_base_interactions(structure3d)
     mapping = Mapping2D3D(
-        structure3d, structure2d.basePairs, structure2d.stackings, True
+        structure3d, base_interactions.basePairs, base_interactions.stackings, True
     )
 
     u1 = structure3d.find_residue(None, ResidueAuth(" ", 1, None, "U5"))
