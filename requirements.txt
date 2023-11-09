@@ -1,3 +1,4 @@
+graphviz==0.20.1
 mmcif==0.81
 numpy==1.26.1
 ordered-set==4.1.0
