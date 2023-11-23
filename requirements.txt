@@ -4,4 +4,4 @@ numpy==1.26.2
 ordered-set==4.1.0
 orjson==3.9.10
 pulp==2.7.0
-scipy==1.11.3
+scipy==1.11.4
