@@ -31,7 +31,16 @@ setup(
             "metareader=rnapolis.metareader:main",
             "transformer=rnapolis.transformer:main",
             "motif-extractor=rnapolis.motif_extractor:main",
+            "molecule-filter=rnapolis.molecule_filter:main",
         ]
     },
-    install_requires=["graphviz", "mmcif", "numpy", "ordered-set", "orjson", "pulp", "scipy"],
+    install_requires=[
+        "graphviz",
+        "mmcif",
+        "numpy",
+        "ordered-set",
+        "orjson",
+        "pulp",
+        "scipy",
+    ],
 )

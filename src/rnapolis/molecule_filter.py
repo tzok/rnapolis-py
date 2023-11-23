@@ -1,12 +1,11 @@
 #! /usr/bin/env python
 import argparse
 import tempfile
-from typing import IO, Dict, List, Set, Tuple
+from typing import List, Set, Tuple
 
 from mmcif.io.IoAdapterPy import IoAdapterPy
 from mmcif.io.PdbxReader import DataCategory, DataContainer
 
-from rnapolis.metareader import convert_category
 from rnapolis.util import handle_input_file
 
 # Source: https://mmcif.wwpdb.org/dictionaries/mmcif_pdbx_v50.dic/Items/_entity_poly.type.html
@@ -155,7 +154,7 @@ def select_category_by_id(
     return attributes, rows
 
 
-if __name__ == "__main__":
+def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--type",
@@ -193,3 +192,7 @@ if __name__ == "__main__":
     with tempfile.NamedTemporaryFile() as tmp:
         adapter.writeFile(tmp.name, [output])
         print(tmp.read().decode())
+
+
+if __name__ == "__main__":
+    main()
