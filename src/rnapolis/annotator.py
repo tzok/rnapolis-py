@@ -508,11 +508,11 @@ def write_json(path: str, structure2d: BaseInteractions):
         f.write(orjson.dumps(structure2d))
 
 
-def write_csv(path: str, structure2d: BaseInteractions):
+def write_csv(path: str, structure2d: Structure2D):
     with open(path, "w") as f:
         writer = csv.writer(f)
         writer.writerow(["nt1", "nt2", "type", "classification-1", "classification-2"])
-        for base_pair in structure2d.basePairs:
+        for base_pair in structure2d.baseInteractions.basePairs:
             writer.writerow(
                 [
                     base_pair.nt1.full_name,
@@ -524,7 +524,7 @@ def write_csv(path: str, structure2d: BaseInteractions):
                     else "",
                 ]
             )
-        for stacking in structure2d.stackings:
+        for stacking in structure2d.baseInteractions.stackings:
             writer.writerow(
                 [
                     stacking.nt1.full_name,
@@ -534,7 +534,7 @@ def write_csv(path: str, structure2d: BaseInteractions):
                     "",
                 ]
             )
-        for base_phosphate in structure2d.basePhosphateInteractions:
+        for base_phosphate in structure2d.baseInteractions.basePhosphateInteractions:
             writer.writerow(
                 [
                     base_phosphate.nt1.full_name,
@@ -544,7 +544,7 @@ def write_csv(path: str, structure2d: BaseInteractions):
                     "",
                 ]
             )
-        for base_ribose in structure2d.basePhosphateInteractions:
+        for base_ribose in structure2d.baseInteractions.basePhosphateInteractions:
             writer.writerow(
                 [
                     base_ribose.nt1.full_name,
@@ -554,7 +554,7 @@ def write_csv(path: str, structure2d: BaseInteractions):
                     "",
                 ]
             )
-        for other in structure2d.otherInteractions:
+        for other in structure2d.baseInteractions.otherInteractions:
             writer.writerow(
                 [
                     other.nt1.full_name,

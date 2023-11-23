@@ -5,7 +5,7 @@ with open("README.md") as f:
 
 setup(
     name="RNApolis",
-    version="0.2.0",
+    version="0.2.1",
     packages=["rnapolis"],
     package_dir={"": "src"},
     author="Tomasz Zok",
@@ -29,9 +29,18 @@ setup(
             "annotator=rnapolis.annotator:main",
             "clashfinder=rnapolis.clashfinder:main",
             "metareader=rnapolis.metareader:main",
-            "transformer=rnapolis.transformer:main",
+            "molecule-filter=rnapolis.molecule_filter:main",
             "motif-extractor=rnapolis.motif_extractor:main",
+            "transformer=rnapolis.transformer:main",
         ]
     },
-    install_requires=["graphviz", "mmcif", "numpy", "ordered-set", "orjson", "pulp", "scipy"],
+    install_requires=[
+        "graphviz",
+        "mmcif",
+        "numpy",
+        "ordered-set",
+        "orjson",
+        "pulp",
+        "scipy",
+    ],
 )
