@@ -29,9 +29,9 @@ setup(
             "annotator=rnapolis.annotator:main",
             "clashfinder=rnapolis.clashfinder:main",
             "metareader=rnapolis.metareader:main",
-            "transformer=rnapolis.transformer:main",
-            "motif-extractor=rnapolis.motif_extractor:main",
             "molecule-filter=rnapolis.molecule_filter:main",
+            "motif-extractor=rnapolis.motif_extractor:main",
+            "transformer=rnapolis.transformer:main",
         ]
     },
     install_requires=[
