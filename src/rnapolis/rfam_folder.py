@@ -24,7 +24,7 @@ class FASTA:
 
     def __init__(self, header: str, sequence: str):
         self.header = header
-        self.sequence = sequence
+        self.sequence = sequence.upper().replace("T", "U")
 
     def __str__(self):
         return f">{self.header}\n{self.sequence}"
