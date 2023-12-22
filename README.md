@@ -2108,3 +2108,38 @@ To use `transformer.py`, specify the path to your input mmCIF file and the desir
 - `--copy-to COPY_TO`: Indicate the column name to copy data to (e.g., `auth_asym_id`).
 
 For additional guidance, use `-h` or `--help`.
+
+### `rfam-folder`
+
+`rfam-folder` is a command-line tool for generating consensus secondary structures for RNA sequences. This tool can process a single RNA sequence or multiple sequences from a FASTA file. It offers the flexibility to specify an Rfam family for targeted analysis, control the folding of the secondary structure, and set a limit on the number of structures generated.
+
+**Important!** You need to have [Infernal software](http://eddylab.org/infernal/) installed for this script to run.
+
+#### Usage:
+
+The general usage pattern for rfam_folder.py is as follows:
+
+```bash
+usage: rfam_folder.py [-h] [--family FAMILY] [--no-fold] [--count COUNT] sequence
+```
+
+Positional Arguments:
+
+- sequence: An RNA sequence directly or a path to a FASTA file containing one or more sequences.
+
+Options:
+
+- `--family FAMILY`: (Optional) Specify the name of the Rfam family to use. If not given, the entire Rfam database is searched for the sequence.
+- `--no-fold`: (Optional) Disable folding of the consensus secondary structure by RNAfold with constraints.
+- `--count COUNT`: (Optional) Set the maximum number of consensus secondary structures to generate per sequence, with a default of 1.
+
+#### Examples
+
+Generate a consensus structure for a single RNA sequence given specific Rfam family:
+
+```
+$ rfam-folder AUCGUUCACCUCAUAAAUUGAGUGAGACGGAAGUAGGUUAAAACCGAAGGAACGCAGU --family RF01739
+>header
+AUCGUUCACCUCAUAAAUUGAGUGAGACGGAAGUAGGUUAAAACCGAAGGAACGCAGU
+..(((((..(((((.......)))))((....)).(((....)))....)))))....
+```
