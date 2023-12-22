@@ -1,10 +1,10 @@
 appdirs==1.4.4
 graphviz==0.20.1
-mmcif==0.81
+mmcif==0.82
 numpy==1.26.2
 ordered-set==4.1.0
 orjson==3.9.10
 pulp==2.7.0
 requests==2.31.0
-scipy==1.11.3
+scipy==1.11.4
 viennarna==2.6.4
