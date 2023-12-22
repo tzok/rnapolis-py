@@ -32,15 +32,19 @@ setup(
             "molecule-filter=rnapolis.molecule_filter:main",
             "motif-extractor=rnapolis.motif_extractor:main",
             "transformer=rnapolis.transformer:main",
+            "rfam-folder=rfam_folder:main",
         ]
     },
     install_requires=[
+        "appdirs",
         "graphviz",
         "mmcif",
         "numpy",
         "ordered-set",
         "orjson",
         "pulp",
+        "requests",
         "scipy",
+        "viennarna",
     ],
 )
