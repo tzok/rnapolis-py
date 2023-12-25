@@ -1,6 +1,6 @@
 appdirs==1.4.4
 graphviz==0.20.1
-mmcif==0.82
+mmcif==0.83
 numpy==1.26.2
 ordered-set==4.1.0
 orjson==3.9.10
