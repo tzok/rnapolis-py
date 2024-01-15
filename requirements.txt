@@ -4,7 +4,7 @@ mmcif==0.84
 numpy==1.26.3
 ordered-set==4.1.0
 orjson==3.9.10
-pulp==2.7.0
+pulp==2.8.0
 requests==2.31.0
 scipy==1.11.4
 viennarna==2.6.4
