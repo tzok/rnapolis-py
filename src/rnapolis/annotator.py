@@ -519,9 +519,11 @@ def write_csv(path: str, structure2d: Structure2D):
                     base_pair.nt2.full_name,
                     "base pair",
                     base_pair.lw.value,
-                    base_pair.saenger.value or ""
-                    if base_pair.saenger is not None
-                    else "",
+                    (
+                        base_pair.saenger.value or ""
+                        if base_pair.saenger is not None
+                        else ""
+                    ),
                 ]
             )
         for stacking in structure2d.baseInteractions.stackings:
