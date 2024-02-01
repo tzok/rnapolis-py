@@ -6,6 +6,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+from concurrent.futures import ThreadPoolExecutor
 from typing import List
 
 import appdirs
@@ -282,12 +283,16 @@ def main():
     else:
         fastas = [FASTA("header", args.sequence)]
 
-    for fasta in fastas:
-        results = generate_consensus_secondary_structure(
-            fasta, args.family, not args.no_fold, args.count
+    with ThreadPoolExecutor() as executor:
+        all_results = executor.map(
+            lambda fasta: generate_consensus_secondary_structure(
+                fasta, args.family, not args.no_fold, args.count
+            ),
+            fastas,
         )
-        for result in results:
-            print(result)
+        for per_fasta_results in all_results:
+            for result in per_fasta_results:
+                print(result)
 
 
 if __name__ == "__main__":
