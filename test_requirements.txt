@@ -1,1 +1,2 @@
 hypothesis==6.93.0
+pytest==8.0.0
