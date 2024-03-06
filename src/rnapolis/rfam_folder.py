@@ -5,7 +5,9 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from typing import List
 
@@ -91,8 +93,20 @@ def ensure_cm(family: str = None):
                     f"Failed to find covariance model for {family} from Rfam."
                 )
 
-    if not os.path.exists(cm_path + ".i1m"):
-        subprocess.run(["cmpress", cm_path], check=True, capture_output=True)
+    if any(
+        not os.path.exists(cm_path + extension)
+        for extension in [".i1m", ".i1i", ".i1p", ".i1f"]
+    ):
+        for extension in [".i1m", ".i1i", ".i1p", ".i1f"]:
+            if os.path.exists(cm_path + extension):
+                os.remove(cm_path + extension)
+        try:
+            subprocess.run(["cmpress", cm_path], check=True, capture_output=True)
+        except subprocess.CalledProcessError as e:
+            print("Failed to run cmpress", file=sys.stderr)
+            print(e.stdout.decode(), file=sys.stderr)
+            print(e.stderr.decode(), file=sys.stderr)
+            raise e
 
     return cm_path
 
@@ -217,24 +231,40 @@ def analyze_cmsearch(cmsearch: str, fasta: FASTA, count: int = 1):
 
 
 def generate_consensus_secondary_structure(
-    fasta: FASTA, family: str = None, fold: bool = True, count: int = 1
+    fasta: FASTA,
+    family: str = None,
+    fold: bool = True,
+    count: int = 1,
+    lock: threading.Lock = None,
 ):
     if shutil.which("cmpress") is None or shutil.which("cmsearch") is None:
         raise RuntimeError(
             "cmpress/cmsearch not found in PATH, please install Infernal first."
         )
 
+    if lock is not None:
+        lock.acquire()
+
     cm_path = ensure_cm(family)
+
+    if lock is not None:
+        lock.release()
 
     with tempfile.NamedTemporaryFile(suffix=".fa") as fin:
         fin.write(str(fasta).encode())
         fin.seek(0)
 
-        completed = subprocess.run(
-            ["cmsearch", "--notextw", cm_path, fin.name],
-            check=True,
-            capture_output=True,
-        )
+        try:
+            completed = subprocess.run(
+                ["cmsearch", "--notextw", cm_path, fin.name],
+                check=True,
+                capture_output=True,
+            )
+        except subprocess.CalledProcessError as e:
+            print("Failed to run cmsearch", file=sys.stderr)
+            print(e.stdout.decode(), file=sys.stderr)
+            print(e.stderr.decode(), file=sys.stderr)
+            raise e
 
     results = analyze_cmsearch(completed.stdout.decode(), fasta, count)
 
@@ -283,10 +313,12 @@ def main():
     else:
         fastas = [FASTA("header", args.sequence)]
 
+    lock = threading.Lock()
+
     with ThreadPoolExecutor() as executor:
         all_results = executor.map(
             lambda fasta: generate_consensus_secondary_structure(
-                fasta, args.family, not args.no_fold, args.count
+                fasta, args.family, not args.no_fold, args.count, lock
             ),
             fastas,
         )
