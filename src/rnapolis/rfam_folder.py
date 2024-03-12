@@ -227,6 +227,9 @@ def analyze_cmsearch(cmsearch: str, fasta: FASTA, count: int = 1):
         if len(result) >= count:
             break
 
+    if result == []:
+        result.append([fasta.sequence, "." * len(fasta.sequence)])
+
     return result
 
 
@@ -235,6 +238,7 @@ def generate_consensus_secondary_structure(
     family: str = None,
     fold: bool = True,
     count: int = 1,
+    no_rfam_defaults: bool = False,
     lock: threading.Lock = None,
 ):
     if shutil.which("cmpress") is None or shutil.which("cmsearch") is None:
@@ -255,8 +259,12 @@ def generate_consensus_secondary_structure(
         fin.seek(0)
 
         try:
+            command = ["cmsearch", "--notextw"]
+            if not no_rfam_defaults:
+                command += ["--nohmmonly", "--rfam", "--cut_ga"]
+            command += [cm_path, fin.name]
             completed = subprocess.run(
-                ["cmsearch", "--notextw", cm_path, fin.name],
+                command,
                 check=True,
                 capture_output=True,
             )
@@ -305,6 +313,12 @@ def main():
         default=1,
         help="(optional) maximum number of consensus secondary structures to generate per sequence, default is 1",
     )
+    parser.add_argument(
+        "--no-rfam-defaults",
+        action="store_true",
+        help="Infernal will be run with Rfam defaults (cmsearch --nohmmonly --rfam --cut_ga CM FASTA), "
+        + "but if this is set then Infernal will be run with global defaults (cmsearch CM FASTA)",
+    )
 
     args = parser.parse_args()
 
@@ -318,7 +332,12 @@ def main():
     with ThreadPoolExecutor() as executor:
         all_results = executor.map(
             lambda fasta: generate_consensus_secondary_structure(
-                fasta, args.family, not args.no_fold, args.count, lock
+                fasta,
+                args.family,
+                not args.no_fold,
+                args.count,
+                args.no_rfam_defaults,
+                lock,
             ),
             fastas,
         )
