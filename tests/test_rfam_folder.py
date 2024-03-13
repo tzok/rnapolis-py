@@ -19,3 +19,12 @@ def test_LJAJ01000009():
     result = generate_consensus_secondary_structure(fasta[0], "RF01315", False)
     sequence = result[0].split("\n")[1]
     assert len(sequence) == len(fasta[0].sequence)
+
+
+@pytest.mark.skipif(IN_GITHUB_ACTIONS, reason="Test doesn't work in Github Actions.")
+def test_RF03339():
+    fastas = parse_fasta("tests/RF03339.fa")
+    for fasta in fastas:
+        result = generate_consensus_secondary_structure(fasta, "RF03339", False)
+        sequence = result[0].split("\n")[1]
+        assert len(sequence) == len(fasta.sequence)
