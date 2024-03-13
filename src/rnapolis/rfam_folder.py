@@ -214,6 +214,15 @@ def analyze_cmsearch(cmsearch: str, fasta: FASTA, count: int = 1):
 
         assert len(sequence) == len(structure)
 
+        i = fasta.sequence.find(sequence)
+        structure = (
+            "." * i + structure + "." * (len(fasta.sequence) - len(sequence) - i)
+        )
+        sequence = fasta.sequence
+
+        assert len(sequence) == len(structure)
+        assert len(sequence) == len(fasta.sequence)
+
         structure = (
             structure.replace(":", ".")
             .replace("-", ".")
