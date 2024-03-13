@@ -137,7 +137,11 @@ def analyze_cmsearch(cmsearch: str, fasta: FASTA, count: int = 1):
         for i in range(len(structure)):
             if structure[i] != " ":
                 break
+
         j = structure.find(" CS")
+        while structure[j] == " ":
+            j -= 1
+        j += 1
 
         structure = structure[i:j]
         sequence = sequence[i:j].upper()
