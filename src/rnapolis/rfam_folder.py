@@ -205,8 +205,7 @@ def analyze_cmsearch(cmsearch: str, fasta: FASTA, count: int = 1):
             sequence_comp = "".join([complementary[c] for c in sequence[::-1]])
             match = re.search(sequence_comp, fasta.sequence)
             assert match is not None, (sequence, fasta.sequence)
-            sequence_comp = match.group()
-            sequence = "".join([complementary[c] for c in sequence_comp[::-1]])
+            sequence = match.group()
         else:
             match = re.search(sequence, fasta.sequence)
             assert match is not None, (sequence, fasta.sequence)
@@ -215,6 +214,8 @@ def analyze_cmsearch(cmsearch: str, fasta: FASTA, count: int = 1):
         assert len(sequence) == len(structure)
 
         i = fasta.sequence.find(sequence)
+        assert i != -1
+
         structure = (
             "." * i + structure + "." * (len(fasta.sequence) - len(sequence) - i)
         )
