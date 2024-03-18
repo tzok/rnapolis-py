@@ -1,5 +1,5 @@
 appdirs==1.4.4
-graphviz==0.20.1
+graphviz==0.20.2
 mmcif==0.86.0
 numpy==1.26.4
 ordered-set==4.1.0
