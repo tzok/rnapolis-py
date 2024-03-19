@@ -175,7 +175,7 @@ def merge_and_clean_bph_br(
 
 
 def find_pairs(
-    structure: Structure3D, model: int = 1
+    structure: Structure3D, model: Optional[int] = None
 ) -> Tuple[List[BasePair], List[BasePhosphate], List[BaseRibose]]:
     # put all donors and acceptors into a KDTree
     coordinates = []
@@ -183,7 +183,7 @@ def find_pairs(
     coordinates_type_map: Dict[Tuple[float, float, float], str] = {}
     coordinates_residue_map: Dict[Tuple[float, float, float], Residue3D] = {}
     for residue in structure.residues:
-        if residue.model != model:
+        if model is not None and residue.model != model:
             continue
         acceptors = (
             BASE_ACCEPTORS.get(residue.one_letter_name, [])
@@ -396,12 +396,14 @@ def find_pairs(
     return base_pairs, base_phosphates, base_riboses
 
 
-def find_stackings(structure: Structure3D, model: int = 1) -> List[Stacking]:
+def find_stackings(
+    structure: Structure3D, model: Optional[int] = None
+) -> List[Stacking]:
     # put all nitrogen ring centers into a KDTree
     coordinates = []
     coordinates_residue_map: Dict[Tuple[float, float, float], Residue3D] = {}
     for residue in structure.residues:
-        if residue.model != model:
+        if model is not None and residue.model != model:
             continue
         base_atoms = BASE_ATOMS.get(residue.one_letter_name, [])
         xs, ys, zs = [], [], []
@@ -473,7 +475,7 @@ def find_stackings(structure: Structure3D, model: int = 1) -> List[Stacking]:
 
 
 def extract_base_interactions(
-    tertiary_structure: Structure3D, model: int = 1
+    tertiary_structure: Structure3D, model: Optional[int] = None
 ) -> BaseInteractions:
     base_pairs, base_phosphate, base_ribose = find_pairs(tertiary_structure, model)
     stackings = find_stackings(tertiary_structure, model)
@@ -481,7 +483,9 @@ def extract_base_interactions(
 
 
 def extract_secondary_structure(
-    tertiary_structure: Structure3D, model: int = 1, find_gaps: bool = False
+    tertiary_structure: Structure3D,
+    model: Optional[int] = None,
+    find_gaps: bool = False,
 ) -> BaseInteractions:
     base_interactions = extract_base_interactions(tertiary_structure, model)
     mapping = Mapping2D3D(
@@ -597,8 +601,8 @@ def main():
     args = parser.parse_args()
 
     file = handle_input_file(args.input)
-    structure3d = read_3d_structure(file, 1)
-    structure2d = extract_secondary_structure(structure3d, 1, args.find_gaps)
+    structure3d = read_3d_structure(file, None)
+    structure2d = extract_secondary_structure(structure3d, None, args.find_gaps)
 
     if args.csv:
         write_csv(args.csv, structure2d)

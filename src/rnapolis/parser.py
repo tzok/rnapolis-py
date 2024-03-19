@@ -7,12 +7,13 @@ from rnapolis.tertiary import BASE_ATOMS, Atom, Residue3D, Structure3D
 
 
 def read_3d_structure(
-    cif_or_pdb: IO[str], model: int = 1, nucleic_acid_only: bool = False
+    cif_or_pdb: IO[str], model: Optional[int] = None, nucleic_acid_only: bool = False
 ) -> Structure3D:
     atoms, modified, sequence = (
         parse_cif(cif_or_pdb) if is_cif(cif_or_pdb) else parse_pdb(cif_or_pdb)
     )
-    atoms = list(filter(lambda atom: atom.model == model, atoms))
+    if model is not None:
+        atoms = list(filter(lambda atom: atom.model == model, atoms))
     return group_atoms(atoms, modified, sequence, nucleic_acid_only)
 
 
