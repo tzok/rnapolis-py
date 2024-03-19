@@ -12,8 +12,15 @@ def read_3d_structure(
     atoms, modified, sequence = (
         parse_cif(cif_or_pdb) if is_cif(cif_or_pdb) else parse_pdb(cif_or_pdb)
     )
-    if model is not None:
-        atoms = list(filter(lambda atom: atom.model == model, atoms))
+    available_models = {atom.model: None for atom in atoms}
+    atoms_by_model = {
+        model: list(filter(lambda atom: atom.model == model, atoms))
+        for model in available_models
+    }
+    if model is not None and model in available_models:
+        atoms = atoms_by_model[model]
+    else:
+        atoms = atoms_by_model[list(available_models.keys())[0]]
     return group_atoms(atoms, modified, sequence, nucleic_acid_only)
 
 
