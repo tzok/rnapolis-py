@@ -486,7 +486,7 @@ def extract_secondary_structure(
     tertiary_structure: Structure3D,
     model: Optional[int] = None,
     find_gaps: bool = False,
-) -> BaseInteractions:
+) -> Structure2D:
     base_interactions = extract_base_interactions(tertiary_structure, model)
     mapping = Mapping2D3D(
         tertiary_structure,

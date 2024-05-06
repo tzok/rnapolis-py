@@ -11,6 +11,7 @@ from rnapolis.common import (
     BpSeq,
     DotBracket,
     Interaction,
+    MultiStrandDotBracket,
     OtherInteraction,
     Residue,
     ResidueAuth,
@@ -122,3 +123,17 @@ def test_pseudoknot_order_assignment():
 
     bpseq_again = BpSeq.from_dotbracket(dot_bracket)
     assert bpseq == bpseq_again
+
+
+def test_multi_strand_dot_bracket():
+    input = ">strand_A\nAGCGCCUGGACUUAAAGCCAU\n..((((.((((((((((((..\n>strand_B\nGGCUUUAAGUUGACGAGGGCAGGGUUUAUCGAGACAUCGGCGGGUGCCCUGCGGUCUUCCUGCGACCGUUAGAGGACUGGUAAAACCACAGGCGACUGUGGCAUAGAGCAGUCCGGGCAGGAA\n)))))))))))..(((...[[[[[[...)))......)))))...]]]]]][[[[[.((((((]]]]].....((((((......((((((....)))))).......))))))..))))))."
+    dot_bracket = MultiStrandDotBracket.from_string(input)
+    assert len(dot_bracket.strands) == 2
+    assert dot_bracket.strands[0].sequence == "AGCGCCUGGACUUAAAGCCAU"
+    assert dot_bracket.strands[1].sequence == (
+        "GGCUUUAAGUUGACGAGGGCAGGGUUUAUCGAGACAUCGGCGGGUGCCCUGCGGUCUUCCUGCGACCGUUAGAGGACUGGUAAAACCACAGGCGACUGUGGCAUAGAGCAGUCCGGGCAGGAA"
+    )
+    assert dot_bracket.strands[0].structure == ("..((((.((((((((((((..")
+    assert dot_bracket.strands[1].structure == (
+        ")))))))))))..(((...[[[[[[...)))......)))))...]]]]]][[[[[.((((((]]]]].....((((((......((((((....)))))).......))))))..))))))."
+    )

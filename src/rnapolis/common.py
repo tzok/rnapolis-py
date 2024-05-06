@@ -1,6 +1,7 @@
 import itertools
 import logging
 import os
+import re
 import string
 from collections import defaultdict
 from collections.abc import Sequence
@@ -894,6 +895,37 @@ class DotBracket:
 
     def __str__(self):
         return f"{self.sequence}\n{self.structure}"
+
+
+@dataclass
+class MultiStrandDotBracket(DotBracket):
+    strands: List[Strand]
+
+    @staticmethod
+    def from_string(input: str):
+        strands = []
+        first = 1
+
+        for match in re.finditer(
+            r"((>.*?\n)?([ACGUNacgun]+)\n([.()\[\]{}<>A-Za-z]+))", input
+        ):
+            sequence = match.group(3)
+            structure = match.group(4)
+            assert len(sequence) == len(structure)
+            last = first + len(sequence) - 1
+            strands.append(Strand(first, last, sequence, structure))
+            first = last + 1
+
+        return MultiStrandDotBracket(
+            "".join(strand.sequence for strand in strands),
+            "".join(strand.structure for strand in strands),
+            strands,
+        )
+
+    @staticmethod
+    def from_file(path: str):
+        with open(path) as f:
+            return MultiStrandDotBracket.from_string(f.read())
 
 
 @dataclass(frozen=True, order=True)
