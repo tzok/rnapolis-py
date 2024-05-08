@@ -907,7 +907,8 @@ class MultiStrandDotBracket(DotBracket):
         first = 1
 
         for match in re.finditer(
-            r"((>.*?\n)?([ACGUNacgun]+)\n([.()\[\]{}<>A-Za-z]+))", input
+            r"((>.*?\n)?([ACGTURYSWKMBDHVNacgturyswkmbdhvn.-]+)\n([.()\[\]{}<>A-Za-z]+))",
+            input,
         ):
             sequence = match.group(3)
             structure = match.group(4)
