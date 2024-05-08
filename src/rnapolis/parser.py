@@ -300,7 +300,6 @@ def get_one_letter_name(
         key = (label.chain, label.number)
         if key in sequence:
             return sequence[key]
-
     # RNA
     if len(name) == 1:
         return name
