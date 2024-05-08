@@ -9,7 +9,6 @@ from typing import Dict, List, Optional, Set, Tuple
 
 import numpy
 import numpy.typing
-import orjson
 from ordered_set import OrderedSet
 from scipy.spatial import KDTree
 
@@ -486,7 +485,8 @@ def extract_secondary_structure(
     tertiary_structure: Structure3D,
     model: Optional[int] = None,
     find_gaps: bool = False,
-) -> Structure2D:
+    all_dot_brackets: bool = False,
+) -> Tuple[Structure2D, List[str]]:
     base_interactions = extract_base_interactions(tertiary_structure, model)
     mapping = Mapping2D3D(
         tertiary_structure,
@@ -495,7 +495,7 @@ def extract_secondary_structure(
         find_gaps,
     )
     stems, single_strands, hairpins, loops = mapping.bpseq.elements
-    return Structure2D(
+    structure2d = Structure2D(
         base_interactions,
         str(mapping.bpseq),
         mapping.dot_bracket,
@@ -505,6 +505,10 @@ def extract_secondary_structure(
         hairpins,
         loops,
     )
+    if all_dot_brackets:
+        return structure2d, mapping.all_dot_brackets
+    else:
+        return structure2d, [structure2d.dotBracket]
 
 
 def write_json(path: str, structure2d: BaseInteractions):
@@ -580,29 +584,40 @@ def write_bpseq(path: str, bpseq: BpSeq):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("input", help="Path to PDB or mmCIF file")
-    parser.add_argument("--bpseq", help="(optional) path to output BPSEQ file")
-    parser.add_argument("--csv", help="(optional) path to output CSV file")
     parser.add_argument(
+        "-a",
+        "--all-dot-brackets",
+        action="store_true",
+        help=")optional) print all dot-brackets, not only optimal one (exclusive with -e/--extended)",
+    )
+    parser.add_argument("-b", "--bpseq", help="(optional) path to output BPSEQ file")
+    parser.add_argument("-c", "--csv", help="(optional) path to output CSV file")
+    parser.add_argument(
+        "-j",
         "--json",
         help="(optional) path to output JSON file",
     )
     parser.add_argument(
+        "-e",
         "--extended",
         action="store_true",
         help="(optional) if set, the program will print extended secondary structure to the standard output",
     )
     parser.add_argument(
+        "-f",
         "--find-gaps",
         action="store_true",
         help="(optional) if set, the program will detect gaps and break the PDB chain into two or more strands; "
         f"the gap is defined as O3'-P distance greater then {1.5 * AVERAGE_OXYGEN_PHOSPHORUS_DISTANCE_COVALENT}",
     )
-    parser.add_argument("--dot", help="(optional) path to output DOT file")
+    parser.add_argument("-d", "--dot", help="(optional) path to output DOT file")
     args = parser.parse_args()
 
     file = handle_input_file(args.input)
     structure3d = read_3d_structure(file, None)
-    structure2d = extract_secondary_structure(structure3d, None, args.find_gaps)
+    structure2d, dot_brackets = extract_secondary_structure(
+        structure3d, None, args.find_gaps, args.all_dot_brackets
+    )
 
     if args.csv:
         write_csv(args.csv, structure2d)
@@ -615,6 +630,9 @@ def main():
 
     if args.extended:
         print(structure2d.extendedDotBracket)
+    elif args.all_dot_brackets:
+        for dot_bracket in dot_brackets:
+            print(dot_bracket)
     else:
         print(structure2d.dotBracket)
 

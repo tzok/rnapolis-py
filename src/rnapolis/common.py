@@ -8,6 +8,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import Enum
 from functools import cache, cached_property, total_ordering
+from itertools import permutations
 from typing import Dict, List, Optional, Tuple
 
 import graphviz
@@ -852,6 +853,78 @@ class BpSeq:
 
         return self.__make_dot_bracket(regions, orders)
 
+    @cached_property
+    def all_dot_brackets(self):
+        # build conflict graph
+        regions = self.__regions
+        graph = defaultdict(set)
+
+        for i, j in itertools.combinations(range(len(regions)), 2):
+            ri, rj = regions[i], regions[j]
+            k, l, _ = ri
+            m, n, _ = rj
+
+            # is pseudoknot?
+            if (k < m < l < n) or (m < k < n < l):
+                graph[i].add(j)
+                graph[j].add(i)
+
+        # find all connected components
+        vertices = list(graph.keys())
+        visited = {vertex: False for vertex in vertices}
+        components = []
+
+        for vertex in vertices:
+            if not visited[vertex]:
+                visited[vertex] = True
+                stack = [vertex]
+                components.append([vertex])
+
+                while stack:
+                    current = stack[-1]
+                    next_vertex = None
+
+                    for neighbor in graph[current]:
+                        if not visited[neighbor]:
+                            next_vertex = neighbor
+                            break
+
+                    if next_vertex is not None:
+                        visited[next_vertex] = True
+                        stack.append(next_vertex)
+                        components[-1].append(next_vertex)
+                    else:
+                        stack.pop()
+
+        # permute order of every component
+        permutations = [
+            list(itertools.permutations(component)) for component in components
+        ]
+        solutions = set()
+
+        for permutation in itertools.product(*permutations):
+            orders = [0 for _ in range(len(regions))]
+
+            for component in permutation:
+                for i in range(1, len(component)):
+                    region_i = component[i]
+                    available = [True for _ in range(len(graph))]
+
+                    for j in range(i):
+                        region_j = component[j]
+
+                        if region_j in graph[region_i]:
+                            available[orders[region_j]] = False
+
+                    order = next(
+                        filter(lambda i: available[i] is True, range(len(available)))
+                    )
+                    orders[region_i] = order
+
+                solutions.add(self.__make_dot_bracket(regions, orders))
+
+        return list(solutions)
+
 
 @dataclass
 class DotBracket:
@@ -895,6 +968,12 @@ class DotBracket:
 
     def __str__(self):
         return f"{self.sequence}\n{self.structure}"
+
+    def __eq__(self, other):
+        return self.sequence == other.sequence and self.structure == other.structure
+
+    def __hash__(self) -> int:
+        return hash((self.sequence, self.structure))
 
 
 @dataclass
