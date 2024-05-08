@@ -548,7 +548,7 @@ class Mapping2D3D:
 
     @cached_property
     def dot_bracket(self) -> str:
-        dbns = self.__generate_dot_bracket_per_strand(self.bpseq)
+        dbns = self.__generate_dot_bracket_per_strand(self.bpseq.dot_bracket.structure)
         i = 0
         result = []
 
@@ -560,8 +560,8 @@ class Mapping2D3D:
             i += len(sequence)
         return "\n".join(result)
 
-    def __generate_dot_bracket_per_strand(self, bpseq: BpSeq) -> List[str]:
-        dbn = bpseq.dot_bracket.structure
+    def __generate_dot_bracket_per_strand(self, dbn_structure: str) -> List[str]:
+        dbn = dbn_structure
         i = 0
         result = []
 
@@ -569,6 +569,25 @@ class Mapping2D3D:
             result.append("".join(dbn[i : i + len(sequence)]))
             i += len(sequence)
         return result
+
+    @cached_property
+    def all_dot_brackets(self) -> List[str]:
+        dot_brackets = []
+
+        for dot_bracket in self.bpseq.all_dot_brackets:
+            dbns = self.__generate_dot_bracket_per_strand(dot_bracket.structure)
+            i = 0
+            result = []
+
+            for i, pair in enumerate(self.strands_sequences):
+                chain, sequence = pair
+                result.append(f">strand_{chain}")
+                result.append(sequence)
+                result.append(dbns[i])
+                i += len(sequence)
+            dot_brackets.append("\n".join(result))
+
+        return dot_brackets
 
     @cached_property
     def extended_dot_bracket(self) -> str:
@@ -593,7 +612,9 @@ class Mapping2D3D:
             for row in [row1, row2]:
                 if row:
                     bpseq = self.__generate_bpseq(row)
-                    dbns = self.__generate_dot_bracket_per_strand(bpseq)
+                    dbns = self.__generate_dot_bracket_per_strand(
+                        bpseq.dot_bracket.structure
+                    )
 
                     for i in range(len(self.strands_sequences)):
                         result[i].append(f"{lw.value} {dbns[i]}")
