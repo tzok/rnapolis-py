@@ -869,8 +869,12 @@ class BpSeq:
                 graph[i].add(j)
                 graph[j].add(i)
 
-        # find all connected components
+        # early exit for non-pseudoknotted structures
         vertices = list(graph.keys())
+        if not vertices:
+            return [self.fcfs]
+
+        # find all connected components
         visited = {vertex: False for vertex in vertices}
         components = []
 
