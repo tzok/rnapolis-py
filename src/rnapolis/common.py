@@ -900,33 +900,37 @@ class BpSeq:
                     else:
                         stack.pop()
 
-        # permute order of every component
-        permutations = [
-            list(itertools.permutations(component)) for component in components
-        ]
-        solutions = set()
+        # find unique orders for each component
+        unique = []
+        for component in components:
+            unique.append(set())
 
-        for permutation in itertools.product(*permutations):
-            orders = [0 for _ in range(len(regions))]
+            for permutation in itertools.permutations(component):
+                orders = {region: 0 for region in component}
 
-            for component in permutation:
-                for i in range(1, len(component)):
-                    region_i = component[i]
-                    available = [True for _ in range(len(graph))]
+                for i in range(1, len(permutation)):
+                    available = [True for _ in range(len(component))]
 
                     for j in range(i):
-                        region_j = component[j]
-
-                        if region_j in graph[region_i]:
-                            available[orders[region_j]] = False
+                        if permutation[j] in graph[permutation[i]]:
+                            available[orders[permutation[j]]] = False
 
                     order = next(
-                        filter(lambda i: available[i] is True, range(len(available)))
+                        filter(lambda k: available[k] is True, range(len(available)))
                     )
-                    orders[region_i] = order
+                    orders[permutation[i]] = order
 
-                solutions.add(self.__make_dot_bracket(regions, orders))
+                unique[-1].add(frozenset(orders.items()))
 
+        # generate all possible dot-brackets
+        solutions = set()
+        for assignment in itertools.product(*unique):
+            orders = {region: 0 for region in range(len(regions))}
+
+            for order in assignment:
+                orders.update(order)
+
+            solutions.add(self.__make_dot_bracket(regions, orders))
         return list(solutions)
 
 
