@@ -1,2 +1,2 @@
-hypothesis==6.102.4
+hypothesis==6.102.6
 pytest==8.2.1
