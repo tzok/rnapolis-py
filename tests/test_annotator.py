@@ -1,6 +1,6 @@
 from collections import Counter
 
-from rnapolis.annotator import extract_base_interactions
+from rnapolis.annotator import extract_base_interactions, extract_secondary_structure
 from rnapolis.parser import read_3d_structure
 
 
@@ -39,3 +39,9 @@ def test_1ehz():
                 assert (
                     False
                 ), f"Interaction {element} occurs {count} times among {labels[i]} type: {duplicates}"
+
+
+def test_8btk():
+    with open("tests/8btk_B7.cif") as f:
+        structure3d = read_3d_structure(f, 1)
+    assert extract_secondary_structure(structure3d, 1) is not None
