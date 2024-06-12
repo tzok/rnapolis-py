@@ -212,7 +212,7 @@ def parse_pdb(
             if alternate_location != " ":
                 continue
             atom_name = line[12:16].strip()
-            residue_name = line[18:20].strip()
+            residue_name = line[17:20].strip()
             chain_identifier = line[21]
             residue_number = int(line[22:26].strip())
             insertion_code = line[26] if line[26] != " " else None
