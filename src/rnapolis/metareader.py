@@ -3,6 +3,7 @@ import argparse
 from typing import IO, Dict, List
 
 import orjson
+import pandas as pd
 from mmcif.io.IoAdapterPy import IoAdapterPy
 from mmcif.io.PdbxReader import DataContainer
 
@@ -46,6 +47,10 @@ def main():
         help="read the mmCIF file and list categories available inside",
         action="store_true",
     )
+    parser.add_argument(
+        "--csv-directory",
+        help="directory where to output CSV per each category",
+    )
     args = parser.parse_args()
 
     file = handle_input_file(args.path)
@@ -56,6 +61,12 @@ def main():
     else:
         result = read_metadata(file, args.category)
         print(orjson.dumps(result).decode("utf-8"))
+
+        if args.csv_directory:
+            for category in result:
+                with open(f"{args.csv_directory}/{category}.csv", "w") as f:
+                    df = pd.DataFrame(result[category])
+                    df.to_csv(f, index=False)
 
 
 if __name__ == "__main__":
