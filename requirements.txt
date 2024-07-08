@@ -3,7 +3,7 @@ graphviz==0.20.3
 mmcif==0.88.0
 numpy==1.26.4
 ordered-set==4.1.0
-orjson==3.10.5
+orjson==3.10.6
 pandas==2.2.2
 pulp==2.8.0
 requests==2.32.3
