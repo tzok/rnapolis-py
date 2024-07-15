@@ -5,7 +5,7 @@ numpy==2.0.0
 ordered-set==4.1.0
 orjson==3.10.6
 pandas==2.2.2
-pulp==2.8.0
+pulp==2.9.0
 requests==2.32.3
 scipy==1.14.0
 viennarna==2.6.4
