@@ -10,8 +10,6 @@ from typing import Dict, List, Optional, Set, Tuple
 import numpy
 import numpy.typing
 from ordered_set import OrderedSet
-from scipy.spatial import KDTree
-
 from rnapolis.common import (
     BR,
     BaseInteractions,
@@ -43,6 +41,7 @@ from rnapolis.tertiary import (
     torsion_angle,
 )
 from rnapolis.util import handle_input_file
+from scipy.spatial import KDTree
 
 HYDROGEN_BOND_MAX_DISTANCE = 4.0
 HYDROGEN_BOND_ANGLE_RANGE = (50.0, 130.0)  # 90 degrees is ideal, so allow +- 40 degrees
@@ -149,7 +148,7 @@ def detect_bph_br_classification(
 
 
 def merge_and_clean_bph_br(
-    pairs: List[Tuple[Residue3D, Residue3D, int]]
+    pairs: List[Tuple[Residue3D, Residue3D, int]],
 ) -> Dict[Tuple[Residue3D, Residue3D], OrderedSet[int]]:
     bph_br_map: Dict[Tuple[Residue3D, Residue3D], OrderedSet[int]] = defaultdict(
         OrderedSet
@@ -588,7 +587,7 @@ def main():
         "-a",
         "--all-dot-brackets",
         action="store_true",
-        help=")optional) print all dot-brackets, not only optimal one (exclusive with -e/--extended)",
+        help="(optional) print all dot-brackets, not only optimal one (exclusive with -e/--extended)",
     )
     parser.add_argument("-b", "--bpseq", help="(optional) path to output BPSEQ file")
     parser.add_argument("-c", "--csv", help="(optional) path to output CSV file")

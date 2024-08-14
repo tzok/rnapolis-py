@@ -8,7 +8,6 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import Enum
 from functools import cache, cached_property, total_ordering
-from itertools import permutations
 from typing import Dict, List, Optional, Tuple
 
 import graphviz

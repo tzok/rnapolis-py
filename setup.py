@@ -5,7 +5,7 @@ with open("README.md") as f:
 
 setup(
     name="RNApolis",
-    version="0.3.17",
+    version="0.3.18",
     packages=["rnapolis"],
     package_dir={"": "src"},
     author="Tomasz Zok",
@@ -42,6 +42,7 @@ setup(
         "numpy",
         "ordered-set",
         "orjson",
+        "pandas",
         "pulp",
         "requests",
         "scipy",

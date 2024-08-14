@@ -2,7 +2,6 @@ import logging
 from typing import IO, Dict, List, Optional, Tuple, Union
 
 from mmcif.io.IoAdapterPy import IoAdapterPy
-
 from rnapolis.common import ResidueAuth, ResidueLabel
 from rnapolis.tertiary import BASE_ATOMS, Atom, Residue3D, Structure3D
 

@@ -14,7 +14,6 @@ from typing import List
 import appdirs
 import requests
 import RNA
-
 from rnapolis.common import BpSeq, DotBracket
 
 COMBINED_CM = "https://ftp.ebi.ac.uk/pub/databases/Rfam/CURRENT/Rfam.cm.gz"
