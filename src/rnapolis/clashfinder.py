@@ -8,11 +8,10 @@ from functools import cached_property
 from typing import List, Optional
 
 import numpy as np
-from scipy.spatial import KDTree
-
 from rnapolis.metareader import read_metadata
 from rnapolis.parser import read_3d_structure
 from rnapolis.tertiary import Atom, Residue3D
+from scipy.spatial import KDTree
 
 CARBON_RADIUS = 0.6
 NITROGEN_RADIUS = 0.54

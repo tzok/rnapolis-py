@@ -6,7 +6,6 @@ import orjson
 import pandas as pd
 from mmcif.io.IoAdapterPy import IoAdapterPy
 from mmcif.io.PdbxReader import DataContainer
-
 from rnapolis.util import handle_input_file
 
 

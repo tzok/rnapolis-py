@@ -7,7 +7,6 @@ from typing import Dict, List, Optional, Set, Tuple, Union
 
 import numpy
 import numpy.typing
-
 from rnapolis.common import (
     BasePair,
     BpSeq,
