@@ -5,7 +5,6 @@ from typing import List, Set, Tuple
 
 from mmcif.io.IoAdapterPy import IoAdapterPy
 from mmcif.io.PdbxReader import DataCategory, DataContainer
-
 from rnapolis.util import handle_input_file
 
 # Source: https://mmcif.wwpdb.org/dictionaries/mmcif_pdbx_v50.dic/Items/_entity_poly.type.html
@@ -158,10 +157,16 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--type",
-        help="a type of molecule to select (default: polyribonucleotide)",
+        help="a type of molecule to select, you can provide this argument multiple times (default: polyribonucleotide)",
         action="append",
         default=["polyribonucleotide"],
         choices=ENTITY_POLY_TYPES,
+    )
+    parser.add_argument(
+        "--chain",
+        help="a chain ID (label_asym_id) to select, you can provide this argument multiple times (if provided, it overrides the --type argument)",
+        action="append",
+        default=[],
     )
     parser.add_argument("path", help="path to a PDBx/mmCIF file")
     args = parser.parse_args()
@@ -171,8 +176,15 @@ def main():
     data = adapter.readFile(file.name)
     output = DataContainer("rnapolis")
 
-    entity_ids = select_ids(data, "entity_poly", "type", "entity_id", set(args.type))
-    asym_ids = select_ids(data, "struct_asym", "entity_id", "id", entity_ids)
+    if args.chain:
+        entity_ids = select_ids(data, "struct_asym", "id", "entity_id", set(args.chain))
+        asym_ids = set(args.chain)
+    else:
+        entity_ids = select_ids(
+            data, "entity_poly", "type", "entity_id", set(args.type)
+        )
+        asym_ids = select_ids(data, "struct_asym", "entity_id", "id", entity_ids)
+
     auth_asym_ids = select_ids(
         data, "atom_site", "label_asym_id", "auth_asym_id", asym_ids
     )
