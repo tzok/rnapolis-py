@@ -497,24 +497,27 @@ class Mapping2D3D:
 
     @cached_property
     def strands_sequences(self) -> List[Tuple[str, str]]:
-        result = defaultdict(list)
+        nucleotides = list(filter(lambda r: r.is_nucleotide, self.structure3d.residues))
 
-        for i, residue in enumerate(
-            filter(lambda r: r.is_nucleotide, self.structure3d.residues)
-        ):
-            if i > 0 and self.find_gaps:
-                previous = self.structure3d.residues[i - 1]
+        if not nucleotides:
+            return []
 
-                if (
-                    not previous.is_connected(residue)
-                    and previous.chain == residue.chain
-                ):
-                    for k in range(residue.number - previous.number - 1):
-                        result[residue.chain].append("?")
+        result = [(nucleotides[0].chain, [nucleotides[0].one_letter_name])]
 
-            result[residue.chain].append(residue.one_letter_name)
+        for i in range(1, len(nucleotides)):
+            previous = nucleotides[i - 1]
+            residue = nucleotides[i]
 
-        return [(chain, "".join(sequence)) for chain, sequence in result.items()]
+            if residue.chain != previous.chain:
+                result.append((residue.chain, [residue.one_letter_name]))
+            else:
+                if self.find_gaps:
+                    if not previous.is_connected(residue):
+                        for k in range(residue.number - previous.number - 1):
+                            result[-1][1].append("?")
+                result[-1][1].append(residue.one_letter_name)
+
+        return [(chain, "".join(sequence)) for chain, sequence in result]
 
     @cached_property
     def bpseq(self) -> BpSeq:
