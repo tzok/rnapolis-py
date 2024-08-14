@@ -1,7 +1,6 @@
 import os
 
 import pytest
-
 from rnapolis.rfam_folder import generate_consensus_secondary_structure, parse_fasta
 
 IN_GITHUB_ACTIONS = os.getenv("GITHUB_ACTIONS") == "true"
