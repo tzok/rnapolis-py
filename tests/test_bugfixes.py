@@ -34,7 +34,7 @@ def test_1DFU():
     assert b1u not in mapping.base_pair_graph[b2g]
 
 
-# in 4WTI the first residue has only O3' atom and so is not considered a nucleotide
+# in 4WTI the first residue has only O3' atom, but is stil considered a nucleotide
 def test_4WTI():
     with open("tests/4WTI_1_T-P.cif") as f:
         structure3d = read_3d_structure(f, 1)
@@ -42,7 +42,7 @@ def test_4WTI():
     mapping = Mapping2D3D(
         structure3d, base_interactions.basePairs, base_interactions.stackings, True
     )
-    assert mapping.dot_bracket == ">strand_T\nCGG\n.((\n>strand_P\nCC\n))"
+    assert mapping.dot_bracket == ">strand_T\nACGG\n..((\n>strand_P\nCC\n))"
 
 
 # in 1HMH the bases are oriented in 45 degrees and it caused the program to identify invalid base pair
@@ -69,9 +69,9 @@ def test_6INQ():
 # in 6g90 from rna3db, the sequence contains Ns which were ignored incorrectly
 def test_6g90():
     with open("tests/6g90_1.cif") as f:
-        structure3d = read_3d_structure(f, 1)
+        structure3d = read_3d_structure(f, nucleic_acid_only=True)
     sequence = "".join([residue.one_letter_name for residue in structure3d.residues])
     assert (
         sequence
-        == "AUACUUACCUUAAGAUAUCAGAGGAGAUCAAGAAGUCCUACUGAUCAAACAUGCGCUUCCAAUAGUAGAAGGACGUUAAGCAUUUAUCAUUGAACUAUAAUUGUUCAUUGAAGUCAUUGAUGCAAACUCCUUGGUCACACACACAUACGGCGCGGAAGGCGUGUUUGCUGACGUUUCCAUUCCCUUGUUUCAAUCAUUGGUUAAUCCCUUGAUUCCUUUGGGGAUUUUUGGGUUAAACUGAUUUUUGGGGCCCUUUGUUUCUUCUGCCUGGAGAAGUUUGACACCAAAUUCAAAUUGGUGUUAGGGGAGCUGGGGCCUUUCAAAANNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNUUUUGGAAGGUCUUGGUCGGGUGGAUCUUAUAAUUUUUGAUUUAUUUU"
+        == "AUACUUACCUUAAGAUAUCAGAGGAGAUCAAGAAGUCCUACUGAUCAAACAUGCGCUUCCAAGAAGGACGUUAAGCAUUUAUCAUUGAACGUUCAUUGAACAUUGAUGCAAACUCCUUGGUCACACACACGCGGAAGGCGUGUUUGCUGACGUCCCUUGUUUCAAUCAUUGGUUAACUGAUUUUUGGGGCCCUUUGUUCUUCUGAGAAGUGACACCAAUUGGUGUUAGGGGAGCUGGGGCCUUUCAAAANNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNUUUUGGAAGGUCUUGGUCGGGUGGAUCUUAUAAUUUUUGAUUUA"
     )
