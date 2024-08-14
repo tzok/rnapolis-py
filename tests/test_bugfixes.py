@@ -12,7 +12,7 @@ def test_1E7K():
     mapping = Mapping2D3D(
         structure3d, base_interaction.basePairs, base_interaction.stackings, True
     )
-    assert len(mapping.strands_sequences) == 2
+    assert len(mapping.strands_sequences) == 1
 
 
 # in 1DFU the adjacent U and G seem to be base-pair like if you do not take into account angles
@@ -74,4 +74,26 @@ def test_6g90():
     assert (
         sequence
         == "AUACUUACCUUAAGAUAUCAGAGGAGAUCAAGAAGUCCUACUGAUCAAACAUGCGCUUCCAAGAAGGACGUUAAGCAUUUAUCAUUGAACGUUCAUUGAACAUUGAUGCAAACUCCUUGGUCACACACACGCGGAAGGCGUGUUUGCUGACGUCCCUUGUUUCAAUCAUUGGUUAACUGAUUUUUGGGGCCCUUUGUUCUUCUGAGAAGUGACACCAAUUGGUGUUAGGGGAGCUGGGGCCUUUCAAAANNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNUUUUGGAAGGUCUUGGUCGGGUGGAUCUUAUAAUUUUUGAUUUA"
+    )
+
+    base_interactions = extract_base_interactions(structure3d)
+
+    # without gaps
+    mapping = Mapping2D3D(
+        structure3d, base_interactions.basePairs, base_interactions.stackings, False
+    )
+    assert (
+        mapping.bpseq.sequence
+        == mapping.dot_bracket.split("\n")[1]
+        == "AUACUUACCUUAAGAUAUCAGAGGAGAUCAAGAAGUCCUACUGAUCAAACAUGCGCUUCCAAGAAGGACGUUAAGCAUUUAUCAUUGAACGUUCAUUGAACAUUGAUGCAAACUCCUUGGUCACACACACGCGGAAGGCGUGUUUGCUGACGUCCCUUGUUUCAAUCAUUGGUUAACUGAUUUUUGGGGCCCUUUGUUCUUCUGAGAAGUGACACCAAUUGGUGUUAGGGGAGCUGGGGCCUUUCAAAANNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNUUUUGGAAGGUCUUGGUCGGGUGGAUCUUAUAAUUUUUGAUUUA"
+    )
+
+    # with gaps
+    mapping = Mapping2D3D(
+        structure3d, base_interactions.basePairs, base_interactions.stackings, True
+    )
+    assert (
+        mapping.bpseq.sequence
+        == mapping.dot_bracket.split("\n")[1]
+        == "AUACUUACCUUAAGAUAUCAGAGGAGAUCAAGAAGUCCUACUGAUCAAACAUGCGCUUCCA?????AGAAGGACGUUAAGCAUUUAUCAUUGAAC???????GUUCAUUGAA??CAUUGAUGCAAACUCCUUGGUCACACACAC???????GCGGAAGGCGUGUUUGCUGACG???????UCCCUUGUUUCAAUCAUUGGUU?????????????????????????????????AACUGAUUUUUGGGGCCCUUUGUU?CUUCUG?????AGAAGU??GACACCAA???????UUGGUGUUAGGGGAGCUGGGGCCUUUCAAAANNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNUUUUGGAAGGUCUUGGUCGGGUGGAUCUUAUAAUUUUUGAUUUA"
     )

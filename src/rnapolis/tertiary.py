@@ -497,42 +497,24 @@ class Mapping2D3D:
 
     @cached_property
     def strands_sequences(self) -> List[Tuple[str, str]]:
-        nucleotides = [
-            residue for residue in self.structure3d.residues if residue.is_nucleotide
-        ]
+        result = defaultdict(list)
 
-        if len(nucleotides) == 0:
-            return []
+        for i, residue in enumerate(
+            filter(lambda r: r.is_nucleotide, self.structure3d.residues)
+        ):
+            if i > 0 and self.find_gaps:
+                previous = self.structure3d.residues[i - 1]
 
-        result = []
-        strand = [nucleotides[0]]
+                if (
+                    not previous.is_connected(residue)
+                    and previous.chain == residue.chain
+                ):
+                    for k in range(residue.number - previous.number - 1):
+                        result[residue.chain].append("?")
 
-        for i in range(1, len(nucleotides)):
-            previous = strand[-1]
-            current = nucleotides[i]
+            result[residue.chain].append(residue.one_letter_name)
 
-            if previous.chain == current.chain and (
-                self.find_gaps == False or previous.is_connected(current)
-            ):
-                strand.append(current)
-            else:
-                result.append(
-                    (
-                        previous.chain,
-                        "".join([residue.one_letter_name for residue in strand]),
-                    )
-                )
-                strand = [current]
-
-        if len(strand) > 0:
-            result.append(
-                (
-                    strand[0].chain,
-                    "".join([residue.one_letter_name for residue in strand]),
-                )
-            )
-
-        return result
+        return [(chain, "".join(sequence)) for chain, sequence in result.items()]
 
     @cached_property
     def bpseq(self) -> BpSeq:
@@ -549,23 +531,23 @@ class Mapping2D3D:
         residue_map: Dict[Residue3D, int] = {}
         i = 1
 
-        for j, residue in enumerate(self.structure3d.residues):
+        for j, residue in enumerate(
+            filter(lambda r: r.is_nucleotide, self.structure3d.residues)
+        ):
             if self.find_gaps and j > 0:
                 previous = self.structure3d.residues[j - 1]
+
                 if (
-                    previous.is_nucleotide
-                    and residue.is_nucleotide
-                    and previous.label
-                    and residue.label
-                    and previous.label.chain == residue.label.chain
+                    not previous.is_connected(residue)
+                    and previous.chain == residue.chain
                 ):
-                    for k in range(residue.label.number - previous.label.number - 1):
+                    for k in range(residue.number - previous.number - 1):
                         result[i] = [i, "?", 0]
                         i += 1
-            if residue.is_nucleotide:
-                result[i] = [i, residue.one_letter_name, 0]
-                residue_map[residue] = i
-                i += 1
+
+            result[i] = [i, residue.one_letter_name, 0]
+            residue_map[residue] = i
+            i += 1
 
         for base_pair in base_pairs:
             j = residue_map.get(base_pair.nt1_3d, None)
