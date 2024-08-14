@@ -42,6 +42,7 @@ setup(
         "numpy",
         "ordered-set",
         "orjson",
+        "pandas",
         "pulp",
         "requests",
         "scipy",
