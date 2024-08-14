@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 def read_3d_structure(
     cif_or_pdb: IO[str], model: Optional[int] = None, nucleic_acid_only: bool = False
 ) -> Structure3D:
-    atoms, modified, sequence = (
+    atoms, modified, sequence_by_entity, is_nucleic_acid_by_entity = (
         parse_cif(cif_or_pdb) if is_cif(cif_or_pdb) else parse_pdb(cif_or_pdb)
     )
     available_models = {atom.model: None for atom in atoms}
@@ -24,7 +24,13 @@ def read_3d_structure(
         atoms = atoms_by_model[model]
     else:
         atoms = atoms_by_model[list(available_models.keys())[0]]
-    return group_atoms(atoms, modified, sequence, nucleic_acid_only)
+    return group_atoms(
+        atoms,
+        modified,
+        sequence_by_entity,
+        is_nucleic_acid_by_entity,
+        nucleic_acid_only,
+    )
 
 
 def is_cif(cif_or_pdb: IO[str]) -> bool:
@@ -40,7 +46,8 @@ def parse_cif(
 ) -> Tuple[
     List[Atom],
     Dict[Union[ResidueLabel, ResidueAuth], str],
-    Dict[Tuple[str, int], str],
+    Dict[str, str],
+    Dict[str, bool],
 ]:
     cif.seek(0)
 
@@ -48,7 +55,8 @@ def parse_cif(
     data = io_adapter.readFile(cif.name)
     atoms: List[Atom] = []
     modified: Dict[Union[ResidueLabel, ResidueAuth], str] = {}
-    sequence = {}
+    sequence_by_entity = {}
+    is_nucleic_acid_by_entity = {}
 
     if data:
         atom_site = data[0].getObj("atom_site")
@@ -59,6 +67,7 @@ def parse_cif(
             for row in atom_site.getRowList():
                 row_dict = dict(zip(atom_site.getAttributeList(), row))
 
+                label_entity_id = row_dict.get("label_entity_id", None)
                 label_chain_name = row_dict.get("label_asym_id", None)
                 label_residue_number = try_parse_int(row_dict.get("label_seq_id", None))
                 label_residue_name = row_dict.get("label_comp_id", None)
@@ -127,7 +136,19 @@ def parse_cif(
                     else None
                 )
 
-                atoms.append(Atom(label, auth, model, atom_name, x, y, z, occupancy))
+                atoms.append(
+                    Atom(
+                        label_entity_id,
+                        label,
+                        auth,
+                        model,
+                        atom_name,
+                        x,
+                        y,
+                        z,
+                        occupancy,
+                    )
+                )
 
         if mod_residue:
             for row in mod_residue.getRowList():
@@ -178,17 +199,24 @@ def parse_cif(
             for row in entity_poly.getRowList():
                 row_dict = dict(zip(entity_poly.getAttributeList(), row))
 
-                pdbx_strand_id = row_dict.get("pdbx_strand_id", None)
+                entity_id = row_dict.get("entity_id", None)
+                type_ = row_dict.get("type", None)
                 pdbx_seq_one_letter_code_can = row_dict.get(
                     "pdbx_seq_one_letter_code_can", None
                 )
 
-                if pdbx_strand_id and pdbx_seq_one_letter_code_can:
-                    for strand in pdbx_strand_id.split(","):
-                        for i, letter in enumerate(pdbx_seq_one_letter_code_can):
-                            sequence[(strand, i + 1)] = letter
+                if entity_id and type_:
+                    is_nucleic_acid_by_entity[entity_id] = type_ in (
+                        "peptide nucleic acid",
+                        "polydeoxyribonucleotide",
+                        "polydeoxyribonucleotide/polyribonucleotide hybrid",
+                        "polyribonucleotide",
+                    )
 
-    return atoms, modified, sequence
+                if entity_id and pdbx_seq_one_letter_code_can:
+                    sequence_by_entity[entity_id] = pdbx_seq_one_letter_code_can
+
+    return atoms, modified, sequence_by_entity, is_nucleic_acid_by_entity
 
 
 def parse_pdb(
@@ -196,7 +224,8 @@ def parse_pdb(
 ) -> Tuple[
     List[Atom],
     Dict[Union[ResidueLabel, ResidueAuth], str],
-    Dict[Tuple[str, int], str],
+    Dict[str, str],
+    Dict[str, bool],
 ]:
     pdb.seek(0)
     atoms: List[Atom] = []
@@ -222,7 +251,7 @@ def parse_pdb(
             auth = ResidueAuth(
                 chain_identifier, residue_number, insertion_code, residue_name
             )
-            atoms.append(Atom(None, auth, model, atom_name, x, y, z, occupancy))
+            atoms.append(Atom(None, None, auth, model, atom_name, x, y, z, occupancy))
         elif line.startswith("MODRES"):
             original_name = line[12:15]
             chain_identifier = line[16]
@@ -234,13 +263,14 @@ def parse_pdb(
             )
             modified[auth] = standard_residue_name
 
-    return atoms, modified, {}
+    return atoms, modified, {}, {}
 
 
 def group_atoms(
     atoms: List[Atom],
     modified: Dict[Union[ResidueLabel, ResidueAuth], str],
-    sequence: Dict[Tuple[str, int], str],
+    sequence_by_entity: Dict[str, str],
+    is_nucleic_acid_by_entity: Dict[str, bool],
     nucleic_acid_only: bool,
 ) -> Structure3D:
     if not atoms:
@@ -258,28 +288,45 @@ def group_atoms(
             label = key_previous[0]
             auth = key_previous[1]
             model = key_previous[2]
+            entity_id = residue_atoms[-1].entity_id
             name = get_residue_name(auth, label, modified)
-            one_letter_name = get_one_letter_name(label, sequence, name)
-            if one_letter_name not in "ACGUT":
-                one_letter_name = detect_one_letter_name(residue_atoms)
-            residue = Residue3D(
-                label, auth, model, one_letter_name, tuple(residue_atoms)
+            one_letter_name = get_one_letter_name(
+                entity_id, label, sequence_by_entity, name
             )
-            if not nucleic_acid_only or (nucleic_acid_only and residue.is_nucleotide):
-                residues.append(residue)
+
+            if one_letter_name not in "ACGUTN":
+                one_letter_name = detect_one_letter_name(residue_atoms)
+
+            residues.append(
+                Residue3D(label, auth, model, one_letter_name, tuple(residue_atoms))
+            )
+
             key_previous = key
             residue_atoms = [atom]
 
     label = key_previous[0]
     auth = key_previous[1]
     model = key_previous[2]
+    entity_id = residue_atoms[-1].entity_id
     name = get_residue_name(auth, label, modified)
-    one_letter_name = get_one_letter_name(label, sequence, name)
-    if one_letter_name not in "ACGUT":
+    one_letter_name = get_one_letter_name(entity_id, label, sequence_by_entity, name)
+
+    if one_letter_name not in "ACGUTN":
         one_letter_name = detect_one_letter_name(residue_atoms)
-    residue = Residue3D(label, auth, model, one_letter_name, tuple(residue_atoms))
-    if not nucleic_acid_only or (nucleic_acid_only and residue.is_nucleotide):
-        residues.append(residue)
+
+    residues.append(
+        Residue3D(label, auth, model, one_letter_name, tuple(residue_atoms))
+    )
+
+    if nucleic_acid_only:
+        if is_nucleic_acid_by_entity:
+            residues = [
+                residue
+                for residue in residues
+                if is_nucleic_acid_by_entity[residue.atoms[0].entity_id]
+            ]
+        else:
+            residues = [residue for residue in residues if residue.is_nucleotide]
 
     return Structure3D(residues)
 
@@ -304,13 +351,14 @@ def get_residue_name(
 
 
 def get_one_letter_name(
-    label: Optional[ResidueLabel], sequence: Dict[Tuple[str, int], str], name: str
+    entity_id: Optional[str],
+    label: Optional[ResidueLabel],
+    sequence_by_entity: Dict[str, str],
+    name: str,
 ) -> str:
     # try getting the value from _entity_poly first
-    if label is not None:
-        key = (label.chain, label.number)
-        if key in sequence:
-            return sequence[key]
+    if entity_id is not None and label is not None and entity_id in sequence_by_entity:
+        return sequence_by_entity[entity_id][label.number - 1]
     # RNA
     if len(name) == 1:
         return name
@@ -334,11 +382,13 @@ def detect_one_letter_name(atoms: List[Atom]) -> str:
         ) / len(atom_names_expected)
         score[candidate] = count
     items = sorted(score.items(), key=lambda kv: kv[1], reverse=True)
+    if items[0][1] == 0:
+        return "?"
     return items[0][0]
 
 
 def try_parse_int(s: str) -> Optional[int]:
     try:
         return int(s)
-    except:
+    except ValueError:
         return None

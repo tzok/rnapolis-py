@@ -2,7 +2,6 @@ from collections import Counter
 
 from hypothesis import given, settings
 from hypothesis import strategies as st
-
 from rnapolis.common import (
     BaseInteractions,
     BasePair,
@@ -93,7 +92,7 @@ def test_rnapdbee_adapters_api_compliance_structure2d(obj):
 
 def test_bpseq_from_dotbracket():
     expected = BpSeq.from_file("tests/1ET4-A.bpseq")
-    actual = BpSeq.from_dotbracket(DotBracket.from_file(f"tests/1ET4-A.dbn"))
+    actual = BpSeq.from_dotbracket(DotBracket.from_file("tests/1ET4-A.dbn"))
     assert expected == actual
 
 

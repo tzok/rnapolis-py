@@ -96,6 +96,7 @@ AVERAGE_OXYGEN_PHOSPHORUS_DISTANCE_COVALENT = 1.6
 
 @dataclass(frozen=True, order=True)
 class Atom:
+    entity_id: Optional[str]
     label: Optional[ResidueLabel]
     auth: Optional[ResidueAuth]
     model: int
@@ -128,6 +129,29 @@ class Residue3D(Residue):
         "C": set(["N1", "C2", "O2", "N3", "C4", "N4", "C5", "C6"]),
         "U": set(["N1", "C2", "O2", "N3", "C4", "O4", "C5", "C6"]),
     }
+    # Heavy atoms in nucleotide
+    nucleotide_heavy_atoms = (
+        set(
+            [
+                "P",
+                "OP1",
+                "OP2",
+                "O5'",
+                "C5'",
+                "C4'",
+                "O4'",
+                "C3'",
+                "O3'",
+                "C2'",
+                "O2'",
+                "C1'",
+            ]
+        )
+        .union(nucleobase_heavy_atoms["A"])
+        .union(nucleobase_heavy_atoms["G"])
+        .union(nucleobase_heavy_atoms["C"])
+        .union(nucleobase_heavy_atoms["U"])
+    )
 
     def __lt__(self, other):
         return (self.model, self.chain, self.number, self.icode or " ") < (
@@ -176,8 +200,8 @@ class Residue3D(Residue):
 
     @cached_property
     def is_nucleotide(self) -> bool:
-        return len(self.atoms) > 1 and any(
-            [atom for atom in self.atoms if atom.name == "C1'"]
+        return self.nucleotide_heavy_atoms.intersection(
+            set([atom.name for atom in self.atoms])
         )
 
     @cached_property
@@ -268,7 +292,7 @@ class Residue3D(Residue):
         logging.error(
             f"Failed to determine the outermost atom for nucleotide {self}, so an arbitrary atom will be used"
         )
-        yield Atom(self.label, self.auth, self.model, "UNK", 0.0, 0.0, 0.0, None)
+        yield Atom(None, self.label, self.auth, self.model, "UNK", 0.0, 0.0, 0.0, None)
 
     def __inner_generator(self):
         # try to find expected atom name
@@ -296,7 +320,7 @@ class Residue3D(Residue):
         logging.error(
             f"Failed to determine the innermost atom for nucleotide {self}, so an arbitrary atom will be used"
         )
-        yield Atom(self.label, self.auth, self.model, "UNK", 0.0, 0.0, 0.0, None)
+        yield Atom(None, self.label, self.auth, self.model, "UNK", 0.0, 0.0, 0.0, None)
 
 
 @dataclass(frozen=True, order=True)
