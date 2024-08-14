@@ -548,7 +548,20 @@ class Mapping2D3D:
         result: Dict[int, List] = {}
         residue_map: Dict[Residue3D, int] = {}
         i = 1
-        for residue in self.structure3d.residues:
+
+        for j, residue in enumerate(self.structure3d.residues):
+            if self.find_gaps and j > 0:
+                previous = self.structure3d.residues[j - 1]
+                if (
+                    previous.is_nucleotide
+                    and residue.is_nucleotide
+                    and previous.label
+                    and residue.label
+                    and previous.label.chain == residue.label.chain
+                ):
+                    for k in range(residue.label.number - previous.label.number - 1):
+                        result[i] = [i, "?", 0]
+                        i += 1
             if residue.is_nucleotide:
                 result[i] = [i, residue.one_letter_name, 0]
                 residue_map[residue] = i
