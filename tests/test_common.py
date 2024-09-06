@@ -1,7 +1,9 @@
 from collections import Counter
 
+import orjson
 from hypothesis import given, settings
 from hypothesis import strategies as st
+
 from rnapolis.common import (
     BaseInteractions,
     BasePair,
@@ -10,13 +12,17 @@ from rnapolis.common import (
     BpSeq,
     DotBracket,
     Interaction,
+    LeontisWesthof,
     MultiStrandDotBracket,
     OtherInteraction,
     Residue,
     ResidueAuth,
     ResidueLabel,
+    Saenger,
     Stacking,
 )
+from rnapolis.parser import read_3d_structure
+from rnapolis.tertiary import Mapping2D3D
 
 
 @given(st.from_type(ResidueLabel))
@@ -135,4 +141,42 @@ def test_multi_strand_dot_bracket():
     assert dot_bracket.strands[0].structure == ("..((((.((((((((((((..")
     assert dot_bracket.strands[1].structure == (
         ")))))))))))..(((...[[[[[[...)))......)))))...]]]]]][[[[[.((((((]]]]].....((((((......((((((....)))))).......))))))..))))))."
+    )
+
+
+def test_conflicted_base_pairs():
+    with open("tests/1A1T_1_B-rnaview.json", "rb") as f:
+        data = orjson.loads(f.read())
+
+    base_pairs = []
+
+    for obj in data.get("basePairs", []):
+        nt1 = Residue(
+            None,
+            ResidueAuth(
+                obj["nt1"]["auth"]["chain"],
+                obj["nt1"]["auth"]["number"],
+                obj["nt1"]["auth"]["icode"],
+                obj["nt1"]["auth"]["name"],
+            ),
+        )
+        nt2 = Residue(
+            None,
+            ResidueAuth(
+                obj["nt2"]["auth"]["chain"],
+                obj["nt2"]["auth"]["number"],
+                obj["nt2"]["auth"]["icode"],
+                obj["nt2"]["auth"]["name"],
+            ),
+        )
+        lw = LeontisWesthof(obj["lw"])
+        saenger = Saenger(obj["saenger"]) if obj["saenger"] else None
+        base_pairs.append(BasePair(nt1, nt2, lw, saenger))
+
+    with open("tests/1A1T_1_B.cif") as f:
+        structure3d = read_3d_structure(f)
+
+    mapping = Mapping2D3D(structure3d, base_pairs, [], True)
+    assert (
+        mapping.dot_bracket == ">strand_B\nGGACUAGCGGAGGCUAGUCC\n((((((((....))))))))"
     )
