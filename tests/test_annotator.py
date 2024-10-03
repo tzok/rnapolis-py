@@ -43,3 +43,14 @@ def test_8btk():
     with open("tests/8btk_B7.cif") as f:
         structure3d = read_3d_structure(f, 1)
     assert extract_secondary_structure(structure3d, 1) is not None
+
+
+def test_488d():
+    """
+    There are clashing residues 151 in chains B and D. The clash is caused by occupancy factors less than 1.
+    """
+    with open("tests/488d.pdb") as f:
+        structure3d = read_3d_structure(f)
+
+    base_interactions = extract_base_interactions(structure3d)
+    assert base_interactions is not None
