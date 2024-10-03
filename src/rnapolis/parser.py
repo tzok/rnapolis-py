@@ -2,6 +2,7 @@ import logging
 from typing import IO, Dict, List, Optional, Tuple, Union
 
 from mmcif.io.IoAdapterPy import IoAdapterPy
+
 from rnapolis.common import ResidueAuth, ResidueLabel
 from rnapolis.tertiary import BASE_ATOMS, Atom, Residue3D, Structure3D
 
@@ -55,8 +56,9 @@ def parse_cif(
     data = io_adapter.readFile(cif.name)
     atoms: List[Atom] = []
     modified: Dict[Union[ResidueLabel, ResidueAuth], str] = {}
-    sequence_by_entity = {}
-    is_nucleic_acid_by_entity = {}
+    sequence_by_entity: Dict[str, str] = {}
+    is_nucleic_acid_by_entity: Dict[str, bool] = {}
+    processed_atoms = set()
 
     if data:
         atom_site = data[0].getObj("atom_site")
@@ -135,6 +137,16 @@ def parse_cif(
                     if "occupancy" in row_dict and row_dict["occupancy"] != "."
                     else None
                 )
+
+                # Create a unique key for each atom in a residue
+                atom_key = (label, auth, atom_name)
+
+                # If this atom has already been processed, skip it
+                if atom_key in processed_atoms:
+                    continue
+
+                # Mark this atom as processed
+                processed_atoms.add(atom_key)
 
                 atoms.append(
                     Atom(
@@ -230,15 +242,15 @@ def parse_pdb(
     pdb.seek(0)
     atoms: List[Atom] = []
     modified: Dict[Union[ResidueLabel, ResidueAuth], str] = {}
+    sequence_by_entity: Dict[str, str] = {}
+    is_nucleic_acid_by_entity: Dict[str, bool] = {}
+    processed_atoms = set()
     model = 1
 
     for line in pdb.readlines():
         if line.startswith("MODEL"):
             model = int(line[10:14].strip())
         elif line.startswith("ATOM") or line.startswith("HETATM"):
-            alternate_location = line[16]
-            if alternate_location != " ":
-                continue
             atom_name = line[12:16].strip()
             residue_name = line[17:20].strip()
             chain_identifier = line[21]
@@ -251,6 +263,17 @@ def parse_pdb(
             auth = ResidueAuth(
                 chain_identifier, residue_number, insertion_code, residue_name
             )
+
+            # Create a unique key for each atom in a residue
+            atom_key = (auth, atom_name)
+
+            # If this atom has already been processed, skip it
+            if atom_key in processed_atoms:
+                continue
+
+            # Mark this atom as processed
+            processed_atoms.add(atom_key)
+
             atoms.append(Atom(None, None, auth, model, atom_name, x, y, z, occupancy))
         elif line.startswith("MODRES"):
             original_name = line[12:15]
