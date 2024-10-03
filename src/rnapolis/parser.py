@@ -1,7 +1,9 @@
 import logging
 from typing import IO, Dict, List, Optional, Tuple, Union
 
+import numpy as np
 from mmcif.io.IoAdapterPy import IoAdapterPy
+from scipy.spatial import KDTree
 
 from rnapolis.common import ResidueAuth, ResidueLabel
 from rnapolis.tertiary import BASE_ATOMS, Atom, Residue3D, Structure3D
@@ -54,11 +56,10 @@ def parse_cif(
 
     io_adapter = IoAdapterPy()
     data = io_adapter.readFile(cif.name)
-    atoms: List[Atom] = []
+    atoms_to_process: List[Atom] = []
     modified: Dict[Union[ResidueLabel, ResidueAuth], str] = {}
     sequence_by_entity: Dict[str, str] = {}
     is_nucleic_acid_by_entity: Dict[str, bool] = {}
-    processed_atoms = set()
 
     if data:
         atom_site = data[0].getObj("atom_site")
@@ -138,17 +139,7 @@ def parse_cif(
                     else None
                 )
 
-                # Create a unique key for each atom in a residue
-                atom_key = (label, auth, atom_name)
-
-                # If this atom has already been processed, skip it
-                if atom_key in processed_atoms:
-                    continue
-
-                # Mark this atom as processed
-                processed_atoms.add(atom_key)
-
-                atoms.append(
+                atoms_to_process.append(
                     Atom(
                         label_entity_id,
                         label,
@@ -228,6 +219,7 @@ def parse_cif(
                 if entity_id and pdbx_seq_one_letter_code_can:
                     sequence_by_entity[entity_id] = pdbx_seq_one_letter_code_can
 
+    atoms = filter_clashing_atoms(atoms_to_process)
     return atoms, modified, sequence_by_entity, is_nucleic_acid_by_entity
 
 
@@ -240,11 +232,8 @@ def parse_pdb(
     Dict[str, bool],
 ]:
     pdb.seek(0)
-    atoms: List[Atom] = []
+    atoms_to_process: List[Atom] = []
     modified: Dict[Union[ResidueLabel, ResidueAuth], str] = {}
-    sequence_by_entity: Dict[str, str] = {}
-    is_nucleic_acid_by_entity: Dict[str, bool] = {}
-    processed_atoms = set()
     model = 1
 
     for line in pdb.readlines():
@@ -264,17 +253,9 @@ def parse_pdb(
                 chain_identifier, residue_number, insertion_code, residue_name
             )
 
-            # Create a unique key for each atom in a residue
-            atom_key = (auth, atom_name)
-
-            # If this atom has already been processed, skip it
-            if atom_key in processed_atoms:
-                continue
-
-            # Mark this atom as processed
-            processed_atoms.add(atom_key)
-
-            atoms.append(Atom(None, None, auth, model, atom_name, x, y, z, occupancy))
+            atoms_to_process.append(
+                Atom(None, None, auth, model, atom_name, x, y, z, occupancy)
+            )
         elif line.startswith("MODRES"):
             original_name = line[12:15]
             chain_identifier = line[16]
@@ -286,6 +267,7 @@ def parse_pdb(
             )
             modified[auth] = standard_residue_name
 
+    atoms = filter_clashing_atoms(atoms_to_process)
     return atoms, modified, {}, {}
 
 
@@ -415,3 +397,36 @@ def try_parse_int(s: str) -> Optional[int]:
         return int(s)
     except ValueError:
         return None
+
+
+def filter_clashing_atoms(atoms: List[Atom], clash_distance: float = 0.5) -> List[Atom]:
+    # First, remove duplicate atoms
+    unique_atoms = {}
+
+    for i, atom in enumerate(atoms):
+        key = (atom.label, atom.auth, atom.name)
+        if key not in unique_atoms or atom.occupancy > unique_atoms[key].occupancy:
+            unique_atoms[key] = atom
+
+    unique_atoms_list = list(unique_atoms.values())
+
+    # Now handle clashing atoms
+    coords = np.array([(atom.x, atom.y, atom.z) for atom in unique_atoms_list])
+    tree = KDTree(coords)
+
+    pairs = tree.query_pairs(r=clash_distance)
+
+    atoms_to_keep = set(range(len(unique_atoms_list)))
+
+    for i, j in pairs:
+        if (
+            unique_atoms_list[i].occupancy is None
+            or unique_atoms_list[j].occupancy is None
+        ):
+            continue
+        if unique_atoms_list[i].occupancy > unique_atoms_list[j].occupancy:
+            atoms_to_keep.discard(j)
+        else:
+            atoms_to_keep.discard(i)
+
+    return [unique_atoms_list[i] for i in atoms_to_keep]
