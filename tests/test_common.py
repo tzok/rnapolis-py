@@ -1,3 +1,4 @@
+import string
 from collections import Counter
 
 import orjson
@@ -11,6 +12,7 @@ from rnapolis.common import (
     BaseRibose,
     BpSeq,
     DotBracket,
+    Entry,
     Interaction,
     LeontisWesthof,
     MultiStrandDotBracket,
@@ -180,3 +182,15 @@ def test_conflicted_base_pairs():
     assert (
         mapping.dot_bracket == ">strand_B\nGGACUAGCGGAGGCUAGUCC\n((((((((....))))))))"
     )
+
+
+def test_high_level_pseudoknot():
+    entries = []
+    brackets = "([{<" + string.ascii_uppercase
+
+    for i, bracket in enumerate(brackets):
+        entries.append(Entry(i, "C", i + len(brackets)))
+        entries.append(Entry(i + len(brackets), "G", i))
+
+    bpseq = BpSeq(entries)
+    assert bpseq.fcfs == "C" * len(brackets) + "G" * len(brackets)
