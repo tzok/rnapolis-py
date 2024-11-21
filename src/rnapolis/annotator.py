@@ -9,6 +9,7 @@ from typing import Dict, List, Optional, Set, Tuple
 
 import numpy
 import numpy.typing
+import orjson
 from ordered_set import OrderedSet
 from rnapolis.common import (
     BR,
