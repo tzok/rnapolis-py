@@ -42,7 +42,7 @@ def test_4WTI():
     mapping = Mapping2D3D(
         structure3d, base_interactions.basePairs, base_interactions.stackings, True
     )
-    assert mapping.dot_bracket == ">strand_T\nACGG\n..((\n>strand_P\nCC\n))"
+    assert mapping.dot_bracket == ">strand_T\nCGG\n.((\n>strand_P\nCC\n))"
 
 
 # in 1HMH the bases are oriented in 45 degrees and it caused the program to identify invalid base pair
