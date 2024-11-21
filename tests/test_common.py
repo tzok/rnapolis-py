@@ -188,9 +188,14 @@ def test_high_level_pseudoknot():
     entries = []
     brackets = "([{<" + string.ascii_uppercase
 
-    for i, bracket in enumerate(brackets):
-        entries.append(Entry(i, "C", i + len(brackets)))
-        entries.append(Entry(i + len(brackets), "G", i))
+    for i in range(len(brackets)):
+        entries.append(Entry(i + 1, "C", i + len(brackets) + 1))
+        entries.append(Entry(i + len(brackets) + 1, "G", i + 1))
 
-    bpseq = BpSeq(entries)
-    assert bpseq.fcfs == "C" * len(brackets) + "G" * len(brackets)
+    bpseq = BpSeq(sorted(entries))
+    dot_bracket = bpseq.fcfs
+    assert dot_bracket.sequence == "C" * len(brackets) + "G" * len(brackets)
+    assert (
+        dot_bracket.structure
+        == "([{<" + string.ascii_uppercase + ")]}>" + string.ascii_lowercase
+    )
