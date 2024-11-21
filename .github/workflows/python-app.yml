@@ -29,7 +29,8 @@ jobs:
     - name: Download and extract HiGHSstatic
       run: |
         wget https://github.com/JuliaBinaryWrappers/HiGHSstatic_jll.jl/releases/download/HiGHSstatic-v1.8.1%2B0/HiGHSstatic.v1.8.1.x86_64-linux-gnu-cxx11.tar.gz
-        tar -xzf HiGHSstatic.v1.8.1.x86_64-linux-gnu-cxx11.tar.gz -C /
+        tar xfz HiGHSstatic.v1.8.1.x86_64-linux-gnu-cxx11.tar.gz -C "${HOME}/.local"
+        echo "${HOME}/.local/bin" >> "${GITHUB_PATH}"
 
     - name: Test with pytest
       run: |
