@@ -1,3 +1,4 @@
+import string
 from collections import Counter
 
 import orjson
@@ -11,6 +12,7 @@ from rnapolis.common import (
     BaseRibose,
     BpSeq,
     DotBracket,
+    Entry,
     Interaction,
     LeontisWesthof,
     MultiStrandDotBracket,
@@ -179,4 +181,21 @@ def test_conflicted_base_pairs():
     mapping = Mapping2D3D(structure3d, base_pairs, [], True)
     assert (
         mapping.dot_bracket == ">strand_B\nGGACUAGCGGAGGCUAGUCC\n((((((((....))))))))"
+    )
+
+
+def test_high_level_pseudoknot():
+    entries = []
+    brackets = "([{<" + string.ascii_uppercase
+
+    for i in range(len(brackets)):
+        entries.append(Entry(i + 1, "C", i + len(brackets) + 1))
+        entries.append(Entry(i + len(brackets) + 1, "G", i + 1))
+
+    bpseq = BpSeq(sorted(entries))
+    dot_bracket = bpseq.fcfs
+    assert dot_bracket.sequence == "C" * len(brackets) + "G" * len(brackets)
+    assert (
+        dot_bracket.structure
+        == "([{<" + string.ascii_uppercase + ")]}>" + string.ascii_lowercase
     )

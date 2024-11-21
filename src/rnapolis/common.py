@@ -338,6 +338,9 @@ class Entry(Sequence):
             return self.pair
         raise IndexError()
 
+    def __lt__(self, other):
+        return self.index_ < other.index_
+
     def __len__(self) -> int:
         return 3
 
@@ -838,7 +841,7 @@ class BpSeq:
 
         for i in range(1, len(regions)):
             k, l, _ = regions[i]
-            available = [True for i in range(10)]
+            available = [True for _ in range(len("([{<" + string.ascii_uppercase))]
 
             for j in range(i):
                 m, n, _ = regions[j]

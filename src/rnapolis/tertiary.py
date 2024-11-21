@@ -124,36 +124,17 @@ class Residue3D(Residue):
     outermost_atoms = {"A": "N9", "G": "N9", "C": "N1", "U": "N1", "T": "N1"}
     # Dist representing expected name of atom closest to the tetrad center
     innermost_atoms = {"A": "N6", "G": "O6", "C": "N4", "U": "O4", "T": "O4"}
+    # Heavy atoms in phosphate and ribose
+    phosphate_atoms = {"P", "OP1", "OP2", "O3'", "O5'"}
+    sugar_atoms = {"C1'", "C2'", "C3'", "C4'", "C5'", "O4'"}
     # Heavy atoms for each main nucleobase
     nucleobase_heavy_atoms = {
         "A": set(["N1", "C2", "N3", "C4", "C5", "C6", "N6", "N7", "C8", "N9"]),
         "G": set(["N1", "C2", "N2", "N3", "C4", "C5", "C6", "O6", "N7", "C8", "N9"]),
         "C": set(["N1", "C2", "O2", "N3", "C4", "N4", "C5", "C6"]),
         "U": set(["N1", "C2", "O2", "N3", "C4", "O4", "C5", "C6"]),
+        "T": set(["N1", "C2", "O2", "N3", "C4", "O4", "C5", "C5M", "C6"]),
     }
-    # Heavy atoms in nucleotide
-    nucleotide_heavy_atoms = (
-        set(
-            [
-                "P",
-                "OP1",
-                "OP2",
-                "O5'",
-                "C5'",
-                "C4'",
-                "O4'",
-                "C3'",
-                "O3'",
-                "C2'",
-                "O2'",
-                "C1'",
-            ]
-        )
-        .union(nucleobase_heavy_atoms["A"])
-        .union(nucleobase_heavy_atoms["G"])
-        .union(nucleobase_heavy_atoms["C"])
-        .union(nucleobase_heavy_atoms["U"])
-    )
 
     def __lt__(self, other):
         return (self.model, self.chain, self.number, self.icode or " ") < (
@@ -202,9 +183,59 @@ class Residue3D(Residue):
 
     @cached_property
     def is_nucleotide(self) -> bool:
-        return self.nucleotide_heavy_atoms.intersection(
-            set([atom.name for atom in self.atoms])
+        scores = {"phosphate": 0.0, "sugar": 0.0, "base": 0.0, "connections": 0.0}
+        weights = {"phosphate": 0.25, "sugar": 0.25, "base": 0.25, "connections": 0.25}
+
+        residue_atoms = {atom.name for atom in self.atoms}
+
+        phosphate_match = len(residue_atoms.intersection(self.phosphate_atoms))
+        scores["phosphate"] = phosphate_match / len(self.phosphate_atoms)
+
+        sugar_match = len(residue_atoms.intersection(self.sugar_atoms))
+        scores["sugar"] = sugar_match / len(self.sugar_atoms)
+
+        nucleobase_atoms = {
+            key: self.nucleobase_heavy_atoms[key] for key in self.nucleobase_heavy_atoms
+        }
+        matches = {
+            key: len(residue_atoms.intersection(nucleobase_atoms[key]))
+            / len(nucleobase_atoms[key])
+            for key in nucleobase_atoms
+        }
+        best_match = max(matches.items(), key=lambda x: x[1])
+        scores["base"] = best_match[1]
+
+        connection_score = 0.0
+        distance_threshold = 2.0
+
+        if "P" in residue_atoms and "O5'" in residue_atoms:
+            p_atom = next(atom for atom in self.atoms if atom.name == "P")
+            o5_atom = next(atom for atom in self.atoms if atom.name == "O5'")
+            if (
+                numpy.linalg.norm(p_atom.coordinates - o5_atom.coordinates)
+                <= distance_threshold
+            ):
+                connection_score += 0.5
+        if "C1'" in residue_atoms:
+            c1_atom = next(atom for atom in self.atoms if atom.name == "C1'")
+            for base_connection in ["N9", "N1"]:
+                if base_connection in residue_atoms:
+                    base_atom = next(
+                        atom for atom in self.atoms if atom.name == base_connection
+                    )
+                    if (
+                        numpy.linalg.norm(c1_atom.coordinates - base_atom.coordinates)
+                        <= distance_threshold
+                    ):
+                        connection_score += 0.5
+                        break
+
+        scores["connections"] = connection_score
+
+        probability = sum(
+            scores[component] * weights[component] for component in scores.keys()
         )
+        return probability > 0.5
 
     @cached_property
     def base_normal_vector(self) -> Optional[numpy.typing.NDArray[numpy.floating]]:
@@ -566,15 +597,14 @@ class Mapping2D3D:
         return self.__generate_bpseq(canonical)
 
     def __generate_bpseq(self, base_pairs):
+        nucleotides = list(filter(lambda r: r.is_nucleotide, self.structure3d.residues))
         result: Dict[int, List] = {}
         residue_map: Dict[Residue3D, int] = {}
         i = 1
 
-        for j, residue in enumerate(
-            filter(lambda r: r.is_nucleotide, self.structure3d.residues)
-        ):
+        for j, residue in enumerate(nucleotides):
             if self.find_gaps and j > 0:
-                previous = self.structure3d.residues[j - 1]
+                previous = nucleotides[j - 1]
 
                 if (
                     not previous.is_connected(residue)
