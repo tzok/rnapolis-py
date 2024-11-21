@@ -121,10 +121,10 @@ def test_pseudoknot_order_assignment():
     assert counter["."] == 1185
     assert counter["("] == 1298
     assert counter["["] == 44
-    assert counter["{"] == 17
-    assert counter["<"] == 7
-    assert counter["A"] == 4
-    assert counter["B"] == 1
+    assert counter["{"] == 18
+    assert counter["<"] == 6
+    assert counter["A"] == 3
+    assert counter["B"] == 2
     assert counter["C"] == 1
     assert counter["D"] == 0
 

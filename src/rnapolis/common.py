@@ -704,12 +704,17 @@ class BpSeq:
 
     @cached_property
     def dot_bracket(self):
-        pulp.LpSolverDefault.msg = False
-        return self.convert_to_dot_bracket(pulp.LpSolverDefault)
+        if pulp.HiGHS_CMD().available():
+            solver = pulp.HiGHS_CMD()  # much faster than default
+        else:
+            solver = pulp.LpSolverDefault
+        if solver is not None:
+            solver.msg = False
+        return self.convert_to_dot_bracket(solver)
 
     def convert_to_dot_bracket(self, solver: pulp.LpSolver):
         # if PuLP solvers are not installed, use FCFS
-        if len(pulp.listSolvers(onlyAvailable=True)) == 0:
+        if solver is None:
             return self.fcfs()
 
         # build conflict graph

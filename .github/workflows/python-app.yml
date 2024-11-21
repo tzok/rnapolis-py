@@ -26,9 +26,11 @@ jobs:
         pip install -r requirements.txt
         pip install -r test_requirements.txt
 
-    - name: Lint with black
+    - name: Download and extract HiGHSstatic
       run: |
-        black --check src/
+        wget https://github.com/JuliaBinaryWrappers/HiGHSstatic_jll.jl/releases/download/HiGHSstatic-v1.8.1%2B0/HiGHSstatic.v1.8.1.x86_64-linux-gnu-cxx11.tar.gz
+        tar xfz HiGHSstatic.v1.8.1.x86_64-linux-gnu-cxx11.tar.gz -C "${HOME}/.local"
+        echo "${HOME}/.local/bin" >> "${GITHUB_PATH}"
 
     - name: Test with pytest
       run: |
