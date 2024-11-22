@@ -199,3 +199,37 @@ def test_high_level_pseudoknot():
         dot_bracket.structure
         == "([{<" + string.ascii_uppercase + ")]}>" + string.ascii_lowercase
     )
+
+
+def test_bpseq_removal_options():
+    sequence = (
+        "GCGGAUUUAGCUCAGUUGGGAGAGCGCCAGACUGAAGAUCUGGAGGUCCUGUGUUCCAUCCACAGAAUUCGCACCA"
+    )
+    structure = (
+        "(((((((..((((....[[..)))).((((..(...)..)))).....(((((..]]...))))))))))))...."
+    )
+
+    bpseq = BpSeq.from_dotbracket(DotBracket(sequence, structure))
+    assert bpseq.dot_bracket.sequence == sequence
+    assert bpseq.dot_bracket.structure == structure
+
+    bpseq_without_isolated = bpseq.without_isolated()
+    assert bpseq_without_isolated.dot_bracket.sequence == sequence
+    assert (
+        bpseq_without_isolated.dot_bracket.structure
+        == "(((((((..((((....[[..)))).((((.........)))).....(((((..]]...))))))))))))...."
+    )
+
+    bpseq_without_pseudoknots = bpseq.without_pseudoknots()
+    assert bpseq_without_pseudoknots.dot_bracket.sequence == sequence
+    assert (
+        bpseq_without_pseudoknots.dot_bracket.structure
+        == "(((((((..((((........)))).((((..(...)..)))).....(((((.......))))))))))))...."
+    )
+
+    bpseq_without_both = bpseq.without_isolated().without_pseudoknots()
+    assert bpseq_without_both.dot_bracket.sequence == sequence
+    assert (
+        bpseq_without_both.dot_bracket.structure
+        == "(((((((..((((........)))).((((.........)))).....(((((.......))))))))))))...."
+    )
