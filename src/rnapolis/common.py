@@ -940,6 +940,27 @@ class BpSeq:
             solutions.add(self.__make_dot_bracket(regions, orders))
         return list(solutions)
 
+    def without_pseudoknots(self):
+        return BpSeq.from_dotbracket(self.dot_bracket.without_pseudoknots())
+
+    def without_isolated(self):
+        stems, _, _, _ = self.elements
+        to_unpair = []
+
+        for stem in stems:
+            if stem.strand5p.first == stem.strand5p.last:
+                to_unpair.append(stem.strand5p.first - 1)
+                to_unpair.append(stem.strand3p.first - 1)
+
+        if not to_unpair:
+            return self
+
+        entries = self.entries.copy()
+        for i in to_unpair:
+            entries[i].pair = 0
+
+        return BpSeq(entries)
+
 
 @dataclass
 class DotBracket:
@@ -989,6 +1010,10 @@ class DotBracket:
 
     def __hash__(self) -> int:
         return hash((self.sequence, self.structure))
+
+    def without_pseudoknots(self):
+        structure = re.sub(r"[\[\]\{\}\<\>A-Za-z]", ".", self.structure)
+        return DotBracket(self.sequence, structure)
 
 
 @dataclass
