@@ -1,10 +1,11 @@
 #! /usr/bin/env python
 import argparse
 import tempfile
-from typing import List, Set, Tuple
+from typing import Iterable, List, Set, Tuple
 
 from mmcif.io.IoAdapterPy import IoAdapterPy
 from mmcif.io.PdbxReader import DataCategory, DataContainer
+
 from rnapolis.util import handle_input_file
 
 # Source: https://mmcif.wwpdb.org/dictionaries/mmcif_pdbx_v50.dic/Items/_entity_poly.type.html
@@ -153,6 +154,85 @@ def select_category_by_id(
     return attributes, rows
 
 
+def filter_by_poly_types(
+    file_content: str, entity_poly_types: Iterable[str] = ["polyribonucleotide"]
+) -> str:
+    adapter = IoAdapterPy()
+
+    with tempfile.NamedTemporaryFile("rt+") as f:
+        f.write(file_content)
+        f.seek(0)
+        data = adapter.readFile(f.name)
+
+    entity_ids = select_ids(
+        data, "entity_poly", "type", "entity_id", set(entity_poly_types)
+    )
+    asym_ids = select_ids(data, "struct_asym", "entity_id", "id", entity_ids)
+    auth_asym_ids = select_ids(
+        data, "atom_site", "label_asym_id", "auth_asym_id", asym_ids
+    )
+
+    output = DataContainer("rnapolis")
+
+    for table, ids in (
+        (CATEGORIES_WITH_ENTITY_ID, entity_ids),
+        (CATEGORIES_WITH_ASYM_ID, asym_ids),
+        (CATEGORIES_WITH_AUTH_ASYM_ID, auth_asym_ids),
+    ):
+        for category, field_name in table:
+            attributes, rows = select_category_by_id(data, category, field_name, ids)
+
+            if attributes and rows:
+                obj = DataCategory(category, attributes, rows)
+                output.append(obj)
+
+    with tempfile.NamedTemporaryFile("rt+") as tmp:
+        adapter.writeFile(tmp.name, [output])
+        tmp.seek(0)
+        return tmp.read()
+
+
+def filter_by_chains(file_content: str, chains: Iterable[str]) -> str:
+    """
+    Filter a PDBx/mmCIF file by chain IDs. The function returns a new PDBx/mmCIF file.
+
+    Warning! The new file might contain more chains than provided in the `chains` argument.
+    This is because the function filters by entity, so if you ask for chain "A",
+    which is part of entity 1 having chains "A", "B" and "C", then you will get all three chains.
+    """
+    adapter = IoAdapterPy()
+
+    with tempfile.NamedTemporaryFile("rt+") as f:
+        f.write(file_content)
+        f.seek(0)
+        data = adapter.readFile(f.name)
+
+    output = DataContainer("rnapolis")
+
+    entity_ids = select_ids(data, "struct_asym", "id", "entity_id", set(chains))
+    asym_ids = set(chains)
+    auth_asym_ids = select_ids(
+        data, "atom_site", "label_asym_id", "auth_asym_id", asym_ids
+    )
+
+    for table, ids in (
+        (CATEGORIES_WITH_ENTITY_ID, entity_ids),
+        (CATEGORIES_WITH_ASYM_ID, asym_ids),
+        (CATEGORIES_WITH_AUTH_ASYM_ID, auth_asym_ids),
+    ):
+        for category, field_name in table:
+            attributes, rows = select_category_by_id(data, category, field_name, ids)
+
+            if attributes and rows:
+                obj = DataCategory(category, attributes, rows)
+                output.append(obj)
+
+    with tempfile.NamedTemporaryFile("rt+") as tmp:
+        adapter.writeFile(tmp.name, [output])
+        tmp.seek(0)
+        return tmp.read()
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -172,38 +252,13 @@ def main():
     args = parser.parse_args()
 
     file = handle_input_file(args.path)
-    adapter = IoAdapterPy()
-    data = adapter.readFile(file.name)
-    output = DataContainer("rnapolis")
 
     if args.chain:
-        entity_ids = select_ids(data, "struct_asym", "id", "entity_id", set(args.chain))
-        asym_ids = set(args.chain)
+        print(filter_by_chains(file.read(), args.chain))
+    elif args.type:
+        print(filter_by_poly_types(file.read(), args.type))
     else:
-        entity_ids = select_ids(
-            data, "entity_poly", "type", "entity_id", set(args.type)
-        )
-        asym_ids = select_ids(data, "struct_asym", "entity_id", "id", entity_ids)
-
-    auth_asym_ids = select_ids(
-        data, "atom_site", "label_asym_id", "auth_asym_id", asym_ids
-    )
-
-    for table, ids in (
-        (CATEGORIES_WITH_ENTITY_ID, entity_ids),
-        (CATEGORIES_WITH_ASYM_ID, asym_ids),
-        (CATEGORIES_WITH_AUTH_ASYM_ID, auth_asym_ids),
-    ):
-        for category, field_name in table:
-            attributes, rows = select_category_by_id(data, category, field_name, ids)
-
-            if attributes and rows:
-                obj = DataCategory(category, attributes, rows)
-                output.append(obj)
-
-    with tempfile.NamedTemporaryFile() as tmp:
-        adapter.writeFile(tmp.name, [output])
-        print(tmp.read().decode())
+        parser.print_help()
 
 
 if __name__ == "__main__":
