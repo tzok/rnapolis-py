@@ -2,7 +2,6 @@
 import argparse
 import string
 import tempfile
-from io import StringIO
 from typing import Dict, Tuple
 
 from mmcif.io.IoAdapterPy import IoAdapterPy
@@ -16,7 +15,11 @@ def copy_from_to(
     copy_to: str = "auth_asym_id",
 ) -> str:
     adapter = IoAdapterPy()
-    data = adapter.readFile(StringIO(file_content))
+
+    with tempfile.NamedTemporaryFile(mode="wt") as f:
+        f.write(file_content)
+        f.seek(0)
+        data = adapter.readFile(f.name)
 
     if len(data) == 0 or category not in data[0].getObjNameList():
         return file_content
@@ -32,7 +35,7 @@ def copy_from_to(
     if copy_to not in attributes:
         attributes.append(copy_to)
 
-    for row in category.getRowList():
+    for row in category_obj.getRowList():
         i = attributes.index(copy_from)
         j = attributes.index(copy_to)
         if j >= len(row):
@@ -41,9 +44,9 @@ def copy_from_to(
             row[j] = row[i]
         transformed.append(row)
 
-    data[0].replace(DataCategory(category, attributes, transformed))
+    data[0].replace(DataCategory(category_obj, attributes, transformed))
 
-    with tempfile.NamedTemporaryFile(mode="wt") as f:
+    with tempfile.NamedTemporaryFile(mode="rt+") as f:
         adapter.writeFile(f.name, data)
         f.seek(0)
         return f.read()
@@ -56,7 +59,10 @@ def replace_value(
     values: str = "".join([c for c in string.printable if c not in string.whitespace]),
 ) -> Tuple[str, Dict]:
     adapter = IoAdapterPy()
-    data = adapter.readFile(StringIO(file_content))
+    with tempfile.NamedTemporaryFile(mode="wt") as f:
+        f.write(file_content)
+        f.seek(0)
+        data = adapter.readFile(f.name)
 
     if len(data) == 0 or category not in data[0].getObjNameList():
         return file_content, {}
@@ -70,7 +76,7 @@ def replace_value(
     transformed = []
     mapping = {}
 
-    for row in category.getRowList():
+    for row in category_obj.getRowList():
         i = attributes.index(column)
 
         if row[i] not in mapping:
@@ -79,9 +85,9 @@ def replace_value(
         row[i] = mapping[row[i]]
         transformed.append(row)
 
-    data[0].replace(DataCategory(category, attributes, transformed))
+    data[0].replace(DataCategory(category_obj, attributes, transformed))
 
-    with tempfile.NamedTemporaryFile(mode="wt") as f:
+    with tempfile.NamedTemporaryFile(mode="rt+") as f:
         adapter.writeFile(f.name, data)
         f.seek(0)
         return f.read(), mapping
