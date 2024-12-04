@@ -9,8 +9,9 @@ def test_filter_by_poly_types():
     with open("tests/1a9n.cif") as f:
         content = f.read()
 
-    filtered = filter_by_poly_types(content, ["polyribonucleotide"])
-    assert re.search(r"^_entity.id", filtered, re.MULTILINE) is not None
+    filtered = filter_by_poly_types(content, ["polyribonucleotide"], ["chem_comp"])
+    assert re.search(r"^_entity\.id", filtered, re.MULTILINE) is not None
+    assert re.search(r"^_chem_comp\.id", filtered, re.MULTILINE) is not None
 
     with tempfile.NamedTemporaryFile("rt+") as f:
         f.write(filtered)
@@ -25,8 +26,9 @@ def test_filter_by_chains():
     with open("tests/1a9n.cif") as f:
         content = f.read()
 
-    filtered = filter_by_chains(content, ["A", "C"])
-    assert re.search(r"^_entity.id", filtered, re.MULTILINE) is not None
+    filtered = filter_by_chains(content, ["A", "C"], ["chem_comp"])
+    assert re.search(r"^_entity\.id", filtered, re.MULTILINE) is not None
+    assert re.search(r"^_chem_comp\.id", filtered, re.MULTILINE) is not None
 
     with tempfile.NamedTemporaryFile("rt+") as f:
         f.write(filtered)
