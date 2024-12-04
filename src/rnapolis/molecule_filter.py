@@ -156,7 +156,9 @@ def select_category_by_id(
 
 
 def filter_by_poly_types(
-    file_content: str, entity_poly_types: Iterable[str] = ["polyribonucleotide"]
+    file_content: str,
+    entity_poly_types: Iterable[str] = ["polyribonucleotide"],
+    retain_categories: Iterable[str] = [],
 ) -> str:
     adapter = IoAdapterPy()
 
@@ -187,13 +189,20 @@ def filter_by_poly_types(
                 obj = DataCategory(category, attributes, rows)
                 output.append(obj)
 
+    for category in retain_categories:
+        obj = data[0].getObj(category)
+        if obj:
+            output.append(obj)
+
     with tempfile.NamedTemporaryFile("rt+") as tmp:
         adapter.writeFile(tmp.name, [output])
         tmp.seek(0)
         return tmp.read()
 
 
-def filter_by_chains(file_content: str, chains: Iterable[str]) -> str:
+def filter_by_chains(
+    file_content: str, chains: Iterable[str], retain_categories: Iterable[str] = []
+) -> str:
     """
     Filter a PDBx/mmCIF file by chain IDs. The function returns a new PDBx/mmCIF file.
 
@@ -227,6 +236,11 @@ def filter_by_chains(file_content: str, chains: Iterable[str]) -> str:
             if attributes and rows:
                 obj = DataCategory(category, attributes, rows)
                 output.append(obj)
+
+    for category in retain_categories:
+        obj = data[0].getObj(category)
+        if obj:
+            output.append(obj)
 
     with tempfile.NamedTemporaryFile("rt+") as tmp:
         adapter.writeFile(tmp.name, [output])
