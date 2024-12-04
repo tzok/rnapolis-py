@@ -21,6 +21,7 @@ ENTITY_POLY_TYPES = [
 ]
 
 CATEGORIES_WITH_ENTITY_ID = [
+    ("entity", "id"),
     ("atom_site", "label_entity_id"),
     ("entity_keywords", "entity_id"),
     ("entity_name_com", "entity_id"),
