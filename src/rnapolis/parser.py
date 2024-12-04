@@ -65,6 +65,7 @@ def parse_cif(
         atom_site = data[0].getObj("atom_site")
         mod_residue = data[0].getObj("pdbx_struct_mod_residue")
         entity_poly = data[0].getObj("entity_poly")
+        entity = data[0].getObj("entity")
 
         if atom_site:
             for row in atom_site.getRowList():
@@ -218,6 +219,23 @@ def parse_cif(
 
                 if entity_id and pdbx_seq_one_letter_code_can:
                     sequence_by_entity[entity_id] = pdbx_seq_one_letter_code_can
+
+        if entity:
+            for row in entity.getRowList():
+                row_dict = dict(zip(entity.getAttributeList(), row))
+
+                entity_id = row_dict.get("id", None)
+                type_ = row_dict.get("type", None)
+
+                if entity_id:
+                    sequence_by_entity[entity_id] = sequence_by_entity.get(
+                        entity_id, ""
+                    )
+
+                    if type_:
+                        is_nucleic_acid_by_entity[entity_id] = (
+                            is_nucleic_acid_by_entity.get(entity_id, type_)
+                        )
 
     atoms = filter_clashing_atoms(atoms_to_process)
     return atoms, modified, sequence_by_entity, is_nucleic_acid_by_entity
