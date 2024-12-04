@@ -1,3 +1,4 @@
+import re
 import tempfile
 
 from rnapolis.molecule_filter import filter_by_chains, filter_by_poly_types
@@ -9,6 +10,7 @@ def test_filter_by_poly_types():
         content = f.read()
 
     filtered = filter_by_poly_types(content, ["polyribonucleotide"])
+    assert re.search(r"^_entity.id", filtered, re.MULTILINE) is not None
 
     with tempfile.NamedTemporaryFile("rt+") as f:
         f.write(filtered)
@@ -24,6 +26,7 @@ def test_filter_by_chains():
         content = f.read()
 
     filtered = filter_by_chains(content, ["A", "C"])
+    assert re.search(r"^_entity.id", filtered, re.MULTILINE) is not None
 
     with tempfile.NamedTemporaryFile("rt+") as f:
         f.write(filtered)
