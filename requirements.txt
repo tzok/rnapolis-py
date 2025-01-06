@@ -7,5 +7,5 @@ orjson==3.10.12
 pandas==2.2.3
 pulp==2.9.0
 requests==2.32.3
-scipy==1.14.1
+scipy==1.15.0
 viennarna==2.7.0
