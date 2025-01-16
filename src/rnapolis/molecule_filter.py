@@ -1,6 +1,8 @@
 #! /usr/bin/env python
 import argparse
+import os
 import tempfile
+from collections import defaultdict, namedtuple
 from typing import Iterable, List, Set, Tuple
 
 from mmcif.io.IoAdapterPy import IoAdapterPy
@@ -20,167 +22,104 @@ ENTITY_POLY_TYPES = [
     "polyribonucleotide",
 ]
 
-CATEGORIES_WITH_ENTITY_ID = [
-    ("entity", "id"),
-    ("atom_site", "label_entity_id"),
-    ("entity_keywords", "entity_id"),
-    ("entity_name_com", "entity_id"),
-    ("entity_name_sys", "entity_id"),
-    ("entity_poly", "entity_id"),
-    ("entity_src_gen", "entity_id"),
-    ("entity_src_nat", "entity_id"),
-    ("pdbx_branch_scheme", "entity_id"),
-    ("pdbx_chain_remapping", "entity_id"),
-    ("pdbx_construct", "entity_id"),
-    ("pdbx_entity_assembly", "entity_id"),
-    ("pdbx_entity_branch", "entity_id"),
-    ("pdbx_entity_branch_descriptor", "entity_id"),
-    ("pdbx_entity_branch_list", "entity_id"),
-    ("pdbx_entity_func_bind_mode", "entity_id"),
-    ("pdbx_entity_name", "entity_id"),
-    ("pdbx_entity_nonpoly", "entity_id"),
-    ("pdbx_entity_poly_domain", "entity_id"),
-    ("pdbx_entity_poly_na_nonstandard", "entity_id"),
-    ("pdbx_entity_poly_na_type", "entity_id"),
-    ("pdbx_entity_poly_protein_class", "entity_id"),
-    ("pdbx_entity_prod_protocol", "entity_id"),
-    ("pdbx_entity_remapping", "entity_id"),
-    ("pdbx_entity_src_gen_character", "entity_id"),
-    ("pdbx_entity_src_gen_chrom", "entity_id"),
-    ("pdbx_entity_src_gen_clone", "entity_id"),
-    ("pdbx_entity_src_gen_express", "entity_id"),
-    ("pdbx_entity_src_gen_fract", "entity_id"),
-    ("pdbx_entity_src_gen_lysis", "entity_id"),
-    ("pdbx_entity_src_gen_prod_digest", "entity_id"),
-    ("pdbx_entity_src_gen_prod_other", "entity_id"),
-    ("pdbx_entity_src_gen_prod_pcr", "entity_id"),
-    ("pdbx_entity_src_gen_proteolysis", "entity_id"),
-    ("pdbx_entity_src_gen_pure", "entity_id"),
-    ("pdbx_entity_src_gen_refold", "entity_id"),
-    ("pdbx_entity_src_syn", "entity_id"),
-    ("pdbx_linked_entity_list", "entity_id"),
-    ("pdbx_prerelease_seq", "entity_id"),
-    ("pdbx_sifts_xref_db", "entity_id"),
-    ("pdbx_sifts_xref_db_segments", "entity_id"),
-    ("pdbx_struct_entity_inst", "entity_id"),
-    ("struct_asym", "entity_id"),
-    ("struct_ref", "entity_id"),
-]
-
-CATEGORIES_WITH_ASYM_ID = [
-    ("pdbx_coordinate_model", "asym_id"),
-    ("pdbx_distant_solvent_atoms", "label_asym_id"),
-    ("pdbx_linked_entity_instance_list", "asym_id"),
-    ("pdbx_poly_seq_scheme", "asym_id"),
-    ("pdbx_sifts_unp_segments", "asym_id"),
-    ("pdbx_struct_asym_gen", "asym_id"),
-    ("pdbx_struct_ncs_virus_gen", "asym_id"),
-    ("pdbx_struct_special_symmetry", "label_asym_id"),
-    ("pdbx_unobs_or_zero_occ_atoms", "label_asym_id"),
-    ("pdbx_unobs_or_zero_occ_residues", "label_asym_id"),
-    ("refine_ls_restr_ncs", "pdbx_asym_id"),
-    ("struct_biol_gen", "asym_id"),
-]
-
-CATEGORIES_WITH_AUTH_ASYM_ID = [
-    ("atom_site_anisotrop", "pdbx_auth_asym_id"),
-    ("pdbx_atom_site_aniso_tls", "auth_asym_id"),
-    ("pdbx_entity_instance_feature", "auth_asym_id"),
-    ("pdbx_feature_monomer", "auth_asym_id"),
-    ("pdbx_missing_atom_nonpoly", "auth_asym_id"),
-    ("pdbx_missing_atom_poly", "auth_asym_id"),
-    ("pdbx_modification_feature", "auth_asym_id"),
-    ("pdbx_refine_component", "auth_asym_id"),
-    ("pdbx_remediation_atom_site_mapping", "auth_asym_id"),
-    ("pdbx_rmch_outlier", "auth_asym_id"),
-    ("pdbx_rms_devs_cov_by_monomer", "auth_asym_id"),
-    ("pdbx_sequence_pattern", "auth_asym_id"),
-    ("pdbx_solvent_atom_site_mapping", "auth_asym_id"),
-    ("pdbx_stereochemistry", "auth_asym_id"),
-    ("pdbx_struct_chem_comp_diagnostics", "pdb_strand_id"),
-    ("pdbx_struct_chem_comp_feature", "pdb_strand_id"),
-    ("pdbx_struct_group_components", "auth_asym_id"),
-    ("pdbx_struct_mod_residue", "auth_asym_id"),
-    ("pdbx_sugar_phosphate_geometry", "auth_asym_id"),
-    ("pdbx_validate_chiral", "auth_asym_id"),
-    ("pdbx_validate_main_chain_plane", "auth_asym_id"),
-    ("pdbx_validate_planes", "auth_asym_id"),
-    ("pdbx_validate_planes_atom", "auth_asym_id"),
-    ("pdbx_validate_torsion", "auth_asym_id"),
-    ("struct_mon_nucl", "auth_asym_id"),
-    ("struct_mon_prot", "auth_asym_id"),
-    ("struct_site_gen", "auth_asym_id"),
-]
+Link = namedtuple(
+    "Link", ["parent_category_id", "parent_name", "child_category_id", "child_name"]
+)
 
 
-def select_ids(
-    data: List[DataContainer],
-    obj_name: str,
-    tested_field_name: str,
-    extracted_field_name: str,
-    accepted_values: Set[str],
-) -> Set[str]:
-    obj = data[0].getObj(obj_name)
-    ids = set()
+def load_pdbx_item_linked_group_list():
+    dictionary = os.path.join(
+        os.path.abspath(os.path.dirname(__file__)), "mmcif_pdbx_v50.dic"
+    )
+    adapter = IoAdapterPy()
+    data = adapter.readFile(dictionary)
+    obj = data[0].getObj("pdbx_item_linked_group_list")
+    links = defaultdict(set)
 
     if obj:
         for row in obj.getRowList():
             row_dict = dict(zip(obj.getAttributeList(), row))
+            child_category_id = row_dict["child_category_id"]
+            child_name = row_dict["child_name"].split(".")[1]
+            parent_name = row_dict["parent_name"].split(".")[1]
+            parent_category_id = row_dict["parent_category_id"]
+            links[parent_category_id].add(
+                Link(parent_category_id, parent_name, child_category_id, child_name)
+            )
 
-            if row_dict.get(tested_field_name, None) in accepted_values:
-                ids.add(row_dict[extracted_field_name])
+    return links
 
-    return ids
+
+def select_ids(
+    data: List[DataContainer],
+    category: str,
+    field_name_to_extract: str,
+    field_name_to_check: str,
+    accepted_values: Iterable[str],
+) -> Set[str]:
+    obj = data[0].getObj(category)
+    if not obj:
+        return set()
+    attributes = obj.getAttributeList()
+    if field_name_to_check not in attributes or field_name_to_extract not in attributes:
+        return set()
+    index_to_check = attributes.index(field_name_to_check)
+    index_to_extract = attributes.index(field_name_to_extract)
+    return {
+        row[index_to_extract]
+        for row in obj.getRowList()
+        if row[index_to_check] in accepted_values
+    }
 
 
 def select_category_by_id(
     data: List[DataContainer],
     category: str,
     field_name: str,
-    ids: List[str],
+    ids: Iterable[str],
 ) -> Tuple[List[str], List[List[str]]]:
     obj = data[0].getObj(category)
-    attributes = []
-    rows = []
-
-    if obj:
-        attributes = obj.getAttributeList()
-
-        for row in obj.getRowList():
-            row_dict = dict(zip(obj.getAttributeList(), row))
-
-            if row_dict.get(field_name, None) in ids:
-                rows.append(row)
-
-    return attributes, rows
+    if not obj:
+        return [], []
+    attributes = obj.getAttributeList()
+    if field_name not in attributes:
+        return attributes, []
+    index = attributes.index(field_name)
+    return attributes, [row for row in obj.getRowList() if row[index] in ids]
 
 
-def filter_by_poly_types(
-    file_content: str,
-    entity_poly_types: Iterable[str] = ["polyribonucleotide"],
-    retain_categories: Iterable[str] = [],
-) -> str:
-    adapter = IoAdapterPy()
-
+def read_cif(file_content: str) -> DataContainer:
     with tempfile.NamedTemporaryFile("rt+") as f:
+        adapter = IoAdapterPy()
         f.write(file_content)
         f.seek(0)
-        data = adapter.readFile(f.name)
+        return adapter.readFile(f.name)
 
-    entity_ids = select_ids(
-        data, "entity_poly", "type", "entity_id", set(entity_poly_types)
-    )
-    asym_ids = select_ids(data, "struct_asym", "entity_id", "id", entity_ids)
-    auth_asym_ids = select_ids(
-        data, "atom_site", "label_asym_id", "auth_asym_id", asym_ids
-    )
+
+def filter_cif(data, entity_ids, asym_ids, auth_asym_ids, retain_categories):
+    links = load_pdbx_item_linked_group_list()
+    categories_with_entity_id = [("entity", "id")] + [
+        (link.child_category_id, link.child_name)
+        for link in links["entity"]
+        if link.parent_name == "id"
+    ]
+    categories_with_asym_id = [("struct_asym", "id")] + [
+        (link.child_category_id, link.child_name)
+        for link in links["struct_asym"]
+        if link.parent_name == "id"
+    ]
+    categories_with_auth_asym_id = [("atom_site", "auth_asym_id")] + [
+        (link.child_category_id, link.child_name)
+        for link in links["atom_site"]
+        if link.parent_name == "auth_asym_id"
+    ]
 
     output = DataContainer("rnapolis")
 
     for table, ids in (
-        (CATEGORIES_WITH_ENTITY_ID, entity_ids),
-        (CATEGORIES_WITH_ASYM_ID, asym_ids),
-        (CATEGORIES_WITH_AUTH_ASYM_ID, auth_asym_ids),
+        (categories_with_entity_id, entity_ids),
+        (categories_with_asym_id, asym_ids),
+        (categories_with_auth_asym_id, auth_asym_ids),
     ):
         for category, field_name in table:
             attributes, rows = select_category_by_id(data, category, field_name, ids)
@@ -195,13 +134,36 @@ def filter_by_poly_types(
             output.append(obj)
 
     with tempfile.NamedTemporaryFile("rt+") as tmp:
+        adapter = IoAdapterPy()
         adapter.writeFile(tmp.name, [output])
         tmp.seek(0)
         return tmp.read()
 
 
+def filter_by_poly_types(
+    file_content: str,
+    entity_poly_types: Iterable[str] = [
+        "polyribonucleotide",
+        "polydeoxyribonucleotide",
+        "polydeoxyribonucleotide/polyribonucleotide hybrid",
+    ],
+    retain_categories: Iterable[str] = ["chem_comp"],
+) -> str:
+    data = read_cif(file_content)
+    entity_ids = select_ids(
+        data, "entity_poly", "entity_id", "type", set(entity_poly_types)
+    )
+    asym_ids = select_ids(data, "struct_asym", "id", "entity_id", entity_ids)
+    auth_asym_ids = select_ids(
+        data, "atom_site", "auth_asym_id", "label_asym_id", asym_ids
+    )
+    return filter_cif(data, entity_ids, asym_ids, auth_asym_ids, retain_categories)
+
+
 def filter_by_chains(
-    file_content: str, chains: Iterable[str], retain_categories: Iterable[str] = []
+    file_content: str,
+    chains: Iterable[str],
+    retain_categories: Iterable[str] = ["chem_comp"],
 ) -> str:
     """
     Filter a PDBx/mmCIF file by chain IDs. The function returns a new PDBx/mmCIF file.
@@ -210,68 +172,55 @@ def filter_by_chains(
     This is because the function filters by entity, so if you ask for chain "A",
     which is part of entity 1 having chains "A", "B" and "C", then you will get all three chains.
     """
-    adapter = IoAdapterPy()
-
-    with tempfile.NamedTemporaryFile("rt+") as f:
-        f.write(file_content)
-        f.seek(0)
-        data = adapter.readFile(f.name)
-
-    output = DataContainer("rnapolis")
-
-    entity_ids = select_ids(data, "struct_asym", "id", "entity_id", set(chains))
+    data = read_cif(file_content)
     asym_ids = set(chains)
+    entity_ids = select_ids(data, "struct_asym", "entity_id", "id", asym_ids)
     auth_asym_ids = select_ids(
-        data, "atom_site", "label_asym_id", "auth_asym_id", asym_ids
+        data, "atom_site", "auth_asym_id", "label_asym_id", asym_ids
     )
-
-    for table, ids in (
-        (CATEGORIES_WITH_ENTITY_ID, entity_ids),
-        (CATEGORIES_WITH_ASYM_ID, asym_ids),
-        (CATEGORIES_WITH_AUTH_ASYM_ID, auth_asym_ids),
-    ):
-        for category, field_name in table:
-            attributes, rows = select_category_by_id(data, category, field_name, ids)
-
-            if attributes and rows:
-                obj = DataCategory(category, attributes, rows)
-                output.append(obj)
-
-    for category in retain_categories:
-        obj = data[0].getObj(category)
-        if obj:
-            output.append(obj)
-
-    with tempfile.NamedTemporaryFile("rt+") as tmp:
-        adapter.writeFile(tmp.name, [output])
-        tmp.seek(0)
-        return tmp.read()
+    return filter_cif(data, entity_ids, asym_ids, auth_asym_ids, retain_categories)
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--type",
-        help="a type of molecule to select, you can provide this argument multiple times (default: polyribonucleotide)",
-        action="append",
-        default=["polyribonucleotide"],
-        choices=ENTITY_POLY_TYPES,
-    )
-    parser.add_argument(
-        "--chain",
-        help="a chain ID (label_asym_id) to select, you can provide this argument multiple times (if provided, it overrides the --type argument)",
+        "--filter-by-poly-types",
+        help=f"filter by entity poly types, possible values: {', '.join(ENTITY_POLY_TYPES)}",
         action="append",
         default=[],
+    )
+    parser.add_argument(
+        "--filter-by-chains",
+        help="filter by chain IDs (label_asym_id), e.g. A, B, C",
+        action="append",
+        default=[],
+    )
+    parser.add_argument(
+        "--retain-categories",
+        help="categories to retain in the output file default: chem_comp",
+        action="append",
+        default=["chem_comp"],
     )
     parser.add_argument("path", help="path to a PDBx/mmCIF file")
     args = parser.parse_args()
 
     file = handle_input_file(args.path)
-
-    if args.chain:
-        print(filter_by_chains(file.read(), args.chain))
-    elif args.type:
-        print(filter_by_poly_types(file.read(), args.type))
+    if args.filter_by_poly_types:
+        print(
+            filter_by_poly_types(
+                file.read(),
+                entity_poly_types=args.filter_by_poly_types,
+                retain_categories=args.retain_categories,
+            )
+        )
+    elif args.filter_by_chains:
+        print(
+            filter_by_chains(
+                file.read(),
+                chains=args.filter_by_chains,
+                retain_categories=args.retain_categories,
+            )
+        )
     else:
         parser.print_help()
 
