@@ -218,7 +218,9 @@ def parse_cif(
                     )
 
                 if entity_id and pdbx_seq_one_letter_code_can:
-                    sequence_by_entity[entity_id] = pdbx_seq_one_letter_code_can
+                    sequence_by_entity[entity_id] = (
+                        pdbx_seq_one_letter_code_can.replace("\n", "")
+                    )
 
         if entity:
             for row in entity.getRowList():
@@ -234,7 +236,16 @@ def parse_cif(
 
                     if type_:
                         is_nucleic_acid_by_entity[entity_id] = (
-                            is_nucleic_acid_by_entity.get(entity_id, type_)
+                            is_nucleic_acid_by_entity.get(
+                                entity_id,
+                                type_
+                                in (
+                                    "peptide nucleic acid",
+                                    "polydeoxyribonucleotide",
+                                    "polydeoxyribonucleotide/polyribonucleotide hybrid",
+                                    "polyribonucleotide",
+                                ),
+                            )
                         )
 
     atoms = filter_clashing_atoms(atoms_to_process)
