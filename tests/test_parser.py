@@ -1,3 +1,5 @@
+import gzip
+
 from rnapolis.parser import read_3d_structure
 
 
@@ -31,3 +33,20 @@ def test_4qln_no_duplicate_atoms():
             assert len(atom_names) == len(
                 set(atom_names)
             ), f"Duplicate atoms found in residue {residue.auth}"
+
+
+def test_1gid():
+    expected_sequence = "GAAUUGCGGGAAAGGGGUCAACAGCCGUUCAGUACCAAGUCUCAGGGGAAACUUUGAGAUGGCCUUGCAAAGGGUAUGGUAAUAAGCUGACGGACAUGGUCCUAACCACGCAGCCAAGUCCUAAGUCAACAGAUCUUCUGUUGAUAUGGAUGCAGUUC"
+
+    with gzip.open("tests/1gid.cif.gz", "rt") as f:
+        structure3d = read_3d_structure(f, nucleic_acid_only=True)
+
+    residues_a = [r for r in structure3d.residues if r.auth.chain == "A"]
+    residues_b = [r for r in structure3d.residues if r.auth.chain == "B"]
+    assert len(residues_a) == len(expected_sequence)
+    assert len(residues_b) == len(expected_sequence)
+
+    actual_sequence_a = "".join([residue.one_letter_name for residue in residues_a])
+    actual_sequence_b = "".join([residue.one_letter_name for residue in residues_b])
+    assert actual_sequence_a == expected_sequence
+    assert actual_sequence_b == expected_sequence

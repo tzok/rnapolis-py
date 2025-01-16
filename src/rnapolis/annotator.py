@@ -11,6 +11,8 @@ import numpy
 import numpy.typing
 import orjson
 from ordered_set import OrderedSet
+from scipy.spatial import KDTree
+
 from rnapolis.common import (
     BR,
     BaseInteractions,
@@ -42,7 +44,6 @@ from rnapolis.tertiary import (
     torsion_angle,
 )
 from rnapolis.util import handle_input_file
-from scipy.spatial import KDTree
 
 HYDROGEN_BOND_MAX_DISTANCE = 4.0
 HYDROGEN_BOND_ANGLE_RANGE = (50.0, 130.0)  # 90 degrees is ideal, so allow +- 40 degrees
