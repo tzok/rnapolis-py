@@ -5,7 +5,7 @@ with open("README.md") as f:
 
 setup(
     name="RNApolis",
-    version="0.4.16",
+    version="0.4.17",
     packages=["rnapolis"],
     package_dir={"": "src"},
     author="Tomasz Zok",
@@ -35,6 +35,8 @@ setup(
             "rfam-folder=rnapolis.rfam_folder:main",
         ]
     },
+    include_package_data=True,
+    package_data={"rnapolis": ["mmcif_pdbx_v50.dic"]},
     install_requires=[
         "appdirs",
         "graphviz",
