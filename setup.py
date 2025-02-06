@@ -35,6 +35,8 @@ setup(
             "rfam-folder=rnapolis.rfam_folder:main",
         ]
     },
+    include_package_data=True,
+    package_data={"rnapolis": ["mmcif_pdbx_v50.dic"]},
     install_requires=[
         "appdirs",
         "graphviz",
