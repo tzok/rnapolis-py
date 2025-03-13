@@ -139,7 +139,6 @@ def test_connected_residues_and_torsion_angles(data_dir):
         assert len(segment) >= 2, f"Segment has fewer than 2 residues: {segment}"
 
     # Calculate torsion angles
-    breakpoint()
     torsion_df = structure.calculate_torsion_angles()
 
     # Check that the DataFrame has the expected columns

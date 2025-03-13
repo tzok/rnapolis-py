@@ -337,6 +337,22 @@ class Structure:
         for angle in ["alpha", "beta", "gamma", "delta", "epsilon", "zeta", "chi"]:
             if angle not in df.columns:
                 df[angle] = None
+        
+        # Reorder columns to ensure consistent order
+        ordered_columns = [
+            "chain_id",
+            "residue_number",
+            "insertion_code",
+            "residue_name",
+            "alpha",
+            "beta",
+            "gamma",
+            "delta",
+            "epsilon",
+            "zeta",
+            "chi",
+        ]
+        df = df[ordered_columns]
 
         return df
 
