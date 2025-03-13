@@ -105,15 +105,15 @@ class Structure:
 class Residue:
     """
     A class representing a single residue in a molecular structure.
-    
+
     This class encapsulates a DataFrame containing atoms belonging to a single residue
     and provides methods to access residue properties.
     """
-    
+
     def __init__(self, residue_df: pd.DataFrame):
         """
         Initialize a Residue object with atom data for a single residue.
-        
+
         Parameters:
         -----------
         residue_df : pd.DataFrame
@@ -121,7 +121,7 @@ class Residue:
         """
         self.atoms = residue_df
         self.format = residue_df.attrs.get("format", "unknown")
-    
+
     @cached_property
     def chain_id(self) -> str:
         """Get the chain identifier for this residue."""
@@ -133,7 +133,7 @@ class Residue:
             else:
                 return self.atoms["auth_asym_id"].iloc[0]
         return ""
-    
+
     @cached_property
     def residue_number(self) -> int:
         """Get the residue sequence number."""
@@ -145,7 +145,7 @@ class Residue:
             else:
                 return int(self.atoms["auth_seq_id"].iloc[0])
         return 0
-    
+
     @cached_property
     def insertion_code(self) -> str:
         """Get the insertion code, if any."""
@@ -157,7 +157,7 @@ class Residue:
                 icode = self.atoms["pdbx_PDB_ins_code"].iloc[0]
                 return icode if pd.notna(icode) else ""
         return ""
-    
+
     @cached_property
     def residue_name(self) -> str:
         """Get the residue name (e.g., 'A', 'G', 'C', 'U', etc.)."""
@@ -169,7 +169,7 @@ class Residue:
             else:
                 return self.atoms["auth_comp_id"].iloc[0]
         return ""
-    
+
     @cached_property
     def center_of_mass(self) -> np.ndarray:
         """Calculate the center of mass of the residue."""
@@ -180,16 +180,16 @@ class Residue:
             coords = self.atoms[["Cartn_x", "Cartn_y", "Cartn_z"]].values
             return np.mean(coords, axis=0)
         return np.array([0.0, 0.0, 0.0])
-    
+
     def find_atom(self, atom_name: str) -> Optional[pd.Series]:
         """
         Find an atom by name in this residue.
-        
+
         Parameters:
         -----------
         atom_name : str
             Name of the atom to find
-            
+
         Returns:
         --------
         Optional[pd.Series]
@@ -212,16 +212,16 @@ class Residue:
                 if len(atoms) > 0:
                     return atoms.iloc[0]
         return None
-    
+
     def get_coordinates(self, atom_name: str) -> Optional[np.ndarray]:
         """
         Get the coordinates of a specific atom.
-        
+
         Parameters:
         -----------
         atom_name : str
             Name of the atom
-            
+
         Returns:
         --------
         Optional[np.ndarray]
@@ -234,11 +234,11 @@ class Residue:
             elif self.format == "mmCIF":
                 return np.array([atom["Cartn_x"], atom["Cartn_y"], atom["Cartn_z"]])
         return None
-    
+
     def __str__(self) -> str:
         """String representation of the residue."""
         return f"{self.residue_name} {self.chain_id}:{self.residue_number}{self.insertion_code}"
-    
+
     def __repr__(self) -> str:
         """Detailed string representation of the residue."""
         return f"Residue({self.__str__()}, {len(self.atoms)} atoms)"
