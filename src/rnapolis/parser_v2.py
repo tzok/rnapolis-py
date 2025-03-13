@@ -19,7 +19,7 @@ def parse_pdb_atoms(content: Union[str, IO[str]]) -> pd.DataFrame:
         DataFrame containing parsed ATOM and HETATM records with columns corresponding to PDB format
     """
     records = []
-    
+
     # Handle both string content and file-like objects
     if isinstance(content, str):
         lines = content.splitlines()
@@ -29,7 +29,7 @@ def parse_pdb_atoms(content: Union[str, IO[str]]) -> pd.DataFrame:
         lines = content.readlines()
         # Convert bytes to string if needed
         if isinstance(lines[0], bytes):
-            lines = [line.decode('utf-8') for line in lines]
+            lines = [line.decode("utf-8") for line in lines]
 
     for line in lines:
         record_type = line[:6].strip()
