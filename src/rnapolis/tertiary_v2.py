@@ -1,6 +1,6 @@
 import string
 from functools import cached_property
-from typing import List, Optional, Dict, Tuple, Set
+from typing import List, Optional
 
 import numpy as np
 import pandas as pd
@@ -23,7 +23,7 @@ def calculate_torsion_angle(
     Returns:
     --------
     float
-        Torsion angle in degrees
+        Torsion angle in radians
     """
     # Calculate vectors between points
     v1 = a2 - a1
@@ -50,8 +50,8 @@ def calculate_torsion_angle(
     x = np.dot(n1, n2)
     y = np.dot(m1, n2)
 
-    # Convert to degrees
-    angle = np.degrees(np.arctan2(y, x))
+    # Return angle in radians
+    angle = np.arctan2(y, x)
 
     return angle
 
@@ -152,7 +152,7 @@ class Structure:
 
         return residues
 
-    def find_connected_residues(self) -> List[List[Residue]]:
+    def find_connected_residues(self) -> List[List["Residue"]]:
         """
         Find segments of connected residues in the structure.
 

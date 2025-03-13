@@ -1,5 +1,7 @@
 import os
+import math
 
+import numpy as np
 import pytest
 
 from rnapolis.parser_v2 import parse_cif_atoms, parse_pdb_atoms
@@ -95,8 +97,8 @@ def test_torsion_angle_calculation():
 
     angle = calculate_torsion_angle(a1, a2, a3, a4)
 
-    # The expected angle is 90 degrees
-    assert abs(angle - 90.0) < 1e-6, f"Expected angle close to 90 degrees, got {angle}"
+    # The expected angle is pi/2 radians (90 degrees)
+    assert abs(angle - np.pi/2) < 1e-6, f"Expected angle close to pi/2 radians, got {angle}"
 
     # Test with collinear points
     a1 = np.array([0.0, 0.0, 0.0])
@@ -135,6 +137,7 @@ def test_connected_residues_and_torsion_angles(data_dir):
         assert len(segment) >= 2, f"Segment has fewer than 2 residues: {segment}"
 
     # Calculate torsion angles
+    breakpoint()
     torsion_df = structure.calculate_torsion_angles()
 
     # Check that the DataFrame has the expected columns
