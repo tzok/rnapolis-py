@@ -105,15 +105,15 @@ class Structure:
 class Atom:
     """
     A class representing a single atom in a molecular structure.
-    
+
     This class encapsulates a pandas Series containing data for a single atom
     and provides methods to access atom properties.
     """
-    
+
     def __init__(self, atom_data: pd.Series, format: str):
         """
         Initialize an Atom object with atom data.
-        
+
         Parameters:
         -----------
         atom_data : pd.Series
@@ -123,7 +123,7 @@ class Atom:
         """
         self.data = atom_data
         self.format = format
-    
+
     @property
     def name(self) -> str:
         """Get the atom name."""
@@ -135,7 +135,7 @@ class Atom:
             else:
                 return self.data["label_atom_id"]
         return ""
-    
+
     @property
     def element(self) -> str:
         """Get the element symbol."""
@@ -145,40 +145,58 @@ class Atom:
             if "type_symbol" in self.data:
                 return self.data["type_symbol"]
         return ""
-    
+
     @property
     def coordinates(self) -> np.ndarray:
         """Get the 3D coordinates of the atom."""
         if self.format == "PDB":
             return np.array([self.data["x"], self.data["y"], self.data["z"]])
         elif self.format == "mmCIF":
-            return np.array([self.data["Cartn_x"], self.data["Cartn_y"], self.data["Cartn_z"]])
+            return np.array(
+                [self.data["Cartn_x"], self.data["Cartn_y"], self.data["Cartn_z"]]
+            )
         return np.array([0.0, 0.0, 0.0])
-    
+
     @property
     def occupancy(self) -> float:
         """Get the occupancy value."""
         if self.format == "PDB":
-            return float(self.data["occupancy"]) if pd.notna(self.data["occupancy"]) else 1.0
+            return (
+                float(self.data["occupancy"])
+                if pd.notna(self.data["occupancy"])
+                else 1.0
+            )
         elif self.format == "mmCIF":
             if "occupancy" in self.data:
-                return float(self.data["occupancy"]) if pd.notna(self.data["occupancy"]) else 1.0
+                return (
+                    float(self.data["occupancy"])
+                    if pd.notna(self.data["occupancy"])
+                    else 1.0
+                )
         return 1.0
-    
+
     @property
     def temperature_factor(self) -> float:
         """Get the temperature factor (B-factor)."""
         if self.format == "PDB":
-            return float(self.data["tempFactor"]) if pd.notna(self.data["tempFactor"]) else 0.0
+            return (
+                float(self.data["tempFactor"])
+                if pd.notna(self.data["tempFactor"])
+                else 0.0
+            )
         elif self.format == "mmCIF":
             if "B_iso_or_equiv" in self.data:
-                return float(self.data["B_iso_or_equiv"]) if pd.notna(self.data["B_iso_or_equiv"]) else 0.0
+                return (
+                    float(self.data["B_iso_or_equiv"])
+                    if pd.notna(self.data["B_iso_or_equiv"])
+                    else 0.0
+                )
         return 0.0
-    
+
     def __str__(self) -> str:
         """String representation of the atom."""
         return f"{self.name} ({self.element})"
-    
+
     def __repr__(self) -> str:
         """Detailed string representation of the atom."""
         coords = self.coordinates
@@ -257,14 +275,14 @@ class Residue:
     def atoms_list(self) -> List[Atom]:
         """Get a list of all atoms in this residue."""
         return [Atom(self.atoms.iloc[i], self.format) for i in range(len(self.atoms))]
-    
+
     @cached_property
     def center_of_mass(self) -> np.ndarray:
         """Calculate the center of mass of the residue."""
         atoms = self.atoms_list
         if not atoms:
             return np.array([0.0, 0.0, 0.0])
-        
+
         coords = np.array([atom.coordinates for atom in atoms])
         return np.mean(coords, axis=0)
 
