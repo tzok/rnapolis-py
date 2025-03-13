@@ -359,6 +359,164 @@ class Structure:
         return df
 
 
+class Residue:
+    """
+    A class representing a single residue in a molecular structure.
+
+    This class encapsulates a DataFrame containing atoms belonging to a single residue
+    and provides methods to access residue properties.
+    """
+
+    def __init__(self, residue_df: pd.DataFrame):
+        """
+        Initialize a Residue object with atom data for a single residue.
+
+        Parameters:
+        -----------
+        residue_df : pd.DataFrame
+            DataFrame containing atom data for a single residue
+        """
+        self.atoms = residue_df
+        self.format = residue_df.attrs.get("format", "unknown")
+
+    @cached_property
+    def chain_id(self) -> str:
+        """Get the chain identifier for this residue."""
+        if self.format == "PDB":
+            return self.atoms["chainID"].iloc[0]
+        elif self.format == "mmCIF":
+            if "auth_asym_id" in self.atoms.columns:
+                return self.atoms["auth_asym_id"].iloc[0]
+            else:
+                return self.atoms["label_asym_id"].iloc[0]
+        return ""
+
+    @cached_property
+    def residue_number(self) -> int:
+        """Get the residue sequence number."""
+        if self.format == "PDB":
+            return int(self.atoms["resSeq"].iloc[0])
+        elif self.format == "mmCIF":
+            if "auth_seq_id" in self.atoms.columns:
+                return int(self.atoms["auth_seq_id"].iloc[0])
+            else:
+                return int(self.atoms["label_seq_id"].iloc[0])
+        return 0
+
+    @cached_property
+    def insertion_code(self) -> Optional[str]:
+        """Get the insertion code, if any."""
+        if self.format == "PDB":
+            icode = self.atoms["iCode"].iloc[0]
+            return icode if pd.notna(icode) else None
+        elif self.format == "mmCIF":
+            if "pdbx_PDB_ins_code" in self.atoms.columns:
+                icode = self.atoms["pdbx_PDB_ins_code"].iloc[0]
+                return icode if pd.notna(icode) else None
+        return None
+
+    @cached_property
+    def residue_name(self) -> str:
+        """Get the residue name (e.g., 'A', 'G', 'C', 'U', etc.)."""
+        if self.format == "PDB":
+            return self.atoms["resName"].iloc[0]
+        elif self.format == "mmCIF":
+            if "auth_comp_id" in self.atoms.columns:
+                return self.atoms["auth_comp_id"].iloc[0]
+            else:
+                return self.atoms["label_comp_id"].iloc[0]
+        return ""
+
+    @cached_property
+    def atoms_list(self) -> List["Atom"]:
+        """Get a list of all atoms in this residue."""
+        return [Atom(self.atoms.iloc[i], self.format) for i in range(len(self.atoms))]
+
+    def find_atom(self, atom_name: str) -> Optional["Atom"]:
+        """
+        Find an atom by name in this residue.
+
+        Parameters:
+        -----------
+        atom_name : str
+            Name of the atom to find
+
+        Returns:
+        --------
+        Optional[Atom]
+            The Atom object, or None if not found
+        """
+        if self.format == "PDB":
+            mask = self.atoms["name"] == atom_name
+            atoms_df = self.atoms[mask]
+            if len(atoms_df) > 0:
+                return Atom(atoms_df.iloc[0], self.format)
+        elif self.format == "mmCIF":
+            if "auth_atom_id" in self.atoms.columns:
+                mask = self.atoms["auth_atom_id"] == atom_name
+                atoms_df = self.atoms[mask]
+                if len(atoms_df) > 0:
+                    return Atom(atoms_df.iloc[0], self.format)
+            else:
+                mask = self.atoms["label_atom_id"] == atom_name
+                atoms_df = self.atoms[mask]
+                if len(atoms_df) > 0:
+                    return Atom(atoms_df.iloc[0], self.format)
+        return None
+
+    def is_connected(self, next_residue_candidate: "Residue") -> bool:
+        """
+        Check if this residue is connected to the next residue candidate.
+
+        The connection is determined by the distance between the O3' atom of this residue
+        and the P atom of the next residue. If the distance is less than 1.5 times the
+        average O-P covalent bond distance, the residues are considered connected.
+
+        Parameters:
+        -----------
+        next_residue_candidate : Residue
+            The residue to check for connection
+
+        Returns:
+        --------
+        bool
+            True if the residues are connected, False otherwise
+        """
+        o3p = self.find_atom("O3'")
+        p = next_residue_candidate.find_atom("P")
+
+        if o3p is not None and p is not None:
+            distance = np.linalg.norm(o3p.coordinates - p.coordinates).item()
+            return distance < 1.5 * AVERAGE_OXYGEN_PHOSPHORUS_DISTANCE_COVALENT
+
+        return False
+
+    def __str__(self) -> str:
+        """String representation of the residue."""
+        # Start with chain ID and residue name
+        if self.chain_id.isspace() or not self.chain_id:
+            builder = f"{self.residue_name}"
+        else:
+            builder = f"{self.chain_id}.{self.residue_name}"
+
+        # Add a separator if the residue name ends with a digit
+        if len(self.residue_name) > 0 and self.residue_name[-1] in string.digits:
+            builder += "/"
+
+        # Add residue number
+        builder += f"{self.residue_number}"
+
+        # Add insertion code if present
+        if self.insertion_code is not None:
+            builder += f"^{self.insertion_code}"
+
+        return builder
+
+    def __repr__(self) -> str:
+        """Detailed string representation of the residue."""
+        return f"Residue({self.__str__()}, {len(self.atoms)} atoms)"
+
+
 class Atom:
     """
     A class representing a single atom in a molecular structure.
@@ -458,161 +616,3 @@ class Atom:
         """Detailed string representation of the atom."""
         coords = self.coordinates
         return f"Atom({self.name}, {self.element}, [{coords[0]:.3f}, {coords[1]:.3f}, {coords[2]:.3f}])"
-
-
-class Residue:
-    """
-    A class representing a single residue in a molecular structure.
-
-    This class encapsulates a DataFrame containing atoms belonging to a single residue
-    and provides methods to access residue properties.
-    """
-
-    def __init__(self, residue_df: pd.DataFrame):
-        """
-        Initialize a Residue object with atom data for a single residue.
-
-        Parameters:
-        -----------
-        residue_df : pd.DataFrame
-            DataFrame containing atom data for a single residue
-        """
-        self.atoms = residue_df
-        self.format = residue_df.attrs.get("format", "unknown")
-
-    @cached_property
-    def chain_id(self) -> str:
-        """Get the chain identifier for this residue."""
-        if self.format == "PDB":
-            return self.atoms["chainID"].iloc[0]
-        elif self.format == "mmCIF":
-            if "auth_asym_id" in self.atoms.columns:
-                return self.atoms["auth_asym_id"].iloc[0]
-            else:
-                return self.atoms["label_asym_id"].iloc[0]
-        return ""
-
-    @cached_property
-    def residue_number(self) -> int:
-        """Get the residue sequence number."""
-        if self.format == "PDB":
-            return int(self.atoms["resSeq"].iloc[0])
-        elif self.format == "mmCIF":
-            if "auth_seq_id" in self.atoms.columns:
-                return int(self.atoms["auth_seq_id"].iloc[0])
-            else:
-                return int(self.atoms["label_seq_id"].iloc[0])
-        return 0
-
-    @cached_property
-    def insertion_code(self) -> Optional[str]:
-        """Get the insertion code, if any."""
-        if self.format == "PDB":
-            icode = self.atoms["iCode"].iloc[0]
-            return icode if pd.notna(icode) else None
-        elif self.format == "mmCIF":
-            if "pdbx_PDB_ins_code" in self.atoms.columns:
-                icode = self.atoms["pdbx_PDB_ins_code"].iloc[0]
-                return icode if pd.notna(icode) else None
-        return None
-
-    @cached_property
-    def residue_name(self) -> str:
-        """Get the residue name (e.g., 'A', 'G', 'C', 'U', etc.)."""
-        if self.format == "PDB":
-            return self.atoms["resName"].iloc[0]
-        elif self.format == "mmCIF":
-            if "auth_comp_id" in self.atoms.columns:
-                return self.atoms["auth_comp_id"].iloc[0]
-            else:
-                return self.atoms["label_comp_id"].iloc[0]
-        return ""
-
-    @cached_property
-    def atoms_list(self) -> List[Atom]:
-        """Get a list of all atoms in this residue."""
-        return [Atom(self.atoms.iloc[i], self.format) for i in range(len(self.atoms))]
-
-    def find_atom(self, atom_name: str) -> Optional[Atom]:
-        """
-        Find an atom by name in this residue.
-
-        Parameters:
-        -----------
-        atom_name : str
-            Name of the atom to find
-
-        Returns:
-        --------
-        Optional[Atom]
-            The Atom object, or None if not found
-        """
-        if self.format == "PDB":
-            mask = self.atoms["name"] == atom_name
-            atoms_df = self.atoms[mask]
-            if len(atoms_df) > 0:
-                return Atom(atoms_df.iloc[0], self.format)
-        elif self.format == "mmCIF":
-            if "auth_atom_id" in self.atoms.columns:
-                mask = self.atoms["auth_atom_id"] == atom_name
-                atoms_df = self.atoms[mask]
-                if len(atoms_df) > 0:
-                    return Atom(atoms_df.iloc[0], self.format)
-            else:
-                mask = self.atoms["label_atom_id"] == atom_name
-                atoms_df = self.atoms[mask]
-                if len(atoms_df) > 0:
-                    return Atom(atoms_df.iloc[0], self.format)
-        return None
-
-    def is_connected(self, next_residue_candidate: "Residue") -> bool:
-        """
-        Check if this residue is connected to the next residue candidate.
-
-        The connection is determined by the distance between the O3' atom of this residue
-        and the P atom of the next residue. If the distance is less than 1.5 times the
-        average O-P covalent bond distance, the residues are considered connected.
-
-        Parameters:
-        -----------
-        next_residue_candidate : Residue
-            The residue to check for connection
-
-        Returns:
-        --------
-        bool
-            True if the residues are connected, False otherwise
-        """
-        o3p = self.find_atom("O3'")
-        p = next_residue_candidate.find_atom("P")
-
-        if o3p is not None and p is not None:
-            distance = np.linalg.norm(o3p.coordinates - p.coordinates).item()
-            return distance < 1.5 * AVERAGE_OXYGEN_PHOSPHORUS_DISTANCE_COVALENT
-
-        return False
-
-    def __str__(self) -> str:
-        """String representation of the residue."""
-        # Start with chain ID and residue name
-        if self.chain_id.isspace() or not self.chain_id:
-            builder = f"{self.residue_name}"
-        else:
-            builder = f"{self.chain_id}.{self.residue_name}"
-
-        # Add a separator if the residue name ends with a digit
-        if len(self.residue_name) > 0 and self.residue_name[-1] in string.digits:
-            builder += "/"
-
-        # Add residue number
-        builder += f"{self.residue_number}"
-
-        # Add insertion code if present
-        if self.insertion_code is not None:
-            builder += f"^{self.insertion_code}"
-
-        return builder
-
-    def __repr__(self) -> str:
-        """Detailed string representation of the residue."""
-        return f"Residue({self.__str__()}, {len(self.atoms)} atoms)"
