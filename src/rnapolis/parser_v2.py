@@ -1,6 +1,7 @@
+from typing import IO, Union
+
 import pandas as pd
 from mmcif.io.IoAdapterPy import IoAdapterPy
-from typing import Union, IO, List, Dict, Any
 
 
 def parse_pdb_atoms(content: str) -> pd.DataFrame:
