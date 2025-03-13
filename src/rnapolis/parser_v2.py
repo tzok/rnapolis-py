@@ -79,8 +79,8 @@ def parse_pdb_atoms(content: str) -> pd.DataFrame:
     categorical_columns = ["record_type", "name", "resName", "chainID", "element"]
     for col in categorical_columns:
         df[col] = df[col].astype("category")
-    
+
     # Add format attribute to the DataFrame
-    df.attrs['format'] = 'PDB'
+    df.attrs["format"] = "PDB"
 
     return df
