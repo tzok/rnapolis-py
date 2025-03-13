@@ -1,5 +1,6 @@
 from functools import cached_property
 from typing import List, Optional
+import string
 
 import numpy as np
 import pandas as pd
@@ -310,7 +311,24 @@ class Residue:
 
     def __str__(self) -> str:
         """String representation of the residue."""
-        return f"{self.residue_name} {self.chain_id}:{self.residue_number}{self.insertion_code}"
+        # Start with chain ID and residue name
+        if self.chain_id.isspace() or not self.chain_id:
+            builder = f"{self.residue_name}"
+        else:
+            builder = f"{self.chain_id}.{self.residue_name}"
+        
+        # Add a separator if the residue name ends with a digit
+        if len(self.residue_name) > 0 and self.residue_name[-1] in string.digits:
+            builder += "/"
+            
+        # Add residue number
+        builder += f"{self.residue_number}"
+        
+        # Add insertion code if present
+        if self.insertion_code:
+            builder += f"^{self.insertion_code}"
+            
+        return builder
 
     def __repr__(self) -> str:
         """Detailed string representation of the residue."""
