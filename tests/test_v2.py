@@ -1,7 +1,7 @@
 import os
-import math
 
 import numpy as np
+import pandas as pd
 import pytest
 
 from rnapolis.parser_v2 import parse_cif_atoms, parse_pdb_atoms
