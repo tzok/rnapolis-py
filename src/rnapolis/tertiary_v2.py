@@ -232,10 +232,6 @@ class Structure:
         # Process each segment
         for segment in segments:
             for i, residue in enumerate(segment):
-                # Skip first and last residue for some angles
-                if i == 0 or i == len(segment) - 1:
-                    continue
-
                 # Prepare row data
                 row = {
                     "chain_id": residue.chain_id,
@@ -249,10 +245,10 @@ class Structure:
                     if angle_name == "chi":
                         continue  # Skip chi for now
 
-                    if angle_name == "alpha" and i == 1:
+                    if angle_name == "alpha" and i == 0:
                         continue  # Skip alpha for the second residue
 
-                    if angle_name in ["epsilon", "zeta"] and i == len(segment) - 2:
+                    if angle_name in ["epsilon", "zeta"] and i == len(segment) - 1:
                         continue  # Skip epsilon and zeta for the second-to-last residue
 
                     # Get the atoms for this angle
