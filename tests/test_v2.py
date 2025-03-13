@@ -98,7 +98,9 @@ def test_torsion_angle_calculation():
     angle = calculate_torsion_angle(a1, a2, a3, a4)
 
     # The expected angle is pi/2 radians (90 degrees)
-    assert abs(angle - np.pi/2) < 1e-6, f"Expected angle close to pi/2 radians, got {angle}"
+    assert abs(angle - np.pi / 2) < 1e-6, (
+        f"Expected angle close to pi/2 radians, got {angle}"
+    )
 
     # Test with collinear points
     a1 = np.array([0.0, 0.0, 0.0])
