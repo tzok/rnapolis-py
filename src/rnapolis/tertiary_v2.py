@@ -273,7 +273,7 @@ class Residue:
         return ""
 
     @cached_property
-    def atoms(self) -> List[Atom]:
+    def atoms_list(self) -> List[Atom]:
         """Get a list of all atoms in this residue."""
         return [Atom(self.atoms.iloc[i], self.format) for i in range(len(self.atoms))]
 
