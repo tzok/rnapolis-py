@@ -1,8 +1,8 @@
 from functools import cached_property
-from typing import List, Optional, Dict, Any, Tuple, Union
+from typing import List, Optional
 
-import pandas as pd
 import numpy as np
+import pandas as pd
 
 
 class Structure:
@@ -272,19 +272,9 @@ class Residue:
         return ""
 
     @cached_property
-    def atoms_list(self) -> List[Atom]:
+    def atoms(self) -> List[Atom]:
         """Get a list of all atoms in this residue."""
         return [Atom(self.atoms.iloc[i], self.format) for i in range(len(self.atoms))]
-
-    @cached_property
-    def center_of_mass(self) -> np.ndarray:
-        """Calculate the center of mass of the residue."""
-        atoms = self.atoms_list
-        if not atoms:
-            return np.array([0.0, 0.0, 0.0])
-
-        coords = np.array([atom.coordinates for atom in atoms])
-        return np.mean(coords, axis=0)
 
     def find_atom(self, atom_name: str) -> Optional[Atom]:
         """
@@ -316,25 +306,6 @@ class Residue:
                 atoms_df = self.atoms[mask]
                 if len(atoms_df) > 0:
                     return Atom(atoms_df.iloc[0], self.format)
-        return None
-
-    def get_coordinates(self, atom_name: str) -> Optional[np.ndarray]:
-        """
-        Get the coordinates of a specific atom.
-
-        Parameters:
-        -----------
-        atom_name : str
-            Name of the atom
-
-        Returns:
-        --------
-        Optional[np.ndarray]
-            3D coordinates as a numpy array, or None if atom not found
-        """
-        atom = self.find_atom(atom_name)
-        if atom is not None:
-            return atom.coordinates
         return None
 
     def __str__(self) -> str:
