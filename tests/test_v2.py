@@ -82,65 +82,74 @@ def test_parse_4qln_formats(data_dir):
         assert pdb_id_to_name[res_id] == cif_id_to_name[res_id], (
             f"Residue name mismatch for {res_id}: PDB={pdb_id_to_name[res_id]}, mmCIF={cif_id_to_name[res_id]}"
         )
-    
+
     # Calculate torsion angles for both structures
     pdb_torsion_df = pdb_structure.calculate_torsion_angles()
     cif_torsion_df = cif_structure.calculate_torsion_angles()
-    
+
     # Check if torsion angle DataFrames have the same shape
     assert pdb_torsion_df.shape == cif_torsion_df.shape, (
         f"Different torsion angle DataFrame shapes: PDB={pdb_torsion_df.shape}, mmCIF={cif_torsion_df.shape}"
     )
-    
+
     # Sort both DataFrames by chain_id, residue_number, and insertion_code for consistent comparison
     pdb_torsion_df = pdb_torsion_df.sort_values(
         by=["chain_id", "residue_number", "insertion_code"]
     ).reset_index(drop=True)
-    
+
     cif_torsion_df = cif_torsion_df.sort_values(
         by=["chain_id", "residue_number", "insertion_code"]
     ).reset_index(drop=True)
-    
+
     # Compare residue identifiers in torsion angle DataFrames
     pd.testing.assert_series_equal(
-        pdb_torsion_df["chain_id"], cif_torsion_df["chain_id"], 
-        check_names=False, check_dtype=False
+        pdb_torsion_df["chain_id"],
+        cif_torsion_df["chain_id"],
+        check_names=False,
+        check_dtype=False,
     )
     pd.testing.assert_series_equal(
-        pdb_torsion_df["residue_number"], cif_torsion_df["residue_number"], 
-        check_names=False, check_dtype=False
+        pdb_torsion_df["residue_number"],
+        cif_torsion_df["residue_number"],
+        check_names=False,
+        check_dtype=False,
     )
     pd.testing.assert_series_equal(
-        pdb_torsion_df["residue_name"], cif_torsion_df["residue_name"], 
-        check_names=False, check_dtype=False
+        pdb_torsion_df["residue_name"],
+        cif_torsion_df["residue_name"],
+        check_names=False,
+        check_dtype=False,
     )
-    
+
     # Compare torsion angle values with a tolerance
     angle_columns = ["alpha", "beta", "gamma", "delta", "epsilon", "zeta", "chi"]
     for col in angle_columns:
         # Skip columns that might not exist in both DataFrames
         if col not in pdb_torsion_df.columns or col not in cif_torsion_df.columns:
             continue
-            
+
         # Get non-NaN values that exist in both DataFrames
         pdb_values = pdb_torsion_df[col]
         cif_values = cif_torsion_df[col]
-        
+
         # Check if the same values are NaN in both DataFrames
         assert pdb_values.isna().equals(cif_values.isna()), (
             f"Different NaN patterns in {col} angle"
         )
-        
+
         # Compare non-NaN values with tolerance
         mask = ~pdb_values.isna()
         if mask.any():
             pdb_non_nan = pdb_values[mask].values
             cif_non_nan = cif_values[mask].values
-            
+
             # Allow a small tolerance for floating-point differences
             np.testing.assert_allclose(
-                pdb_non_nan, cif_non_nan, rtol=1e-5, atol=1e-5,
-                err_msg=f"Torsion angle values for {col} don't match between PDB and mmCIF"
+                pdb_non_nan,
+                cif_non_nan,
+                rtol=1e-5,
+                atol=1e-5,
+                err_msg=f"Torsion angle values for {col} don't match between PDB and mmCIF",
             )
 
 
