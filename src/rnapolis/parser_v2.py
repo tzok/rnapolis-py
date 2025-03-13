@@ -1,4 +1,6 @@
 import pandas as pd
+from mmcif.io.IoAdapterPy import IoAdapterPy
+from typing import Union, IO, List, Dict, Any
 
 
 def parse_pdb_atoms(content: str) -> pd.DataFrame:
@@ -83,4 +85,75 @@ def parse_pdb_atoms(content: str) -> pd.DataFrame:
     # Add format attribute to the DataFrame
     df.attrs["format"] = "PDB"
 
+    return df
+
+
+def parse_cif_atoms(content: Union[str, IO[str]]) -> pd.DataFrame:
+    """
+    Parse mmCIF file content and extract atom_site records into a pandas DataFrame.
+    
+    Parameters:
+    -----------
+    content : Union[str, IO[str]]
+        Content of a mmCIF file as a string or file-like object
+        
+    Returns:
+    --------
+    pd.DataFrame
+        DataFrame containing parsed atom_site records with columns corresponding to mmCIF format
+    """
+    adapter = IoAdapterPy()
+    
+    # Handle both string content and file-like objects
+    if isinstance(content, str):
+        # Create a temporary file to use with the adapter
+        import tempfile
+        with tempfile.NamedTemporaryFile(mode='w+', suffix='.cif') as temp_file:
+            temp_file.write(content)
+            temp_file.flush()
+            data = adapter.readFile(temp_file.name)
+    else:
+        # Assume it's a file-like object with a name attribute
+        data = adapter.readFile(content.name)
+    
+    # Get the atom_site category
+    category = data[0].getObj("atom_site")
+    
+    if not category:
+        # Return empty DataFrame if no atom_site category found
+        return pd.DataFrame()
+    
+    # Extract attribute names and data rows
+    attributes = category.getAttributeList()
+    rows = category.getRowList()
+    
+    # Create a list of dictionaries for each atom
+    records = [dict(zip(attributes, row)) for row in rows]
+    
+    # Create DataFrame from records
+    df = pd.DataFrame(records)
+    
+    # Convert numeric columns to appropriate types
+    numeric_columns = [
+        "id", "auth_seq_id", "Cartn_x", "Cartn_y", "Cartn_z", 
+        "occupancy", "B_iso_or_equiv", "pdbx_formal_charge"
+    ]
+    
+    for col in numeric_columns:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+    
+    # Convert categorical columns
+    categorical_columns = [
+        "group_PDB", "type_symbol", "label_atom_id", "label_comp_id", 
+        "label_asym_id", "auth_atom_id", "auth_comp_id", "auth_asym_id"
+    ]
+    
+    for col in categorical_columns:
+        if col in df.columns:
+            df[col] = df[col].astype("category")
+    
+    # Add format attribute to the DataFrame
+    df.attrs["format"] = "mmCIF"
+    
     return df
