@@ -309,7 +309,6 @@ class Residue:
                     return Atom(atoms_df.iloc[0], self.format)
         return None
 
-
     def __str__(self) -> str:
         """String representation of the residue."""
         # Start with chain ID and residue name
