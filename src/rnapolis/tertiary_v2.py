@@ -308,7 +308,7 @@ class Residue:
                 if len(atoms_df) > 0:
                     return Atom(atoms_df.iloc[0], self.format)
         return None
-        
+
     def get_coordinates(self, atom_name: str) -> Optional[np.ndarray]:
         """
         Get the coordinates of a specific atom.
@@ -327,14 +327,14 @@ class Residue:
         if atom is not None:
             return atom.coordinates
         return None
-        
+
     @cached_property
     def center_of_mass(self) -> np.ndarray:
         """Calculate the center of mass of the residue."""
         atoms = self.atoms_list
         if not atoms:
             return np.array([0.0, 0.0, 0.0])
-        
+
         coords = np.array([atom.coordinates for atom in atoms])
         return np.mean(coords, axis=0)
 
