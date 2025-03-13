@@ -9,15 +9,17 @@ import pandas as pd
 AVERAGE_OXYGEN_PHOSPHORUS_DISTANCE_COVALENT = 1.6
 
 
-def calculate_torsion_angle(a1: np.ndarray, a2: np.ndarray, a3: np.ndarray, a4: np.ndarray) -> float:
+def calculate_torsion_angle(
+    a1: np.ndarray, a2: np.ndarray, a3: np.ndarray, a4: np.ndarray
+) -> float:
     """
     Calculate the torsion angle between four points in 3D space.
-    
+
     Parameters:
     -----------
     a1, a2, a3, a4 : np.ndarray
         3D coordinates of the four atoms
-        
+
     Returns:
     --------
     float
@@ -27,30 +29,30 @@ def calculate_torsion_angle(a1: np.ndarray, a2: np.ndarray, a3: np.ndarray, a4: 
     v1 = a2 - a1
     v2 = a3 - a2
     v3 = a4 - a3
-    
+
     # Calculate normal vectors
     n1 = np.cross(v1, v2)
     n2 = np.cross(v2, v3)
-    
+
     # Normalize normal vectors
     n1_norm = np.linalg.norm(n1)
     n2_norm = np.linalg.norm(n2)
-    
+
     # Check for collinearity
     if n1_norm < 1e-6 or n2_norm < 1e-6:
-        return float('nan')
-    
+        return float("nan")
+
     n1 = n1 / n1_norm
     n2 = n2 / n2_norm
-    
+
     # Calculate the angle using dot product
     m1 = np.cross(n1, v2 / np.linalg.norm(v2))
     x = np.dot(n1, n2)
     y = np.dot(m1, n2)
-    
+
     # Convert to degrees
     angle = np.degrees(np.arctan2(y, x))
-    
+
     return angle
 
 
@@ -149,11 +151,11 @@ class Structure:
             residues.append(Residue(residue_df))
 
         return residues
-        
+
     def find_connected_residues(self) -> List[List[Residue]]:
         """
         Find segments of connected residues in the structure.
-        
+
         Returns:
         --------
         List[List[Residue]]
@@ -166,16 +168,18 @@ class Structure:
             if chain_id not in residues_by_chain:
                 residues_by_chain[chain_id] = []
             residues_by_chain[chain_id].append(residue)
-        
+
         # Sort residues in each chain by residue number
         for chain_id in residues_by_chain:
-            residues_by_chain[chain_id].sort(key=lambda r: (r.residue_number, r.insertion_code or ''))
-        
+            residues_by_chain[chain_id].sort(
+                key=lambda r: (r.residue_number, r.insertion_code or "")
+            )
+
         # Find connected segments in each chain
         segments = []
         for chain_id, chain_residues in residues_by_chain.items():
             current_segment = []
-            
+
             for i, residue in enumerate(chain_residues):
                 if not current_segment:
                     # Start a new segment
@@ -187,20 +191,22 @@ class Structure:
                         current_segment.append(residue)
                     else:
                         # End the current segment and start a new one
-                        if len(current_segment) > 1:  # Only add segments with at least 2 residues
+                        if (
+                            len(current_segment) > 1
+                        ):  # Only add segments with at least 2 residues
                             segments.append(current_segment)
                         current_segment = [residue]
-            
+
             # Add the last segment if it has at least 2 residues
             if len(current_segment) > 1:
                 segments.append(current_segment)
-        
+
         return segments
-    
+
     def calculate_torsion_angles(self) -> pd.DataFrame:
         """
         Calculate torsion angles for all connected residues in the structure.
-        
+
         Returns:
         --------
         pd.DataFrame
@@ -208,51 +214,51 @@ class Structure:
         """
         # Find connected segments
         segments = self.find_connected_residues()
-        
+
         # Prepare data for the DataFrame
         data = []
-        
+
         # Define the torsion angles to calculate
         torsion_definitions = {
-            'alpha': [('O3\'', -1), ('P', 0), ('O5\'', 0), ('C5\'', 0)],
-            'beta': [('P', 0), ('O5\'', 0), ('C5\'', 0), ('C4\'', 0)],
-            'gamma': [('O5\'', 0), ('C5\'', 0), ('C4\'', 0), ('C3\'', 0)],
-            'delta': [('C5\'', 0), ('C4\'', 0), ('C3\'', 0), ('O3\'', 0)],
-            'epsilon': [('C4\'', 0), ('C3\'', 0), ('O3\'', 0), ('P', 1)],
-            'zeta': [('C3\'', 0), ('O3\'', 0), ('P', 1), ('O5\'', 1)],
-            'chi': None  # Will be handled separately due to purine/pyrimidine difference
+            "alpha": [("O3'", -1), ("P", 0), ("O5'", 0), ("C5'", 0)],
+            "beta": [("P", 0), ("O5'", 0), ("C5'", 0), ("C4'", 0)],
+            "gamma": [("O5'", 0), ("C5'", 0), ("C4'", 0), ("C3'", 0)],
+            "delta": [("C5'", 0), ("C4'", 0), ("C3'", 0), ("O3'", 0)],
+            "epsilon": [("C4'", 0), ("C3'", 0), ("O3'", 0), ("P", 1)],
+            "zeta": [("C3'", 0), ("O3'", 0), ("P", 1), ("O5'", 1)],
+            "chi": None,  # Will be handled separately due to purine/pyrimidine difference
         }
-        
+
         # Process each segment
         for segment in segments:
             for i, residue in enumerate(segment):
                 # Skip first and last residue for some angles
                 if i == 0 or i == len(segment) - 1:
                     continue
-                
+
                 # Prepare row data
                 row = {
-                    'chain_id': residue.chain_id,
-                    'residue_number': residue.residue_number,
-                    'insertion_code': residue.insertion_code,
-                    'residue_name': residue.residue_name
+                    "chain_id": residue.chain_id,
+                    "residue_number": residue.residue_number,
+                    "insertion_code": residue.insertion_code,
+                    "residue_name": residue.residue_name,
                 }
-                
+
                 # Calculate standard torsion angles
                 for angle_name, atoms_def in torsion_definitions.items():
-                    if angle_name == 'chi':
+                    if angle_name == "chi":
                         continue  # Skip chi for now
-                        
-                    if angle_name == 'alpha' and i == 1:
+
+                    if angle_name == "alpha" and i == 1:
                         continue  # Skip alpha for the second residue
-                        
-                    if angle_name in ['epsilon', 'zeta'] and i == len(segment) - 2:
+
+                    if angle_name in ["epsilon", "zeta"] and i == len(segment) - 2:
                         continue  # Skip epsilon and zeta for the second-to-last residue
-                    
+
                     # Get the atoms for this angle
                     atoms = []
                     valid = True
-                    
+
                     for atom_name, offset in atoms_def:
                         res_idx = i + offset
                         if 0 <= res_idx < len(segment):
@@ -265,64 +271,77 @@ class Structure:
                         else:
                             valid = False
                             break
-                    
+
                     # Calculate the angle if all atoms were found
                     if valid and len(atoms) == 4:
-                        angle = calculate_torsion_angle(atoms[0], atoms[1], atoms[2], atoms[3])
+                        angle = calculate_torsion_angle(
+                            atoms[0], atoms[1], atoms[2], atoms[3]
+                        )
                         row[angle_name] = angle
                     else:
                         row[angle_name] = None
-                
+
                 # Calculate chi angle based on residue type
                 # Pyrimidines: O4'-C1'-N1-C2
                 # Purines: O4'-C1'-N9-C4
-                purine_bases = ['A', 'G', 'DA', 'DG']
-                pyrimidine_bases = ['C', 'U', 'T', 'DC', 'DT']
-                
+                purine_bases = ["A", "G", "DA", "DG"]
+                pyrimidine_bases = ["C", "U", "T", "DC", "DT"]
+
                 o4_prime = residue.find_atom("O4'")
                 c1_prime = residue.find_atom("C1'")
-                
+
                 if o4_prime is not None and c1_prime is not None:
                     if residue.residue_name in purine_bases:
                         n9 = residue.find_atom("N9")
                         c4 = residue.find_atom("C4")
                         if n9 is not None and c4 is not None:
                             chi = calculate_torsion_angle(
-                                o4_prime.coordinates, 
-                                c1_prime.coordinates, 
-                                n9.coordinates, 
-                                c4.coordinates
+                                o4_prime.coordinates,
+                                c1_prime.coordinates,
+                                n9.coordinates,
+                                c4.coordinates,
                             )
-                            row['chi'] = chi
+                            row["chi"] = chi
                     elif residue.residue_name in pyrimidine_bases:
                         n1 = residue.find_atom("N1")
                         c2 = residue.find_atom("C2")
                         if n1 is not None and c2 is not None:
                             chi = calculate_torsion_angle(
-                                o4_prime.coordinates, 
-                                c1_prime.coordinates, 
-                                n1.coordinates, 
-                                c2.coordinates
+                                o4_prime.coordinates,
+                                c1_prime.coordinates,
+                                n1.coordinates,
+                                c2.coordinates,
                             )
-                            row['chi'] = chi
-                
+                            row["chi"] = chi
+
                 data.append(row)
-        
+
         # Create DataFrame
         if not data:
             # Return empty DataFrame with correct columns
-            return pd.DataFrame(columns=[
-                'chain_id', 'residue_number', 'insertion_code', 'residue_name',
-                'alpha', 'beta', 'gamma', 'delta', 'epsilon', 'zeta', 'chi'
-            ])
-        
+            return pd.DataFrame(
+                columns=[
+                    "chain_id",
+                    "residue_number",
+                    "insertion_code",
+                    "residue_name",
+                    "alpha",
+                    "beta",
+                    "gamma",
+                    "delta",
+                    "epsilon",
+                    "zeta",
+                    "chi",
+                ]
+            )
+
         df = pd.DataFrame(data)
-        
+
         # Ensure all angle columns exist
-        for angle in ['alpha', 'beta', 'gamma', 'delta', 'epsilon', 'zeta', 'chi']:
+        for angle in ["alpha", "beta", "gamma", "delta", "epsilon", "zeta", "chi"]:
             if angle not in df.columns:
                 df[angle] = None
-        
+
         return df
 
 
