@@ -1,8 +1,7 @@
 import pandas as pd
-from typing import List, Dict, Any
 
 
-def parse_pdb(content: str) -> pd.DataFrame:
+def parse_pdb_atoms(content: str) -> pd.DataFrame:
     """
     Parse PDB file content and extract ATOM and HETATM records into a pandas DataFrame.
 
@@ -80,5 +79,8 @@ def parse_pdb(content: str) -> pd.DataFrame:
     categorical_columns = ["record_type", "name", "resName", "chainID", "element"]
     for col in categorical_columns:
         df[col] = df[col].astype("category")
+    
+    # Add format attribute to the DataFrame
+    df.attrs['format'] = 'PDB'
 
     return df
