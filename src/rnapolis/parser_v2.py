@@ -91,7 +91,15 @@ def parse_pdb_atoms(content: Union[str, IO[str]]) -> pd.DataFrame:
         df[col] = pd.to_numeric(df[col], errors="coerce")
 
     # Convert categorical columns
-    categorical_columns = ["record_type", "name", "resName", "chainID", "element"]
+    categorical_columns = [
+        "record_type",
+        "name",
+        "altLoc",
+        "resName",
+        "chainID",
+        "element",
+        "charge",
+    ]
     for col in categorical_columns:
         df[col] = df[col].astype("category")
 
