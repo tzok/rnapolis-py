@@ -1,5 +1,5 @@
 from functools import cached_property
-from typing import List, Optional
+from typing import List, Optional, Union
 import string
 
 import numpy as np
@@ -249,16 +249,16 @@ class Residue:
         return 0
 
     @cached_property
-    def insertion_code(self) -> str:
+    def insertion_code(self) -> Optional[str]:
         """Get the insertion code, if any."""
         if self.format == "PDB":
             icode = self.atoms["iCode"].iloc[0]
-            return icode if pd.notna(icode) else ""
+            return icode if pd.notna(icode) else None
         elif self.format == "mmCIF":
             if "pdbx_PDB_ins_code" in self.atoms.columns:
                 icode = self.atoms["pdbx_PDB_ins_code"].iloc[0]
-                return icode if pd.notna(icode) else ""
-        return ""
+                return icode if pd.notna(icode) else None
+        return None
 
     @cached_property
     def residue_name(self) -> str:
@@ -325,7 +325,7 @@ class Residue:
         builder += f"{self.residue_number}"
 
         # Add insertion code if present
-        if self.insertion_code:
+        if self.insertion_code is not None:
             builder += f"^{self.insertion_code}"
 
         return builder

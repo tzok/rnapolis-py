@@ -39,6 +39,7 @@ def parse_pdb_atoms(content: Union[str, IO[str]]) -> pd.DataFrame:
             continue
 
         # Parse fields according to PDB format specification
+        icode = line[26:27].strip()
         record = {
             "record_type": record_type,
             "serial": line[6:11].strip(),
@@ -47,7 +48,7 @@ def parse_pdb_atoms(content: Union[str, IO[str]]) -> pd.DataFrame:
             "resName": line[17:20].strip(),
             "chainID": line[21:22].strip(),
             "resSeq": line[22:26].strip(),
-            "iCode": line[26:27].strip(),
+            "iCode": None if not icode else icode,  # Convert empty string to None
             "x": line[30:38].strip(),
             "y": line[38:46].strip(),
             "z": line[46:54].strip(),
@@ -141,7 +142,16 @@ def parse_cif_atoms(content: Union[str, IO[str]]) -> pd.DataFrame:
     rows = category.getRowList()
 
     # Create a list of dictionaries for each atom
-    records = [dict(zip(attributes, row)) for row in rows]
+    records = []
+    for row in rows:
+        record = dict(zip(attributes, row))
+        
+        # Convert "?" or "." in insertion code to None
+        if "pdbx_PDB_ins_code" in record:
+            if record["pdbx_PDB_ins_code"] in ["?", ".", ""]:
+                record["pdbx_PDB_ins_code"] = None
+                
+        records.append(record)
 
     # Create DataFrame from records
     df = pd.DataFrame(records)
