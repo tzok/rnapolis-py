@@ -80,3 +80,73 @@ def test_parse_4qln_formats(data_dir):
         assert pdb_id_to_name[res_id] == cif_id_to_name[res_id], (
             f"Residue name mismatch for {res_id}: PDB={pdb_id_to_name[res_id]}, mmCIF={cif_id_to_name[res_id]}"
         )
+
+
+def test_torsion_angle_calculation():
+    """Test the torsion angle calculation function."""
+    # Define four points that form a known torsion angle
+    a1 = np.array([1.0, 0.0, 0.0])
+    a2 = np.array([0.0, 0.0, 0.0])
+    a3 = np.array([0.0, 1.0, 0.0])
+    a4 = np.array([0.0, 1.0, 1.0])
+    
+    # Calculate the torsion angle
+    from rnapolis.tertiary_v2 import calculate_torsion_angle
+    angle = calculate_torsion_angle(a1, a2, a3, a4)
+    
+    # The expected angle is 90 degrees
+    assert abs(angle - 90.0) < 1e-6, f"Expected angle close to 90 degrees, got {angle}"
+    
+    # Test with collinear points
+    a1 = np.array([0.0, 0.0, 0.0])
+    a2 = np.array([1.0, 0.0, 0.0])
+    a3 = np.array([2.0, 0.0, 0.0])
+    a4 = np.array([3.0, 0.0, 0.0])
+    
+    angle = calculate_torsion_angle(a1, a2, a3, a4)
+    assert np.isnan(angle), f"Expected NaN for collinear points, got {angle}"
+
+
+def test_connected_residues_and_torsion_angles(data_dir):
+    """Test finding connected residues and calculating torsion angles."""
+    # Load PDB file
+    pdb_path = os.path.join(data_dir, "4qln.pdb")
+    
+    # Skip test if file doesn't exist
+    if not os.path.exists(pdb_path):
+        pytest.skip(f"Test file not found: {pdb_path}")
+    
+    # Parse PDB file
+    with open(pdb_path, "r") as pdb_file:
+        pdb_atoms = parse_pdb_atoms(pdb_file)
+    
+    # Create structure
+    structure = Structure(pdb_atoms)
+    
+    # Find connected residues
+    segments = structure.find_connected_residues()
+    
+    # Check that we found at least one segment
+    assert len(segments) > 0, "No connected residue segments found"
+    
+    # Check that each segment has at least 2 residues
+    for segment in segments:
+        assert len(segment) >= 2, f"Segment has fewer than 2 residues: {segment}"
+    
+    # Calculate torsion angles
+    torsion_df = structure.calculate_torsion_angles()
+    
+    # Check that the DataFrame has the expected columns
+    expected_columns = [
+        'chain_id', 'residue_number', 'insertion_code', 'residue_name',
+        'alpha', 'beta', 'gamma', 'delta', 'epsilon', 'zeta', 'chi'
+    ]
+    for col in expected_columns:
+        assert col in torsion_df.columns, f"Expected column {col} not found in torsion angles DataFrame"
+    
+    # Check that we have some torsion angle values
+    assert len(torsion_df) > 0, "No torsion angles calculated"
+    
+    # Check that at least some angles are not null
+    for angle in ['alpha', 'beta', 'gamma', 'delta', 'epsilon', 'zeta', 'chi']:
+        assert torsion_df[angle].notna().any(), f"No valid {angle} angles calculated"
