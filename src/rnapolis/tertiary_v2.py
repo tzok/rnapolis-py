@@ -49,7 +49,7 @@ class Structure:
             groupby_cols = [col for col in groupby_cols if col in self.atoms.columns]
 
             # Group atoms by residue
-            grouped = self.atoms.groupby(groupby_cols, dropna=False)
+            grouped = self.atoms.groupby(groupby_cols, dropna=False, observed=False)
 
         elif self.format == "mmCIF":
             # Prefer auth_* columns if they exist
@@ -71,7 +71,7 @@ class Structure:
                     groupby_cols.append("pdbx_PDB_ins_code")
 
             # Group atoms by residue
-            grouped = self.atoms.groupby(groupby_cols, dropna=False)
+            grouped = self.atoms.groupby(groupby_cols, dropna=False, observed=False)
 
         else:
             # For unknown formats, return an empty list
