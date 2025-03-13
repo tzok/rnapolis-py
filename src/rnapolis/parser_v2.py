@@ -4,14 +4,14 @@ import pandas as pd
 from mmcif.io.IoAdapterPy import IoAdapterPy
 
 
-def parse_pdb_atoms(content: str) -> pd.DataFrame:
+def parse_pdb_atoms(content: Union[str, IO[str]]) -> pd.DataFrame:
     """
     Parse PDB file content and extract ATOM and HETATM records into a pandas DataFrame.
 
     Parameters:
     -----------
-    content : str
-        Content of a PDB file as a string
+    content : Union[str, IO[str]]
+        Content of a PDB file as a string or file-like object
 
     Returns:
     --------
@@ -19,8 +19,19 @@ def parse_pdb_atoms(content: str) -> pd.DataFrame:
         DataFrame containing parsed ATOM and HETATM records with columns corresponding to PDB format
     """
     records = []
+    
+    # Handle both string content and file-like objects
+    if isinstance(content, str):
+        lines = content.splitlines()
+    else:
+        # Read all lines from the file-like object
+        content.seek(0)  # Ensure we're at the beginning of the file
+        lines = content.readlines()
+        # Convert bytes to string if needed
+        if isinstance(lines[0], bytes):
+            lines = [line.decode('utf-8') for line in lines]
 
-    for line in content.splitlines():
+    for line in lines:
         record_type = line[:6].strip()
 
         # Only process ATOM and HETATM records
