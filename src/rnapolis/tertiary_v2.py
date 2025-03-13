@@ -51,19 +51,19 @@ class Structure:
             grouped = self.atoms.groupby(groupby_cols, dropna=False)
 
         elif self.format == "mmCIF":
-            # Prefer label_* columns if they exist
+            # Prefer auth_* columns if they exist
             if (
-                "label_asym_id" in self.atoms.columns
-                and "label_seq_id" in self.atoms.columns
+                "auth_asym_id" in self.atoms.columns
+                and "auth_seq_id" in self.atoms.columns
             ):
-                groupby_cols = ["label_asym_id", "label_seq_id"]
+                groupby_cols = ["auth_asym_id", "auth_seq_id"]
 
                 # Add insertion code if it exists
                 if "pdbx_PDB_ins_code" in self.atoms.columns:
                     groupby_cols.append("pdbx_PDB_ins_code")
             else:
-                # Fall back to auth_* columns
-                groupby_cols = ["auth_asym_id", "auth_seq_id"]
+                # Fall back to label_* columns
+                groupby_cols = ["label_asym_id", "label_seq_id"]
 
                 # Add insertion code if it exists
                 if "pdbx_PDB_ins_code" in self.atoms.columns:
@@ -128,10 +128,10 @@ class Residue:
         if self.format == "PDB":
             return self.atoms["chainID"].iloc[0]
         elif self.format == "mmCIF":
-            if "label_asym_id" in self.atoms.columns:
-                return self.atoms["label_asym_id"].iloc[0]
-            else:
+            if "auth_asym_id" in self.atoms.columns:
                 return self.atoms["auth_asym_id"].iloc[0]
+            else:
+                return self.atoms["label_asym_id"].iloc[0]
         return ""
 
     @cached_property
@@ -140,10 +140,10 @@ class Residue:
         if self.format == "PDB":
             return int(self.atoms["resSeq"].iloc[0])
         elif self.format == "mmCIF":
-            if "label_seq_id" in self.atoms.columns:
-                return int(self.atoms["label_seq_id"].iloc[0])
-            else:
+            if "auth_seq_id" in self.atoms.columns:
                 return int(self.atoms["auth_seq_id"].iloc[0])
+            else:
+                return int(self.atoms["label_seq_id"].iloc[0])
         return 0
 
     @cached_property
@@ -164,10 +164,10 @@ class Residue:
         if self.format == "PDB":
             return self.atoms["resName"].iloc[0]
         elif self.format == "mmCIF":
-            if "label_comp_id" in self.atoms.columns:
-                return self.atoms["label_comp_id"].iloc[0]
-            else:
+            if "auth_comp_id" in self.atoms.columns:
                 return self.atoms["auth_comp_id"].iloc[0]
+            else:
+                return self.atoms["label_comp_id"].iloc[0]
         return ""
 
     @cached_property
@@ -201,13 +201,13 @@ class Residue:
             if len(atoms) > 0:
                 return atoms.iloc[0]
         elif self.format == "mmCIF":
-            if "label_atom_id" in self.atoms.columns:
-                mask = self.atoms["label_atom_id"] == atom_name
+            if "auth_atom_id" in self.atoms.columns:
+                mask = self.atoms["auth_atom_id"] == atom_name
                 atoms = self.atoms[mask]
                 if len(atoms) > 0:
                     return atoms.iloc[0]
             else:
-                mask = self.atoms["auth_atom_id"] == atom_name
+                mask = self.atoms["label_atom_id"] == atom_name
                 atoms = self.atoms[mask]
                 if len(atoms) > 0:
                     return atoms.iloc[0]
