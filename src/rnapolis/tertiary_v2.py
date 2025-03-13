@@ -5,6 +5,9 @@ import string
 import numpy as np
 import pandas as pd
 
+# Constants
+AVERAGE_OXYGEN_PHOSPHORUS_DISTANCE_COVALENT = 1.6
+
 
 class Structure:
     """
@@ -333,3 +336,30 @@ class Residue:
     def __repr__(self) -> str:
         """Detailed string representation of the residue."""
         return f"Residue({self.__str__()}, {len(self.atoms)} atoms)"
+        
+    def is_connected(self, next_residue_candidate: "Residue") -> bool:
+        """
+        Check if this residue is connected to the next residue candidate.
+        
+        The connection is determined by the distance between the O3' atom of this residue
+        and the P atom of the next residue. If the distance is less than 1.5 times the
+        average O-P covalent bond distance, the residues are considered connected.
+        
+        Parameters:
+        -----------
+        next_residue_candidate : Residue
+            The residue to check for connection
+            
+        Returns:
+        --------
+        bool
+            True if the residues are connected, False otherwise
+        """
+        o3p = self.find_atom("O3'")
+        p = next_residue_candidate.find_atom("P")
+        
+        if o3p is not None and p is not None:
+            distance = np.linalg.norm(o3p.coordinates - p.coordinates).item()
+            return distance < 1.5 * AVERAGE_OXYGEN_PHOSPHORUS_DISTANCE_COVALENT
+            
+        return False
