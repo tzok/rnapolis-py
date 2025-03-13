@@ -316,18 +316,18 @@ class Residue:
             builder = f"{self.residue_name}"
         else:
             builder = f"{self.chain_id}.{self.residue_name}"
-        
+
         # Add a separator if the residue name ends with a digit
         if len(self.residue_name) > 0 and self.residue_name[-1] in string.digits:
             builder += "/"
-            
+
         # Add residue number
         builder += f"{self.residue_number}"
-        
+
         # Add insertion code if present
         if self.insertion_code:
             builder += f"^{self.insertion_code}"
-            
+
         return builder
 
     def __repr__(self) -> str:
