@@ -145,12 +145,12 @@ def parse_cif_atoms(content: Union[str, IO[str]]) -> pd.DataFrame:
     records = []
     for row in rows:
         record = dict(zip(attributes, row))
-        
+
         # Convert "?" or "." in insertion code to None
         if "pdbx_PDB_ins_code" in record:
             if record["pdbx_PDB_ins_code"] in ["?", ".", ""]:
                 record["pdbx_PDB_ins_code"] = None
-                
+
         records.append(record)
 
     # Create DataFrame from records
