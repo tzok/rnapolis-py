@@ -84,8 +84,8 @@ def test_parse_4qln_formats(data_dir):
         )
 
     # Calculate torsion angles for both structures
-    pdb_torsion_df = pdb_structure.calculate_torsion_angles()
-    cif_torsion_df = cif_structure.calculate_torsion_angles()
+    pdb_torsion_df = pdb_structure.torsion_angles
+    cif_torsion_df = cif_structure.torsion_angles
 
     # Check if torsion angle DataFrames have the same shape
     assert pdb_torsion_df.shape == cif_torsion_df.shape, (
@@ -198,7 +198,7 @@ def test_connected_residues_and_torsion_angles(data_dir):
     structure = Structure(pdb_atoms)
 
     # Find connected residues
-    segments = structure.find_connected_residues()
+    segments = structure.connected_residues
 
     # Check that we found at least one segment
     assert len(segments) > 0, "No connected residue segments found"
@@ -208,7 +208,7 @@ def test_connected_residues_and_torsion_angles(data_dir):
         assert len(segment) >= 2, f"Segment has fewer than 2 residues: {segment}"
 
     # Calculate torsion angles
-    torsion_df = structure.calculate_torsion_angles()
+    torsion_df = structure.torsion_angles
 
     # Check that the DataFrame has the expected columns
     expected_columns = [

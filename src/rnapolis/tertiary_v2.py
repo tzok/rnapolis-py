@@ -152,7 +152,8 @@ class Structure:
 
         return residues
 
-    def find_connected_residues(self) -> List[List["Residue"]]:
+    @cached_property
+    def connected_residues(self) -> List[List["Residue"]]:
         """
         Find segments of connected residues in the structure.
 
@@ -180,7 +181,7 @@ class Structure:
         for chain_id, chain_residues in residues_by_chain.items():
             current_segment = []
 
-            for i, residue in enumerate(chain_residues):
+            for residue in chain_residues:
                 if not current_segment:
                     # Start a new segment
                     current_segment.append(residue)
@@ -203,7 +204,8 @@ class Structure:
 
         return segments
 
-    def calculate_torsion_angles(self) -> pd.DataFrame:
+    @cached_property
+    def torsion_angles(self) -> pd.DataFrame:
         """
         Calculate torsion angles for all connected residues in the structure.
 
@@ -213,7 +215,7 @@ class Structure:
             DataFrame containing torsion angle values for each residue
         """
         # Find connected segments
-        segments = self.find_connected_residues()
+        segments = self.connected_residues
 
         # Prepare data for the DataFrame
         data = []
@@ -379,7 +381,7 @@ class Atom:
         self.data = atom_data
         self.format = format
 
-    @property
+    @cached_property
     def name(self) -> str:
         """Get the atom name."""
         if self.format == "PDB":
@@ -391,7 +393,7 @@ class Atom:
                 return self.data["label_atom_id"]
         return ""
 
-    @property
+    @cached_property
     def element(self) -> str:
         """Get the element symbol."""
         if self.format == "PDB":
@@ -401,7 +403,7 @@ class Atom:
                 return self.data["type_symbol"]
         return ""
 
-    @property
+    @cached_property
     def coordinates(self) -> np.ndarray:
         """Get the 3D coordinates of the atom."""
         if self.format == "PDB":
@@ -412,7 +414,7 @@ class Atom:
             )
         return np.array([0.0, 0.0, 0.0])
 
-    @property
+    @cached_property
     def occupancy(self) -> float:
         """Get the occupancy value."""
         if self.format == "PDB":
@@ -430,7 +432,7 @@ class Atom:
                 )
         return 1.0
 
-    @property
+    @cached_property
     def temperature_factor(self) -> float:
         """Get the temperature factor (B-factor)."""
         if self.format == "PDB":
@@ -563,31 +565,6 @@ class Residue:
                     return Atom(atoms_df.iloc[0], self.format)
         return None
 
-    def __str__(self) -> str:
-        """String representation of the residue."""
-        # Start with chain ID and residue name
-        if self.chain_id.isspace() or not self.chain_id:
-            builder = f"{self.residue_name}"
-        else:
-            builder = f"{self.chain_id}.{self.residue_name}"
-
-        # Add a separator if the residue name ends with a digit
-        if len(self.residue_name) > 0 and self.residue_name[-1] in string.digits:
-            builder += "/"
-
-        # Add residue number
-        builder += f"{self.residue_number}"
-
-        # Add insertion code if present
-        if self.insertion_code is not None:
-            builder += f"^{self.insertion_code}"
-
-        return builder
-
-    def __repr__(self) -> str:
-        """Detailed string representation of the residue."""
-        return f"Residue({self.__str__()}, {len(self.atoms)} atoms)"
-
     def is_connected(self, next_residue_candidate: "Residue") -> bool:
         """
         Check if this residue is connected to the next residue candidate.
@@ -614,3 +591,28 @@ class Residue:
             return distance < 1.5 * AVERAGE_OXYGEN_PHOSPHORUS_DISTANCE_COVALENT
 
         return False
+
+    def __str__(self) -> str:
+        """String representation of the residue."""
+        # Start with chain ID and residue name
+        if self.chain_id.isspace() or not self.chain_id:
+            builder = f"{self.residue_name}"
+        else:
+            builder = f"{self.chain_id}.{self.residue_name}"
+
+        # Add a separator if the residue name ends with a digit
+        if len(self.residue_name) > 0 and self.residue_name[-1] in string.digits:
+            builder += "/"
+
+        # Add residue number
+        builder += f"{self.residue_number}"
+
+        # Add insertion code if present
+        if self.insertion_code is not None:
+            builder += f"^{self.insertion_code}"
+
+        return builder
+
+    def __repr__(self) -> str:
+        """Detailed string representation of the residue."""
+        return f"Residue({self.__str__()}, {len(self.atoms)} atoms)"
