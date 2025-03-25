@@ -154,7 +154,7 @@ def compare_atom_names(structures: List[Tuple[str, Structure]]) -> Dict:
     """
     # Dictionary to store atom names for each residue position across all structures
     atom_names = defaultdict(dict)
-    
+
     # Map of residue keys to residue objects for later reference
     residue_objects = defaultdict(dict)
 
@@ -187,7 +187,7 @@ def find_atom_inconsistencies(atom_names: Dict) -> Dict:
     for key, atoms_by_file in atom_names.items():
         # Get all atom sets
         all_atom_sets = list(atoms_by_file.values())
-        
+
         # If there are at least two structures to compare
         if len(all_atom_sets) >= 2:
             # Check if all atom sets are the same
@@ -200,7 +200,9 @@ def find_atom_inconsistencies(atom_names: Dict) -> Dict:
     return inconsistencies
 
 
-def print_atom_inconsistencies(inconsistencies: Dict, residue_objects: Dict, file_paths: List[str]) -> None:
+def print_atom_inconsistencies(
+    inconsistencies: Dict, residue_objects: Dict, file_paths: List[str]
+) -> None:
     """
     Print atom name inconsistencies in a tabular format.
 
@@ -214,7 +216,9 @@ def print_atom_inconsistencies(inconsistencies: Dict, residue_objects: Dict, fil
         List of file paths to ensure consistent order in output
     """
     if not inconsistencies:
-        print("No atom name inconsistencies found. All residues have the same atoms across structures.")
+        print(
+            "No atom name inconsistencies found. All residues have the same atoms across structures."
+        )
         return
 
     # Get base file names for display
@@ -230,24 +234,28 @@ def print_atom_inconsistencies(inconsistencies: Dict, residue_objects: Dict, fil
     for key in sorted_keys:
         atoms_by_file = inconsistencies[key]
         position = format_residue_key(key)
-        
+
         # Get residue name for this position
-        residue_name = residue_objects[key][file_paths[0]].residue_name if key in residue_objects and file_paths[0] in residue_objects[key] else "Unknown"
-        
+        residue_name = (
+            residue_objects[key][file_paths[0]].residue_name
+            if key in residue_objects and file_paths[0] in residue_objects[key]
+            else "Unknown"
+        )
+
         print(f"\nResidue {position} ({residue_name}):")
-        
+
         # Find all unique atoms across all files
         all_atoms = set()
         for atom_set in atoms_by_file.values():
             all_atoms.update(atom_set)
-        
+
         # Sort atoms for consistent display
         sorted_atoms = sorted(all_atoms)
-        
+
         # Print header row with file names
         print(f"{'Atom':10} | " + " | ".join(f"{name:15}" for name in base_names))
         print("-" * (12 + 19 * len(base_names)))
-        
+
         # Print each atom and whether it's present in each file
         for atom in sorted_atoms:
             row = [atom]
@@ -256,7 +264,7 @@ def print_atom_inconsistencies(inconsistencies: Dict, residue_objects: Dict, fil
                     row.append("✓")
                 else:
                     row.append("✗")
-            
+
             print(f"{row[0]:10} | " + " | ".join(f"{val:^15}" for val in row[1:]))
 
 
@@ -409,13 +417,15 @@ def main():
         if args.atoms and not residue_inconsistencies:
             # Compare atom names across structures
             atom_names, residue_objects = compare_atom_names(structures)
-            
+
             # Find inconsistencies in atom names
             atom_inconsistencies = find_atom_inconsistencies(atom_names)
-            
+
             # Print atom name inconsistencies
-            print_atom_inconsistencies(atom_inconsistencies, residue_objects, [s[0] for s in structures])
-            
+            print_atom_inconsistencies(
+                atom_inconsistencies, residue_objects, [s[0] for s in structures]
+            )
+
             # Update exit code if atom inconsistencies were found
             if atom_inconsistencies:
                 residue_inconsistencies = True  # This will cause a non-zero exit code
