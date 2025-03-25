@@ -34,10 +34,10 @@ def determine_file_format(file_path: str) -> str:
         'PDB' for .pdb files, 'mmCIF' for .cif files, or None for unsupported formats
     """
     ext = os.path.splitext(file_path)[1].lower()
-    if ext == '.pdb':
-        return 'PDB'
-    elif ext in ['.cif', '.mmcif']:
-        return 'mmCIF'
+    if ext == ".pdb":
+        return "PDB"
+    elif ext in [".cif", ".mmcif"]:
+        return "mmCIF"
     else:
         return None
 
@@ -62,16 +62,16 @@ def parse_structure_file(file_path: str) -> Optional[Structure]:
         return None
 
     try:
-        with open(file_path, 'r') as f:
-            if file_format == 'PDB':
+        with open(file_path, "r") as f:
+            if file_format == "PDB":
                 atoms_df = parse_pdb_atoms(f)
             else:  # mmCIF
                 atoms_df = parse_cif_atoms(f)
-            
+
             if atoms_df.empty:
                 print(f"Warning: No atoms found in {file_path}", file=sys.stderr)
                 return None
-                
+
             return Structure(atoms_df)
     except Exception as e:
         print(f"Error parsing {file_path}: {str(e)}", file=sys.stderr)
@@ -111,13 +111,13 @@ def compare_residue_names(structures: List[Tuple[str, Structure]]) -> Dict:
     """
     # Dictionary to store residue names for each position across all structures
     residue_names = defaultdict(dict)
-    
+
     # Collect residue names from all structures
     for file_path, structure in structures:
         for residue in structure.residues:
             key = get_residue_key(residue)
             residue_names[key][file_path] = residue.residue_name
-    
+
     return residue_names
 
 
@@ -136,15 +136,15 @@ def find_inconsistencies(residue_names: Dict) -> Dict:
         Dictionary with inconsistent residue keys as keys and a dictionary of file paths and residue names as values
     """
     inconsistencies = {}
-    
+
     for key, names_by_file in residue_names.items():
         # Get unique residue names for this position
         unique_names = set(names_by_file.values())
-        
+
         # If there's more than one unique name, this position is inconsistent
         if len(unique_names) > 1:
             inconsistencies[key] = names_by_file
-    
+
     return inconsistencies
 
 
@@ -183,26 +183,26 @@ def print_inconsistencies(inconsistencies: Dict, file_paths: List[str]) -> None:
     if not inconsistencies:
         print("No inconsistencies found. All residue names match across structures.")
         return
-    
+
     # Get base file names for display
     base_names = [os.path.basename(path) for path in file_paths]
-    
+
     # Print header
     header = "Position | " + " | ".join(base_names)
     print(header)
     print("-" * len(header))
-    
+
     # Sort keys for consistent output
     sorted_keys = sorted(inconsistencies.keys(), key=lambda k: (k[0], k[1], k[2] or ""))
-    
+
     # Print each inconsistency
     for key in sorted_keys:
         names_by_file = inconsistencies[key]
         position = format_residue_key(key)
-        
+
         # Get residue name for each file, or "-" if not present
         row_values = [names_by_file.get(path, "-") for path in file_paths]
-        
+
         print(f"{position:8} | " + " | ".join(f"{val:3}" for val in row_values))
 
 
@@ -211,44 +211,48 @@ def main():
     parser = argparse.ArgumentParser(
         description="Check consistency of residue names across multiple PDB/mmCIF files."
     )
+    parser.add_argument("files", nargs="+", help="PDB or mmCIF files to compare")
     parser.add_argument(
-        "files", nargs="+", help="PDB or mmCIF files to compare"
-    )
-    parser.add_argument(
-        "-v", "--verbose", action="store_true", help="Print all residues, not just inconsistencies"
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="Print all residues, not just inconsistencies",
     )
     parser.add_argument(
         "-o", "--output", help="Output file for results (default: stdout)"
     )
-    
+
     args = parser.parse_args()
-    
+
     # Parse all structure files
     structures = []
     for file_path in args.files:
         structure = parse_structure_file(file_path)
         if structure:
             structures.append((file_path, structure))
-    
+
     if len(structures) < 2:
-        print("Error: At least two valid structure files are required for comparison", file=sys.stderr)
+        print(
+            "Error: At least two valid structure files are required for comparison",
+            file=sys.stderr,
+        )
         sys.exit(1)
-    
+
     # Compare residue names across structures
     residue_names = compare_residue_names(structures)
-    
+
     # Find inconsistencies
     inconsistencies = find_inconsistencies(residue_names)
-    
+
     # Redirect output if specified
     original_stdout = sys.stdout
     if args.output:
         try:
-            sys.stdout = open(args.output, 'w')
+            sys.stdout = open(args.output, "w")
         except Exception as e:
             print(f"Error opening output file: {str(e)}", file=sys.stderr)
             sys.exit(1)
-    
+
     try:
         # Print results
         if args.verbose:
@@ -260,12 +264,15 @@ def main():
         if args.output:
             sys.stdout.close()
             sys.stdout = original_stdout
-    
+
     # Print summary to stderr
     total_residues = len(residue_names)
     inconsistent_residues = len(inconsistencies)
-    print(f"\nSummary: {inconsistent_residues} inconsistencies found out of {total_residues} total residues.", file=sys.stderr)
-    
+    print(
+        f"\nSummary: {inconsistent_residues} inconsistencies found out of {total_residues} total residues.",
+        file=sys.stderr,
+    )
+
     # Return non-zero exit code if inconsistencies were found
     if inconsistent_residues > 0:
         sys.exit(1)
