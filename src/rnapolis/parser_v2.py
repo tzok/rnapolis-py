@@ -203,7 +203,9 @@ def parse_cif_atoms(content: Union[str, IO[str]]) -> pd.DataFrame:
     return df
 
 
-def write_pdb(df: pd.DataFrame, output: Union[str, TextIO, None] = None) -> Union[str, None]:
+def write_pdb(
+    df: pd.DataFrame, output: Union[str, TextIO, None] = None
+) -> Union[str, None]:
     """
     Write a DataFrame of atom records to PDB format.
 
@@ -249,7 +251,7 @@ def write_pdb(df: pd.DataFrame, output: Union[str, TextIO, None] = None) -> Unio
             atom_name = row["name"]
         else:  # mmCIF
             atom_name = row.get("auth_atom_id", row.get("label_atom_id", ""))
-        
+
         # Right-justify atom name if it starts with a number
         if atom_name and atom_name[0].isdigit():
             line = line[:12] + atom_name.ljust(4) + line[16:]
@@ -288,7 +290,11 @@ def write_pdb(df: pd.DataFrame, output: Union[str, TextIO, None] = None) -> Unio
         if format_type == "PDB":
             icode = row["iCode"] if pd.notna(row["iCode"]) else ""
         else:  # mmCIF
-            icode = row.get("pdbx_PDB_ins_code", "") if pd.notna(row.get("pdbx_PDB_ins_code", "")) else ""
+            icode = (
+                row.get("pdbx_PDB_ins_code", "")
+                if pd.notna(row.get("pdbx_PDB_ins_code", ""))
+                else ""
+            )
         line = line[:26] + icode + line[27:]
 
         # Set X coordinate
@@ -368,6 +374,6 @@ def write_pdb(df: pd.DataFrame, output: Union[str, TextIO, None] = None) -> Unio
         else:
             output.write(content)
         return None
-    
+
     # Return the content as a string
     return content
