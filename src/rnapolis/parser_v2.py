@@ -1,4 +1,5 @@
-from typing import IO, Union
+from typing import IO, Union, TextIO
+import io
 
 import pandas as pd
 from mmcif.io.IoAdapterPy import IoAdapterPy
@@ -200,3 +201,173 @@ def parse_cif_atoms(content: Union[str, IO[str]]) -> pd.DataFrame:
     df.attrs["format"] = "mmCIF"
 
     return df
+
+
+def write_pdb(df: pd.DataFrame, output: Union[str, TextIO, None] = None) -> Union[str, None]:
+    """
+    Write a DataFrame of atom records to PDB format.
+
+    Parameters:
+    -----------
+    df : pd.DataFrame
+        DataFrame containing atom records, as created by parse_pdb_atoms or parse_cif_atoms
+    output : Union[str, TextIO, None], optional
+        Output file path or file-like object. If None, returns the PDB content as a string.
+
+    Returns:
+    --------
+    Union[str, None]
+        If output is None, returns the PDB content as a string. Otherwise, returns None.
+    """
+    # Create a buffer to store the PDB content
+    buffer = io.StringIO()
+
+    # Get the format of the DataFrame
+    format_type = df.attrs.get("format", "PDB")
+
+    # Process each row in the DataFrame
+    for _, row in df.iterrows():
+        # Initialize the line with spaces
+        line = " " * 80
+
+        # Set record type (ATOM or HETATM)
+        if format_type == "PDB":
+            record_type = row["record_type"]
+        else:  # mmCIF
+            record_type = row.get("group_PDB", "ATOM")
+        line = record_type.ljust(6) + line[6:]
+
+        # Set atom serial number
+        if format_type == "PDB":
+            serial = str(int(row["serial"]))
+        else:  # mmCIF
+            serial = str(int(row["id"]))
+        line = line[:6] + serial.rjust(5) + line[11:]
+
+        # Set atom name
+        if format_type == "PDB":
+            atom_name = row["name"]
+        else:  # mmCIF
+            atom_name = row.get("auth_atom_id", row.get("label_atom_id", ""))
+        
+        # Right-justify atom name if it starts with a number
+        if atom_name and atom_name[0].isdigit():
+            line = line[:12] + atom_name.ljust(4) + line[16:]
+        else:
+            line = line[:12] + " " + atom_name.ljust(3) + line[16:]
+
+        # Set alternate location indicator
+        if format_type == "PDB":
+            alt_loc = row.get("altLoc", "")
+        else:  # mmCIF
+            alt_loc = row.get("label_alt_id", "")
+        line = line[:16] + alt_loc + line[17:]
+
+        # Set residue name
+        if format_type == "PDB":
+            res_name = row["resName"]
+        else:  # mmCIF
+            res_name = row.get("auth_comp_id", row.get("label_comp_id", ""))
+        line = line[:17] + res_name.ljust(3) + line[20:]
+
+        # Set chain identifier
+        if format_type == "PDB":
+            chain_id = row["chainID"]
+        else:  # mmCIF
+            chain_id = row.get("auth_asym_id", row.get("label_asym_id", ""))
+        line = line[:21] + chain_id + line[22:]
+
+        # Set residue sequence number
+        if format_type == "PDB":
+            res_seq = str(int(row["resSeq"]))
+        else:  # mmCIF
+            res_seq = str(int(row.get("auth_seq_id", row.get("label_seq_id", 0))))
+        line = line[:22] + res_seq.rjust(4) + line[26:]
+
+        # Set insertion code
+        if format_type == "PDB":
+            icode = row["iCode"] if pd.notna(row["iCode"]) else ""
+        else:  # mmCIF
+            icode = row.get("pdbx_PDB_ins_code", "") if pd.notna(row.get("pdbx_PDB_ins_code", "")) else ""
+        line = line[:26] + icode + line[27:]
+
+        # Set X coordinate
+        if format_type == "PDB":
+            x = float(row["x"])
+        else:  # mmCIF
+            x = float(row["Cartn_x"])
+        line = line[:30] + f"{x:8.3f}" + line[38:]
+
+        # Set Y coordinate
+        if format_type == "PDB":
+            y = float(row["y"])
+        else:  # mmCIF
+            y = float(row["Cartn_y"])
+        line = line[:38] + f"{y:8.3f}" + line[46:]
+
+        # Set Z coordinate
+        if format_type == "PDB":
+            z = float(row["z"])
+        else:  # mmCIF
+            z = float(row["Cartn_z"])
+        line = line[:46] + f"{z:8.3f}" + line[54:]
+
+        # Set occupancy
+        if format_type == "PDB":
+            occupancy = float(row["occupancy"])
+        else:  # mmCIF
+            occupancy = float(row.get("occupancy", 1.0))
+        line = line[:54] + f"{occupancy:6.2f}" + line[60:]
+
+        # Set temperature factor
+        if format_type == "PDB":
+            temp_factor = float(row["tempFactor"])
+        else:  # mmCIF
+            temp_factor = float(row.get("B_iso_or_equiv", 0.0))
+        line = line[:60] + f"{temp_factor:6.2f}" + line[66:]
+
+        # Set element symbol
+        if format_type == "PDB":
+            element = row["element"]
+        else:  # mmCIF
+            element = row.get("type_symbol", "")
+        line = line[:76] + element.rjust(2) + line[78:]
+
+        # Set charge
+        if format_type == "PDB":
+            charge = row["charge"]
+        else:  # mmCIF
+            charge = row.get("pdbx_formal_charge", "")
+            if charge and charge not in ["?", "."]:
+                # Convert numeric charge to PDB format (e.g., "1+" or "2-")
+                try:
+                    charge_val = int(charge)
+                    if charge_val != 0:
+                        charge = f"{abs(charge_val)}{'+' if charge_val > 0 else '-'}"
+                    else:
+                        charge = ""
+                except ValueError:
+                    pass
+        line = line[:78] + charge + line[80:]
+
+        # Write the line to the buffer
+        buffer.write(line.rstrip() + "\n")
+
+    # Add END record
+    buffer.write("END\n")
+
+    # Get the content as a string
+    content = buffer.getvalue()
+    buffer.close()
+
+    # Write to output if provided
+    if output is not None:
+        if isinstance(output, str):
+            with open(output, "w") as f:
+                f.write(content)
+        else:
+            output.write(content)
+        return None
+    
+    # Return the content as a string
+    return content
