@@ -73,6 +73,7 @@ def main():
 
         structures.append((path, residues))
 
+    residues_to_remove = set()
     for path, residues in structures:
         ref_path, ref_residues = structures[0]
 
@@ -92,7 +93,6 @@ def main():
                 sys.exit(1)
 
         # Find residues with different number of atoms
-        residues_to_remove = set()
         for i, (residue, ref_residue) in enumerate(zip(residues, ref_residues)):
             if len(residue.atoms) != len(ref_residue.atoms):
                 print(
