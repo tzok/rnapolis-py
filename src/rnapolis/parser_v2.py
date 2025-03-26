@@ -1,11 +1,10 @@
 import io
 import tempfile
-from typing import IO, TextIO, Union, List
+from typing import IO, TextIO, Union
 
 import pandas as pd
 from mmcif.io.IoAdapterPy import IoAdapterPy
-from mmcif.io.PdbxReader import DataContainer
-from mmcif.io.PdbxWriter import DataCategory
+from mmcif.io.PdbxReader import DataCategory, DataContainer
 
 
 def parse_pdb_atoms(content: Union[str, IO[str]]) -> pd.DataFrame:
