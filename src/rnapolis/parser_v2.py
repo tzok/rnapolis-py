@@ -1,8 +1,11 @@
-from typing import IO, Union, TextIO
 import io
+import tempfile
+from typing import IO, TextIO, Union, List
 
 import pandas as pd
 from mmcif.io.IoAdapterPy import IoAdapterPy
+from mmcif.io.PdbxReader import DataContainer
+from mmcif.io.PdbxWriter import DataCategory
 
 
 def parse_pdb_atoms(content: Union[str, IO[str]]) -> pd.DataFrame:
@@ -377,3 +380,126 @@ def write_pdb(
 
     # Return the content as a string
     return content
+
+
+def write_cif(
+    df: pd.DataFrame, output: Union[str, TextIO, None] = None
+) -> Union[str, None]:
+    """
+    Write a DataFrame of atom records to mmCIF format.
+
+    Parameters:
+    -----------
+    df : pd.DataFrame
+        DataFrame containing atom records, as created by parse_pdb_atoms or parse_cif_atoms
+    output : Union[str, TextIO, None], optional
+        Output file path or file-like object. If None, returns the mmCIF content as a string.
+
+    Returns:
+    --------
+    Union[str, None]
+        If output is None, returns the mmCIF content as a string. Otherwise, returns None.
+    """
+    # Get the format of the DataFrame
+    format_type = df.attrs.get("format", "PDB")
+    
+    # Create a new DataContainer
+    data_container = DataContainer("data_structure")
+    
+    # Define the attributes for atom_site category
+    if format_type == "mmCIF":
+        # Use existing mmCIF attributes
+        attributes = list(df.columns)
+    else:  # PDB format
+        # Map PDB columns to mmCIF attributes
+        attributes = [
+            "group_PDB",          # record_type
+            "id",                  # serial
+            "type_symbol",         # element
+            "label_atom_id",       # name
+            "label_alt_id",        # altLoc
+            "label_comp_id",       # resName
+            "label_asym_id",       # chainID
+            "label_entity_id",     # (generated)
+            "label_seq_id",        # resSeq
+            "pdbx_PDB_ins_code",   # iCode
+            "Cartn_x",             # x
+            "Cartn_y",             # y
+            "Cartn_z",             # z
+            "occupancy",           # occupancy
+            "B_iso_or_equiv",      # tempFactor
+            "pdbx_formal_charge",  # charge
+            "auth_seq_id",         # resSeq
+            "auth_comp_id",        # resName
+            "auth_asym_id",        # chainID
+            "auth_atom_id",        # name
+            "pdbx_PDB_model_num"   # (generated)
+        ]
+    
+    # Prepare rows for the atom_site category
+    rows = []
+    
+    for _, row in df.iterrows():
+        if format_type == "mmCIF":
+            # Use existing mmCIF data
+            row_data = [str(row.get(attr, "?")) for attr in attributes]
+        else:  # PDB format
+            # Map PDB data to mmCIF format
+            entity_id = "1"  # Default entity ID
+            model_num = "1"  # Default model number
+            
+            row_data = [
+                str(row["record_type"]),                                # group_PDB
+                str(int(row["serial"])),                                # id
+                str(row["element"]),                                    # type_symbol
+                str(row["name"]),                                       # label_atom_id
+                str(row.get("altLoc", "")),                             # label_alt_id
+                str(row["resName"]),                                    # label_comp_id
+                str(row["chainID"]),                                    # label_asym_id
+                entity_id,                                              # label_entity_id
+                str(int(row["resSeq"])),                                # label_seq_id
+                str(row["iCode"]) if pd.notna(row["iCode"]) else "?",   # pdbx_PDB_ins_code
+                f"{float(row['x']):.3f}",                               # Cartn_x
+                f"{float(row['y']):.3f}",                               # Cartn_y
+                f"{float(row['z']):.3f}",                               # Cartn_z
+                f"{float(row['occupancy']):.2f}",                       # occupancy
+                f"{float(row['tempFactor']):.2f}",                      # B_iso_or_equiv
+                str(row.get("charge", "")) or "?",                      # pdbx_formal_charge
+                str(int(row["resSeq"])),                                # auth_seq_id
+                str(row["resName"]),                                    # auth_comp_id
+                str(row["chainID"]),                                    # auth_asym_id
+                str(row["name"]),                                       # auth_atom_id
+                model_num                                               # pdbx_PDB_model_num
+            ]
+        
+        rows.append(row_data)
+    
+    # Create the atom_site category
+    atom_site_category = DataCategory("atom_site", attributes, rows)
+    
+    # Add the category to the data container
+    data_container.append(atom_site_category)
+    
+    # Create an IoAdapter for writing
+    adapter = IoAdapterPy()
+    
+    # Handle output
+    if output is None:
+        # Return as string - write to a temporary file and read it back
+        with tempfile.NamedTemporaryFile(mode="w+", suffix=".cif") as temp_file:
+            adapter.writeFile(temp_file.name, [data_container])
+            temp_file.flush()
+            temp_file.seek(0)
+            return temp_file.read()
+    elif isinstance(output, str):
+        # Write to a file path
+        adapter.writeFile(output, [data_container])
+        return None
+    else:
+        # Write to a file-like object
+        with tempfile.NamedTemporaryFile(mode="w+", suffix=".cif") as temp_file:
+            adapter.writeFile(temp_file.name, [data_container])
+            temp_file.flush()
+            temp_file.seek(0)
+            output.write(temp_file.read())
+        return None
