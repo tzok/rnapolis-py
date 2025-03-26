@@ -43,22 +43,38 @@ def main():
             elif line.startswith("pdb2"):
                 pdb2_aligned.append(line.split()[1])
 
-    pdb1_aligned = " ".join(pdb1_aligned)
-    pdb2_aligned = " ".join(pdb2_aligned)
+    pdb1_aligned = "".join(pdb1_aligned)
+    pdb2_aligned = "".join(pdb2_aligned)
     residues_to_remove = {"pdb1": [], "pdb2": []}
 
-    for i, (c1, c2) in enumerate(zip(pdb1_aligned, pdb2_aligned)):
+    i, j = 0, 0
+    for c1, c2 in zip(pdb1_aligned, pdb2_aligned):
+        if c1 == c2 == "-":
+            continue  # Should not happen to have gap aligned to gap, but just in case
+
         if c1 == c2:
+            i += 1
+            j += 1
             continue
+
         if c1 == "-":
-            residues_to_remove["pdb2"].append(i)
-        elif c2 == "-":
+            residues_to_remove["pdb2"].append(j)
+            j += 1
+            continue
+
+        if c2 == "-":
             residues_to_remove["pdb1"].append(i)
-        elif c1 != c2:
+            i += 1
+            continue
+
+        if c1 != c2:
             residues_to_remove["pdb1"].append(i)
-            residues_to_remove["pdb2"].append(i)
-        else:
-            raise ValueError("This should not happen!")
+            residues_to_remove["pdb2"].append(j)
+            i += 1
+            j += 1
+            continue
+
+        raise ValueError("This should not happen!")
 
     if not residues_to_remove["pdb1"] and not residues_to_remove["pdb2"]:
         print("Structures are already aligned")
