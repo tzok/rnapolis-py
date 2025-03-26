@@ -165,7 +165,7 @@ class Structure:
         # Group residues by chain
         residues_by_chain = {}
         for residue in self.residues:
-            chain_id = residue.chain_id
+            chain_id = residue.chain_id()
             if chain_id not in residues_by_chain:
                 residues_by_chain[chain_id] = []
             residues_by_chain[chain_id].append(residue)
@@ -173,7 +173,7 @@ class Structure:
         # Sort residues in each chain by residue number
         for chain_id in residues_by_chain:
             residues_by_chain[chain_id].sort(
-                key=lambda r: (r.residue_number, r.insertion_code or "")
+                key=lambda r: (r.residue_number(), r.insertion_code() or "")
             )
 
         # Find connected segments in each chain
@@ -236,9 +236,9 @@ class Structure:
             for i, residue in enumerate(segment):
                 # Prepare row data
                 row = {
-                    "chain_id": residue.chain_id,
-                    "residue_number": residue.residue_number,
-                    "insertion_code": residue.insertion_code,
+                    "chain_id": residue.chain_id(),
+                    "residue_number": residue.residue_number(),
+                    "insertion_code": residue.insertion_code(),
                     "residue_name": residue.residue_name,
                 }
 
@@ -379,7 +379,6 @@ class Residue:
         self.atoms = residue_df
         self.format = residue_df.attrs.get("format", "unknown")
 
-    @cached_property
     def chain_id(self) -> str:
         """Get the chain identifier for this residue."""
         if self.format == "PDB":
@@ -390,8 +389,17 @@ class Residue:
             else:
                 return self.atoms["label_asym_id"].iloc[0]
         return ""
+    
+    def set_chain_id(self, value: str) -> None:
+        """Set the chain identifier for this residue."""
+        if self.format == "PDB":
+            self.atoms["chainID"] = value
+        elif self.format == "mmCIF":
+            if "auth_asym_id" in self.atoms.columns:
+                self.atoms["auth_asym_id"] = value
+            if "label_asym_id" in self.atoms.columns:
+                self.atoms["label_asym_id"] = value
 
-    @cached_property
     def residue_number(self) -> int:
         """Get the residue sequence number."""
         if self.format == "PDB":
@@ -402,8 +410,17 @@ class Residue:
             else:
                 return int(self.atoms["label_seq_id"].iloc[0])
         return 0
+    
+    def set_residue_number(self, value: int) -> None:
+        """Set the residue sequence number."""
+        if self.format == "PDB":
+            self.atoms["resSeq"] = value
+        elif self.format == "mmCIF":
+            if "auth_seq_id" in self.atoms.columns:
+                self.atoms["auth_seq_id"] = value
+            if "label_seq_id" in self.atoms.columns:
+                self.atoms["label_seq_id"] = value
 
-    @cached_property
     def insertion_code(self) -> Optional[str]:
         """Get the insertion code, if any."""
         if self.format == "PDB":
@@ -414,6 +431,14 @@ class Residue:
                 icode = self.atoms["pdbx_PDB_ins_code"].iloc[0]
                 return icode if pd.notna(icode) else None
         return None
+    
+    def set_insertion_code(self, value: Optional[str]) -> None:
+        """Set the insertion code."""
+        if self.format == "PDB":
+            self.atoms["iCode"] = value
+        elif self.format == "mmCIF":
+            if "pdbx_PDB_ins_code" in self.atoms.columns:
+                self.atoms["pdbx_PDB_ins_code"] = value
 
     @cached_property
     def residue_name(self) -> str:
@@ -494,21 +519,23 @@ class Residue:
     def __str__(self) -> str:
         """String representation of the residue."""
         # Start with chain ID and residue name
-        if self.chain_id.isspace() or not self.chain_id:
+        chain = self.chain_id()
+        if chain.isspace() or not chain:
             builder = f"{self.residue_name}"
         else:
-            builder = f"{self.chain_id}.{self.residue_name}"
+            builder = f"{chain}.{self.residue_name}"
 
         # Add a separator if the residue name ends with a digit
         if len(self.residue_name) > 0 and self.residue_name[-1] in string.digits:
             builder += "/"
 
         # Add residue number
-        builder += f"{self.residue_number}"
+        builder += f"{self.residue_number()}"
 
         # Add insertion code if present
-        if self.insertion_code is not None:
-            builder += f"^{self.insertion_code}"
+        icode = self.insertion_code()
+        if icode is not None:
+            builder += f"^{icode}"
 
         return builder
 
