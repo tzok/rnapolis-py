@@ -389,7 +389,7 @@ class Residue:
             else:
                 return self.atoms["label_asym_id"].iloc[0]
         return ""
-    
+
     def set_chain_id(self, value: str) -> None:
         """Set the chain identifier for this residue."""
         if self.format == "PDB":
@@ -410,7 +410,7 @@ class Residue:
             else:
                 return int(self.atoms["label_seq_id"].iloc[0])
         return 0
-    
+
     def set_residue_number(self, value: int) -> None:
         """Set the residue sequence number."""
         if self.format == "PDB":
@@ -431,7 +431,7 @@ class Residue:
                 icode = self.atoms["pdbx_PDB_ins_code"].iloc[0]
                 return icode if pd.notna(icode) else None
         return None
-    
+
     def set_insertion_code(self, value: Optional[str]) -> None:
         """Set the insertion code."""
         if self.format == "PDB":
