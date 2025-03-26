@@ -402,10 +402,10 @@ def write_cif(
     """
     # Get the format of the DataFrame
     format_type = df.attrs.get("format", "PDB")
-    
+
     # Create a new DataContainer
     data_container = DataContainer("data_structure")
-    
+
     # Define the attributes for atom_site category
     if format_type == "mmCIF":
         # Use existing mmCIF attributes
@@ -413,32 +413,32 @@ def write_cif(
     else:  # PDB format
         # Map PDB columns to mmCIF attributes
         attributes = [
-            "group_PDB",          # record_type
-            "id",                  # serial
-            "type_symbol",         # element
-            "label_atom_id",       # name
-            "label_alt_id",        # altLoc
-            "label_comp_id",       # resName
-            "label_asym_id",       # chainID
-            "label_entity_id",     # (generated)
-            "label_seq_id",        # resSeq
-            "pdbx_PDB_ins_code",   # iCode
-            "Cartn_x",             # x
-            "Cartn_y",             # y
-            "Cartn_z",             # z
-            "occupancy",           # occupancy
-            "B_iso_or_equiv",      # tempFactor
+            "group_PDB",  # record_type
+            "id",  # serial
+            "type_symbol",  # element
+            "label_atom_id",  # name
+            "label_alt_id",  # altLoc
+            "label_comp_id",  # resName
+            "label_asym_id",  # chainID
+            "label_entity_id",  # (generated)
+            "label_seq_id",  # resSeq
+            "pdbx_PDB_ins_code",  # iCode
+            "Cartn_x",  # x
+            "Cartn_y",  # y
+            "Cartn_z",  # z
+            "occupancy",  # occupancy
+            "B_iso_or_equiv",  # tempFactor
             "pdbx_formal_charge",  # charge
-            "auth_seq_id",         # resSeq
-            "auth_comp_id",        # resName
-            "auth_asym_id",        # chainID
-            "auth_atom_id",        # name
-            "pdbx_PDB_model_num"   # (generated)
+            "auth_seq_id",  # resSeq
+            "auth_comp_id",  # resName
+            "auth_asym_id",  # chainID
+            "auth_atom_id",  # name
+            "pdbx_PDB_model_num",  # (generated)
         ]
-    
+
     # Prepare rows for the atom_site category
     rows = []
-    
+
     for _, row in df.iterrows():
         if format_type == "mmCIF":
             # Use existing mmCIF data
@@ -447,42 +447,44 @@ def write_cif(
             # Map PDB data to mmCIF format
             entity_id = "1"  # Default entity ID
             model_num = "1"  # Default model number
-            
+
             row_data = [
-                str(row["record_type"]),                                # group_PDB
-                str(int(row["serial"])),                                # id
-                str(row["element"]),                                    # type_symbol
-                str(row["name"]),                                       # label_atom_id
-                str(row.get("altLoc", "")),                             # label_alt_id
-                str(row["resName"]),                                    # label_comp_id
-                str(row["chainID"]),                                    # label_asym_id
-                entity_id,                                              # label_entity_id
-                str(int(row["resSeq"])),                                # label_seq_id
-                str(row["iCode"]) if pd.notna(row["iCode"]) else "?",   # pdbx_PDB_ins_code
-                f"{float(row['x']):.3f}",                               # Cartn_x
-                f"{float(row['y']):.3f}",                               # Cartn_y
-                f"{float(row['z']):.3f}",                               # Cartn_z
-                f"{float(row['occupancy']):.2f}",                       # occupancy
-                f"{float(row['tempFactor']):.2f}",                      # B_iso_or_equiv
-                str(row.get("charge", "")) or "?",                      # pdbx_formal_charge
-                str(int(row["resSeq"])),                                # auth_seq_id
-                str(row["resName"]),                                    # auth_comp_id
-                str(row["chainID"]),                                    # auth_asym_id
-                str(row["name"]),                                       # auth_atom_id
-                model_num                                               # pdbx_PDB_model_num
+                str(row["record_type"]),  # group_PDB
+                str(int(row["serial"])),  # id
+                str(row["element"]),  # type_symbol
+                str(row["name"]),  # label_atom_id
+                str(row.get("altLoc", "")),  # label_alt_id
+                str(row["resName"]),  # label_comp_id
+                str(row["chainID"]),  # label_asym_id
+                entity_id,  # label_entity_id
+                str(int(row["resSeq"])),  # label_seq_id
+                str(row["iCode"])
+                if pd.notna(row["iCode"])
+                else "?",  # pdbx_PDB_ins_code
+                f"{float(row['x']):.3f}",  # Cartn_x
+                f"{float(row['y']):.3f}",  # Cartn_y
+                f"{float(row['z']):.3f}",  # Cartn_z
+                f"{float(row['occupancy']):.2f}",  # occupancy
+                f"{float(row['tempFactor']):.2f}",  # B_iso_or_equiv
+                str(row.get("charge", "")) or "?",  # pdbx_formal_charge
+                str(int(row["resSeq"])),  # auth_seq_id
+                str(row["resName"]),  # auth_comp_id
+                str(row["chainID"]),  # auth_asym_id
+                str(row["name"]),  # auth_atom_id
+                model_num,  # pdbx_PDB_model_num
             ]
-        
+
         rows.append(row_data)
-    
+
     # Create the atom_site category
     atom_site_category = DataCategory("atom_site", attributes, rows)
-    
+
     # Add the category to the data container
     data_container.append(atom_site_category)
-    
+
     # Create an IoAdapter for writing
     adapter = IoAdapterPy()
-    
+
     # Handle output
     if output is None:
         # Return as string - write to a temporary file and read it back
