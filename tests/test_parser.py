@@ -30,9 +30,9 @@ def test_4qln_no_duplicate_atoms():
 
         for residue in residues_to_check:
             atom_names = [atom.name for atom in residue.atoms]
-            assert len(atom_names) == len(
-                set(atom_names)
-            ), f"Duplicate atoms found in residue {residue.auth}"
+            assert len(atom_names) == len(set(atom_names)), (
+                f"Duplicate atoms found in residue {residue.auth}"
+            )
 
 
 def test_1gid():

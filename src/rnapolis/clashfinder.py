@@ -179,20 +179,20 @@ def main():
         for ci, cj in sorted(clashing_chains):
             if ci == cj:
                 print(
-                    f"Clashes found in chain {ci} with maximum occupancy sum equal to {max_occupancy_chains[(ci,cj)]}"
+                    f"Clashes found in chain {ci} with maximum occupancy sum equal to {max_occupancy_chains[(ci, cj)]}"
                 )
             else:
                 print(
-                    f"Clashes found between chains {ci} and {cj} with maximum occupancy sum equal to {max_occupancy_chains[(ci,cj)]}"
+                    f"Clashes found between chains {ci} and {cj} with maximum occupancy sum equal to {max_occupancy_chains[(ci, cj)]}"
                 )
             for ri, rj in clashing_chains[(ci, cj)]:
                 if ri == rj:
                     print(
-                        f"    Clashes found in residue {ri} with maximum occupancy sum equal to {max_occupancy_residues[(ri,rj)]}"
+                        f"    Clashes found in residue {ri} with maximum occupancy sum equal to {max_occupancy_residues[(ri, rj)]}"
                     )
                 else:
                     print(
-                        f"    Clashes found between residues {ri} and {rj} with maximum occupancy sum equal to {max_occupancy_residues[(ri,rj)]}"
+                        f"    Clashes found between residues {ri} and {rj} with maximum occupancy sum equal to {max_occupancy_residues[(ri, rj)]}"
                     )
                 for ai, aj, occupancy in sorted(clashing_chains[(ci, cj)][(ri, rj)]):
                     print(
