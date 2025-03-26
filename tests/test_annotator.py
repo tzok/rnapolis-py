@@ -36,7 +36,9 @@ def test_1ehz():
                     for bp in interactions[i]
                     if (bp.nt1.full_name, bp.nt2.full_name) == element
                 ]
-                assert False, f"Interaction {element} occurs {count} times among {labels[i]} type: {duplicates}"
+                assert False, (
+                    f"Interaction {element} occurs {count} times among {labels[i]} type: {duplicates}"
+                )
 
 
 def test_8btk():

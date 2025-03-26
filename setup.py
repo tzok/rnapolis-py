@@ -27,16 +27,26 @@ setup(
     entry_points={
         "console_scripts": [
             "annotator=rnapolis.annotator:main",
+            "aligner=rnapolis.aligner:main",
             "clashfinder=rnapolis.clashfinder:main",
             "metareader=rnapolis.metareader:main",
             "molecule-filter=rnapolis.molecule_filter:main",
             "motif-extractor=rnapolis.motif_extractor:main",
             "transformer=rnapolis.transformer:main",
             "rfam-folder=rnapolis.rfam_folder:main",
+            "unifier=rnapolis.unifier:main",
         ]
     },
     include_package_data=True,
-    package_data={"rnapolis": ["mmcif_pdbx_v50.dic"]},
+    package_data={
+        "rnapolis": [
+            "component_A.csv",
+            "component_C.csv",
+            "component_G.csv",
+            "component_U.csv",
+            "mmcif_pdbx_v50.dic",
+        ]
+    },
     install_requires=[
         "appdirs",
         "graphviz",
