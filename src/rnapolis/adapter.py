@@ -206,11 +206,11 @@ def parse_external_output(
 def parse_fr3d_output(file_path: str) -> BaseInteractions:
     """
     Parse FR3D output file and convert to BaseInteractions.
-    
+
     Args:
-        file_path: Path to a concatenated FR3D output file containing basepair, stacking, 
+        file_path: Path to a concatenated FR3D output file containing basepair, stacking,
                   and backbone interactions
-        
+
     Returns:
         BaseInteractions object containing the interactions found by FR3D
     """
@@ -222,7 +222,7 @@ def parse_fr3d_output(file_path: str) -> BaseInteractions:
         "base_phosphate_interactions": [],
         "other_interactions": [],
     }
-    
+
     # Process the concatenated file
     with open(file_path, "r") as f:
         current_section = None
@@ -230,7 +230,7 @@ def parse_fr3d_output(file_path: str) -> BaseInteractions:
             line = line.strip()
             if not line:
                 continue
-                
+
             # Check for section headers
             if line.startswith("#"):
                 if "basepair" in line.lower():
@@ -244,7 +244,7 @@ def parse_fr3d_output(file_path: str) -> BaseInteractions:
                     continue
                 else:
                     continue  # Skip other comment lines
-            
+
             # Process the line based on the current section
             if current_section:
                 _process_interaction_line(line, current_section, interactions_data)
