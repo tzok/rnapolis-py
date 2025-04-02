@@ -310,6 +310,40 @@ def parse_fr3d_output(file_path: str) -> BaseInteractions:
     )
 
 
+def process_external_tool_output(
+    structure3d: Structure3D,
+    external_file_path: str,
+    tool: ExternalTool,
+    model: Optional[int] = None,
+    find_gaps: bool = False,
+    all_dot_brackets: bool = False,
+) -> Tuple[Structure2D, List[str]]:
+    """
+    Process external tool output and create a secondary structure representation.
+    
+    This function can be used from other code to process external tool outputs
+    and get a Structure2D object with the secondary structure information.
+    
+    Args:
+        structure3d: The 3D structure parsed from PDB/mmCIF
+        external_file_path: Path to the external tool output file
+        tool: The external tool that generated the output (FR3D, DSSR, etc.)
+        model: Model number to use (if None, use first model)
+        find_gaps: Whether to detect gaps in the structure
+        all_dot_brackets: Whether to return all possible dot-bracket notations
+        
+    Returns:
+        A tuple containing the Structure2D object and a list of dot-bracket notations
+    """
+    # Parse external tool output
+    base_interactions = parse_external_output(external_file_path, tool, structure3d)
+    
+    # Extract secondary structure using the external tool's interactions
+    return extract_secondary_structure_from_external(
+        structure3d, base_interactions, model, find_gaps, all_dot_brackets
+    )
+
+
 def extract_secondary_structure_from_external(
     tertiary_structure: Structure3D,
     base_interactions: BaseInteractions,
@@ -468,13 +502,14 @@ def main():
     file = handle_input_file(args.input)
     structure3d = read_3d_structure(file, None)
 
-    # Parse external tool output
-    external_tool = ExternalTool(args.tool)
-    base_interactions = parse_external_output(args.external, external_tool, structure3d)
-
-    # Extract secondary structure using the external tool's interactions
-    structure2d, dot_brackets = extract_secondary_structure_from_external(
-        structure3d, base_interactions, None, args.find_gaps, args.all_dot_brackets
+    # Process external tool output and get secondary structure
+    structure2d, dot_brackets = process_external_tool_output(
+        structure3d, 
+        args.external, 
+        ExternalTool(args.tool), 
+        None, 
+        args.find_gaps, 
+        args.all_dot_brackets
     )
 
     if args.csv:
