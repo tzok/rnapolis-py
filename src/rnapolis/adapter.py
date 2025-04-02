@@ -27,12 +27,12 @@ def parse_external_output(
 ) -> BaseInteractions:
     """
     Parse the output from an external tool (FR3D, DSSR, etc.) and convert it to BaseInteractions.
-    
+
     Args:
         file_path: Path to the external tool output file
         tool: The external tool that generated the output
         structure3d: The 3D structure parsed from PDB/mmCIF
-        
+
     Returns:
         BaseInteractions object containing the interactions found by the external tool
     """
@@ -56,14 +56,14 @@ def extract_secondary_structure_from_external(
 ) -> Tuple[Structure2D, List[str]]:
     """
     Create a secondary structure representation using interactions from an external tool.
-    
+
     Args:
         tertiary_structure: The 3D structure parsed from PDB/mmCIF
         base_interactions: Interactions parsed from external tool output
         model: Model number to use (if None, use all models)
         find_gaps: Whether to detect gaps in the structure
         all_dot_brackets: Whether to return all possible dot-bracket notations
-        
+
     Returns:
         A tuple containing the Structure2D object and a list of dot-bracket notations
     """
@@ -204,11 +204,11 @@ def main():
 
     file = handle_input_file(args.input)
     structure3d = read_3d_structure(file, None)
-    
+
     # Parse external tool output
     external_tool = ExternalTool(args.tool)
     base_interactions = parse_external_output(args.external, external_tool, structure3d)
-    
+
     # Extract secondary structure using the external tool's interactions
     structure2d, dot_brackets = extract_secondary_structure_from_external(
         structure3d, base_interactions, None, args.find_gaps, args.all_dot_brackets
