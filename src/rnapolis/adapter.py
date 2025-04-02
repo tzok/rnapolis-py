@@ -206,10 +206,10 @@ def parse_external_output(
 def parse_fr3d_output(file_path: str) -> BaseInteractions:
     """
     Parse FR3D output files and convert to BaseInteractions.
-    
+
     Args:
         file_path: Directory containing FR3D output files or path to a specific file
-        
+
     Returns:
         BaseInteractions object containing the interactions found by FR3D
     """
@@ -221,7 +221,7 @@ def parse_fr3d_output(file_path: str) -> BaseInteractions:
         "base_phosphate_interactions": [],
         "other_interactions": [],
     }
-    
+
     # Determine if file_path is a directory or a specific file
     if os.path.isdir(file_path):
         # Look for FR3D output files in the directory
@@ -235,28 +235,28 @@ def parse_fr3d_output(file_path: str) -> BaseInteractions:
         basepair_file = os.path.join(base_dir, f"{base_name}_basepair_detail.txt")
         stacking_file = os.path.join(base_dir, f"{base_name}_stacking.txt")
         backbone_file = os.path.join(base_dir, f"{base_name}_backbone.txt")
-    
+
     # Process base pair interactions
     if os.path.exists(basepair_file):
         with open(basepair_file, "r") as f:
             for line in f:
                 if line.strip() and not line.startswith("#"):
                     _process_interaction_line(line, "basepair", interactions_data)
-    
+
     # Process stacking interactions
     if os.path.exists(stacking_file):
         with open(stacking_file, "r") as f:
             for line in f:
                 if line.strip() and not line.startswith("#"):
                     _process_interaction_line(line, "stacking", interactions_data)
-    
+
     # Process backbone interactions
     if os.path.exists(backbone_file):
         with open(backbone_file, "r") as f:
             for line in f:
                 if line.strip() and not line.startswith("#"):
                     _process_interaction_line(line, "backbone", interactions_data)
-    
+
     # Return a BaseInteractions object with all the processed interactions
     return BaseInteractions(
         interactions_data["base_pairs"],
