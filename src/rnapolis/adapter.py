@@ -174,7 +174,7 @@ def _process_interaction_line(
 
         return True
     except (ValueError, IndexError) as e:
-        logging.warning(f"Error parsing {category} interaction: {e}")
+        logging.warning(f"Error parsing interaction: {e}")
         return False
 
 
