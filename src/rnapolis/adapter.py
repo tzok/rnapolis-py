@@ -216,10 +216,15 @@ def parse_dssr_output(
 
     # Handle multi-model files
     if "models" in dssr:
-        for result in dssr.get("models", []):
-            if result.get("model", None) == model:
-                dssr = result.get("parameters", {})
-                break
+        if model is None and dssr.get("models"):
+            # If model is None, use the first model
+            dssr = dssr.get("models")[0].get("parameters", {})
+        else:
+            # Otherwise find the specified model
+            for result in dssr.get("models", []):
+                if result.get("model", None) == model:
+                    dssr = result.get("parameters", {})
+                    break
 
     for pair in dssr.get("pairs", []):
         nt1 = match_dssr_name_to_residue(structure3d, pair.get("nt1", None))
