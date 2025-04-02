@@ -194,39 +194,41 @@ def match_dssr_lw(lw: Optional[str]) -> Optional[LeontisWesthof]:
     return LeontisWesthof[lw] if lw in dir(LeontisWesthof) else None
 
 
-def parse_dssr_output(file_path: str, structure3d: Structure3D, model: Optional[int] = None) -> BaseInteractions:
+def parse_dssr_output(
+    file_path: str, structure3d: Structure3D, model: Optional[int] = None
+) -> BaseInteractions:
     """
     Parse DSSR JSON output and convert to BaseInteractions.
-    
+
     Args:
         file_path: Path to DSSR JSON output file
         structure3d: The 3D structure parsed from PDB/mmCIF
         model: Model number to use (if None, use first model)
-        
+
     Returns:
         BaseInteractions object containing the interactions found by DSSR
     """
     base_pairs: List[BasePair] = []
     stackings: List[Stacking] = []
-    
+
     with open(file_path) as f:
         dssr = orjson.loads(f.read())
-    
+
     # Handle multi-model files
     if "models" in dssr:
         for result in dssr.get("models", []):
             if result.get("model", None) == model:
                 dssr = result.get("parameters", {})
                 break
-    
+
     for pair in dssr.get("pairs", []):
         nt1 = match_dssr_name_to_residue(structure3d, pair.get("nt1", None))
         nt2 = match_dssr_name_to_residue(structure3d, pair.get("nt2", None))
         lw = match_dssr_lw(pair.get("LW", None))
-        
+
         if nt1 is not None and nt2 is not None and lw is not None:
             base_pairs.append(BasePair(nt1, nt2, lw, None))
-    
+
     for stack in dssr.get("stacks", []):
         nts = [
             match_dssr_name_to_residue(structure3d, nt)
@@ -237,7 +239,7 @@ def parse_dssr_output(file_path: str, structure3d: Structure3D, model: Optional[
             nt2 = nts[i]
             if nt1 is not None and nt2 is not None:
                 stackings.append(Stacking(nt1, nt2, None))
-    
+
     return BaseInteractions(base_pairs, stackings, [], [], [])
 
 
