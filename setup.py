@@ -5,7 +5,7 @@ with open("README.md") as f:
 
 setup(
     name="RNApolis",
-    version="0.6.2",
+    version="0.7.0",
     packages=["rnapolis"],
     package_dir={"": "src"},
     author="Tomasz Zok",
