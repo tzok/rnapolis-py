@@ -5,7 +5,7 @@ with open("README.md") as f:
 
 setup(
     name="RNApolis",
-    version="0.6.2",
+    version="0.7.0",
     packages=["rnapolis"],
     package_dir={"": "src"},
     author="Tomasz Zok",
@@ -27,6 +27,7 @@ setup(
     entry_points={
         "console_scripts": [
             "annotator=rnapolis.annotator:main",
+            "adapter=rnapolis.adapter:main",
             "aligner=rnapolis.aligner:main",
             "clashfinder=rnapolis.clashfinder:main",
             "metareader=rnapolis.metareader:main",
