@@ -225,29 +225,13 @@ def parse_fr3d_output(file_path: str) -> BaseInteractions:
 
     # Process the concatenated file
     with open(file_path, "r") as f:
-        current_section = None
         for line in f:
             line = line.strip()
-            if not line:
+            if not line or line.startswith("#"):
                 continue
 
-            # Check for section headers
-            if line.startswith("#"):
-                if "basepair" in line.lower():
-                    current_section = "basepair"
-                    continue
-                elif "stacking" in line.lower():
-                    current_section = "stacking"
-                    continue
-                elif "backbone" in line.lower():
-                    current_section = "backbone"
-                    continue
-                else:
-                    continue  # Skip other comment lines
-
-            # Process the line based on the current section
-            if current_section:
-                _process_interaction_line(line, current_section, interactions_data)
+            # Process every non-empty, non-comment line
+            _process_interaction_line(line, "interaction", interactions_data)
 
     # Return a BaseInteractions object with all the processed interactions
     return BaseInteractions(
