@@ -121,7 +121,6 @@ def unify_classification(fr3d_name: str) -> tuple:
 
 def _process_interaction_line(
     line: str,
-    category: str,
     interactions_data: Dict[str, list],
 ):
     """
@@ -129,7 +128,6 @@ def _process_interaction_line(
 
     Args:
         line: The tab-separated interaction line
-        category: The category of interaction (for logging purposes)
         interactions_data: Dictionary containing all interaction lists
 
     Returns:
@@ -139,7 +137,7 @@ def _process_interaction_line(
         # Split by tabs and get the first three fields
         parts = line.split("\t")
         if len(parts) < 3:
-            logging.warning(f"Invalid {category} line format: {line}")
+            logging.warning(f"Invalid interaction line format: {line}")
             return False
 
         nt1 = parts[0]
@@ -231,7 +229,7 @@ def parse_fr3d_output(file_path: str) -> BaseInteractions:
                 continue
 
             # Process every non-empty, non-comment line
-            _process_interaction_line(line, "interaction", interactions_data)
+            _process_interaction_line(line, interactions_data)
 
     # Return a BaseInteractions object with all the processed interactions
     return BaseInteractions(
