@@ -178,6 +178,69 @@ def _process_interaction_line(
         return False
 
 
+def match_dssr_name_to_residue(
+    structure3d: Structure3D, nt_id: Optional[str]
+) -> Optional[Residue]:
+    if nt_id is not None:
+        nt_id = nt_id.split(":")[-1]
+        for residue in structure3d.residues:
+            if residue.full_name == nt_id:
+                return residue
+        logging.warning(f"Failed to find residue {nt_id}")
+    return None
+
+
+def match_dssr_lw(lw: Optional[str]) -> Optional[LeontisWesthof]:
+    return LeontisWesthof[lw] if lw in dir(LeontisWesthof) else None
+
+
+def parse_dssr_output(file_path: str, structure3d: Structure3D, model: Optional[int] = None) -> BaseInteractions:
+    """
+    Parse DSSR JSON output and convert to BaseInteractions.
+    
+    Args:
+        file_path: Path to DSSR JSON output file
+        structure3d: The 3D structure parsed from PDB/mmCIF
+        model: Model number to use (if None, use first model)
+        
+    Returns:
+        BaseInteractions object containing the interactions found by DSSR
+    """
+    base_pairs: List[BasePair] = []
+    stackings: List[Stacking] = []
+    
+    with open(file_path) as f:
+        dssr = orjson.loads(f.read())
+    
+    # Handle multi-model files
+    if "models" in dssr:
+        for result in dssr.get("models", []):
+            if result.get("model", None) == model:
+                dssr = result.get("parameters", {})
+                break
+    
+    for pair in dssr.get("pairs", []):
+        nt1 = match_dssr_name_to_residue(structure3d, pair.get("nt1", None))
+        nt2 = match_dssr_name_to_residue(structure3d, pair.get("nt2", None))
+        lw = match_dssr_lw(pair.get("LW", None))
+        
+        if nt1 is not None and nt2 is not None and lw is not None:
+            base_pairs.append(BasePair(nt1, nt2, lw, None))
+    
+    for stack in dssr.get("stacks", []):
+        nts = [
+            match_dssr_name_to_residue(structure3d, nt)
+            for nt in stack.get("nts_long", "").split(",")
+        ]
+        for i in range(1, len(nts)):
+            nt1 = nts[i - 1]
+            nt2 = nts[i]
+            if nt1 is not None and nt2 is not None:
+                stackings.append(Stacking(nt1, nt2, None))
+    
+    return BaseInteractions(base_pairs, stackings, [], [], [])
+
+
 def parse_external_output(
     file_path: str, tool: ExternalTool, structure3d: Structure3D
 ) -> BaseInteractions:
@@ -195,8 +258,7 @@ def parse_external_output(
     if tool == ExternalTool.FR3D:
         return parse_fr3d_output(file_path)
     elif tool == ExternalTool.DSSR:
-        # TODO: Implement DSSR output parsing
-        raise NotImplementedError("DSSR output parsing not yet implemented")
+        return parse_dssr_output(file_path, structure3d)
     else:
         raise ValueError(f"Unsupported external tool: {tool}")
 
