@@ -234,6 +234,7 @@ def write_pdb(
     last_res_seq = None
     last_res_name = None
     last_serial = None
+    last_icode = None
 
     # Process each row in the DataFrame
     for index, row in df.iterrows():
@@ -252,16 +253,17 @@ def write_pdb(
             # 18-20: Residue name (right-justified)
             # 22: Chain ID
             # 23-26: Residue sequence number (right-justified)
-            # 27: Insertion code (usually blank for TER)
+            # 27: Insertion code
             ter_serial = str(last_serial + 1).rjust(5)
-            ter_res_name = last_res_name.rjust(3)
+            ter_res_name = last_res_name.strip().rjust(3)  # Strip and justify
             ter_chain_id = last_chain_id
             ter_res_seq = last_res_seq.rjust(4)
-            # Insertion code is typically blank, handled by spacing
+            ter_icode = last_icode if last_icode else ""  # Use last recorded iCode
 
-            ter_line = (
-                f"TER   {ter_serial}      {ter_res_name} {ter_chain_id}{ter_res_seq}"
-            )
+            # Construct the TER line ensuring correct spacing for all fields
+            # TER (1-6), serial (7-11), space (12-17), resName (18-20), space (21),
+            # chainID (22), resSeq (23-26), iCode (27)
+            ter_line = f"TER   {ter_serial}      {ter_res_name} {ter_chain_id}{ter_res_seq}{ter_icode}"
             buffer.write(ter_line.ljust(80) + "\n")
 
         # Initialize the line with spaces
@@ -400,22 +402,29 @@ def write_pdb(
             last_res_name = row["resName"]
             last_chain_id = row["chainID"]
             last_res_seq = str(int(row["resSeq"]))
+            last_icode = row["iCode"] if pd.notna(row["iCode"]) else ""
         else:  # mmCIF
             last_serial = int(row["id"])
             last_res_name = row.get("auth_comp_id", row.get("label_comp_id", ""))
             last_chain_id = row.get("auth_asym_id", row.get("label_asym_id", ""))
             last_res_seq = str(int(row.get("auth_seq_id", row.get("label_seq_id", 0))))
+            last_icode = (
+                row.get("pdbx_PDB_ins_code", "")
+                if pd.notna(row.get("pdbx_PDB_ins_code", ""))
+                else ""
+            )
 
     # Add TER record for the last chain
     if last_chain_id is not None:
         # Format TER record according to PDB specification
         ter_serial = str(last_serial + 1).rjust(5)
-        ter_res_name = last_res_name.rjust(3)
+        ter_res_name = last_res_name.strip().rjust(3)  # Strip and justify
         ter_chain_id = last_chain_id
         ter_res_seq = last_res_seq.rjust(4)
-        # Insertion code is typically blank, handled by spacing
+        ter_icode = last_icode if last_icode else ""  # Use last recorded iCode
 
-        ter_line = f"TER   {ter_serial}      {ter_res_name} {ter_chain_id}{ter_res_seq}"
+        # Construct the TER line ensuring correct spacing for all fields
+        ter_line = f"TER   {ter_serial}      {ter_res_name} {ter_chain_id}{ter_res_seq}{ter_icode}"
         buffer.write(ter_line.ljust(80) + "\n")
 
     # Add END record
