@@ -255,7 +255,7 @@ def write_pdb(
             # 23-26: Residue sequence number (right-justified)
             # 27: Insertion code
             ter_serial = str(last_serial + 1).rjust(5)
-            ter_res_name = last_res_name.strip().rjust(3)  # Strip and justify
+            ter_res_name = last_res_name.strip().ljust(3)  # Strip and left-justify
             ter_chain_id = last_chain_id
             ter_res_seq = last_res_seq.rjust(4)
             ter_icode = last_icode if last_icode else ""  # Use last recorded iCode
@@ -418,7 +418,7 @@ def write_pdb(
     if last_chain_id is not None:
         # Format TER record according to PDB specification
         ter_serial = str(last_serial + 1).rjust(5)
-        ter_res_name = last_res_name.strip().rjust(3)  # Strip and justify
+        ter_res_name = last_res_name.strip().ljust(3)  # Strip and left-justify
         ter_chain_id = last_chain_id
         ter_res_seq = last_res_seq.rjust(4)
         ter_icode = last_icode if last_icode else ""  # Use last recorded iCode
