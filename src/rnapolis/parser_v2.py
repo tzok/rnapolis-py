@@ -59,6 +59,7 @@ def parse_pdb_atoms(content: Union[str, IO[str]]) -> pd.DataFrame:
             "tempFactor": line[60:66].strip(),
             "element": line[76:78].strip(),
             "charge": line[78:80].strip(),
+            "model": current_model,  # Add the current model number
         }
 
         records.append(record)
@@ -83,13 +84,23 @@ def parse_pdb_atoms(content: Union[str, IO[str]]) -> pd.DataFrame:
                 "tempFactor",
                 "element",
                 "charge",
+                "model",
             ]
         )
 
     df = pd.DataFrame(records)
 
     # Convert numeric columns to appropriate types
-    numeric_columns = ["serial", "resSeq", "x", "y", "z", "occupancy", "tempFactor"]
+    numeric_columns = [
+        "serial",
+        "resSeq",
+        "x",
+        "y",
+        "z",
+        "occupancy",
+        "tempFactor",
+        "model",
+    ]
     for col in numeric_columns:
         df[col] = pd.to_numeric(df[col], errors="coerce")
 
