@@ -229,8 +229,28 @@ def write_pdb(
     # Get the format of the DataFrame
     format_type = df.attrs.get("format", "PDB")
 
+    # Variables to track chain changes for TER records
+    last_chain_id = None
+    last_res_seq = None
+    last_res_name = None
+    last_serial = None
+
     # Process each row in the DataFrame
-    for _, row in df.iterrows():
+    for index, row in df.iterrows():
+        # Get current chain ID
+        if format_type == "PDB":
+            current_chain_id = row["chainID"]
+        else:  # mmCIF
+            current_chain_id = row.get("auth_asym_id", row.get("label_asym_id", ""))
+
+        # Write TER record if chain changes
+        if last_chain_id is not None and current_chain_id != last_chain_id:
+            ter_line = "TER   "
+            ter_line += str(last_serial + 1).rjust(5) + "      "  # Next serial number
+            ter_line += last_res_name.rjust(3) + " "
+            ter_line += last_chain_id + last_res_seq.rjust(4)
+            buffer.write(ter_line.ljust(80) + "\n")
+
         # Initialize the line with spaces
         line = " " * 80
 
@@ -360,6 +380,26 @@ def write_pdb(
 
         # Write the line to the buffer
         buffer.write(line.rstrip() + "\n")
+
+        # Update last atom info for potential TER record
+        if format_type == "PDB":
+            last_serial = int(row["serial"])
+            last_res_name = row["resName"]
+            last_chain_id = row["chainID"]
+            last_res_seq = str(int(row["resSeq"]))
+        else:  # mmCIF
+            last_serial = int(row["id"])
+            last_res_name = row.get("auth_comp_id", row.get("label_comp_id", ""))
+            last_chain_id = row.get("auth_asym_id", row.get("label_asym_id", ""))
+            last_res_seq = str(int(row.get("auth_seq_id", row.get("label_seq_id", 0))))
+
+    # Add TER record for the last chain
+    if last_chain_id is not None:
+        ter_line = "TER   "
+        ter_line += str(last_serial + 1).rjust(5) + "      "  # Next serial number
+        ter_line += last_res_name.rjust(3) + " "
+        ter_line += last_chain_id + last_res_seq.rjust(4)
+        buffer.write(ter_line.ljust(80) + "\n")
 
     # Add END record
     buffer.write("END\n")
