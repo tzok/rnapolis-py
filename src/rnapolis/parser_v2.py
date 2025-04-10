@@ -259,7 +259,9 @@ def write_pdb(
             ter_res_seq = last_res_seq.rjust(4)
             # Insertion code is typically blank, handled by spacing
 
-            ter_line = f"TER   {ter_serial}      {ter_res_name} {ter_chain_id}{ter_res_seq}"
+            ter_line = (
+                f"TER   {ter_serial}      {ter_res_name} {ter_chain_id}{ter_res_seq}"
+            )
             buffer.write(ter_line.ljust(80) + "\n")
 
         # Initialize the line with spaces
