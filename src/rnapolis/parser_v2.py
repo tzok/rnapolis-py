@@ -34,8 +34,18 @@ def parse_pdb_atoms(content: Union[str, IO[str]]) -> pd.DataFrame:
         if isinstance(lines[0], bytes):
             lines = [line.decode("utf-8") for line in lines]
 
+    current_model = 1
     for line in lines:
         record_type = line[:6].strip()
+
+        # Check for MODEL record
+        if record_type == "MODEL":
+            try:
+                current_model = int(line[10:14].strip())
+            except ValueError:
+                # Handle cases where MODEL record might be malformed
+                pass  # Keep the previous model number
+            continue
 
         # Only process ATOM and HETATM records
         if record_type not in ["ATOM", "HETATM"]:
