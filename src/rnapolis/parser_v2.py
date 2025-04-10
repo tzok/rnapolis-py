@@ -34,8 +34,18 @@ def parse_pdb_atoms(content: Union[str, IO[str]]) -> pd.DataFrame:
         if isinstance(lines[0], bytes):
             lines = [line.decode("utf-8") for line in lines]
 
+    current_model = 1
     for line in lines:
         record_type = line[:6].strip()
+
+        # Check for MODEL record
+        if record_type == "MODEL":
+            try:
+                current_model = int(line[10:14].strip())
+            except ValueError:
+                # Handle cases where MODEL record might be malformed
+                pass  # Keep the previous model number
+            continue
 
         # Only process ATOM and HETATM records
         if record_type not in ["ATOM", "HETATM"]:
@@ -59,6 +69,7 @@ def parse_pdb_atoms(content: Union[str, IO[str]]) -> pd.DataFrame:
             "tempFactor": line[60:66].strip(),
             "element": line[76:78].strip(),
             "charge": line[78:80].strip(),
+            "model": current_model,  # Add the current model number
         }
 
         records.append(record)
@@ -83,13 +94,23 @@ def parse_pdb_atoms(content: Union[str, IO[str]]) -> pd.DataFrame:
                 "tempFactor",
                 "element",
                 "charge",
+                "model",
             ]
         )
 
     df = pd.DataFrame(records)
 
     # Convert numeric columns to appropriate types
-    numeric_columns = ["serial", "resSeq", "x", "y", "z", "occupancy", "tempFactor"]
+    numeric_columns = [
+        "serial",
+        "resSeq",
+        "x",
+        "y",
+        "z",
+        "occupancy",
+        "tempFactor",
+        "model",
+    ]
     for col in numeric_columns:
         df[col] = pd.to_numeric(df[col], errors="coerce")
 
@@ -229,8 +250,43 @@ def write_pdb(
     # Get the format of the DataFrame
     format_type = df.attrs.get("format", "PDB")
 
+    # Variables to track chain changes for TER records
+    last_chain_id = None
+    last_res_seq = None
+    last_res_name = None
+    last_serial = None
+    last_icode = None
+
     # Process each row in the DataFrame
-    for _, row in df.iterrows():
+    for index, row in df.iterrows():
+        # Get current chain ID
+        if format_type == "PDB":
+            current_chain_id = row["chainID"]
+        else:  # mmCIF
+            current_chain_id = row.get("auth_asym_id", row.get("label_asym_id", ""))
+
+        # Write TER record if chain changes
+        if last_chain_id is not None and current_chain_id != last_chain_id:
+            # Format TER record according to PDB specification
+            # Columns:
+            # 1-6: "TER   "
+            # 7-11: Serial number (right-justified)
+            # 18-20: Residue name (right-justified)
+            # 22: Chain ID
+            # 23-26: Residue sequence number (right-justified)
+            # 27: Insertion code
+            ter_serial = str(last_serial + 1).rjust(5)
+            ter_res_name = last_res_name.strip().ljust(3)  # Strip and left-justify
+            ter_chain_id = last_chain_id
+            ter_res_seq = last_res_seq.rjust(4)
+            ter_icode = last_icode if last_icode else ""  # Use last recorded iCode
+
+            # Construct the TER line ensuring correct spacing for all fields
+            # TER (1-6), serial (7-11), space (12-17), resName (18-20), space (21),
+            # chainID (22), resSeq (23-26), iCode (27)
+            ter_line = f"TER   {ter_serial}      {ter_res_name} {ter_chain_id}{ter_res_seq}{ter_icode}"
+            buffer.write(ter_line.ljust(80) + "\n")
+
         # Initialize the line with spaces
         line = " " * 80
 
@@ -360,6 +416,37 @@ def write_pdb(
 
         # Write the line to the buffer
         buffer.write(line.rstrip() + "\n")
+
+        # Update last atom info for potential TER record
+        if format_type == "PDB":
+            last_serial = int(row["serial"])
+            last_res_name = row["resName"]
+            last_chain_id = row["chainID"]
+            last_res_seq = str(int(row["resSeq"]))
+            last_icode = row["iCode"] if pd.notna(row["iCode"]) else ""
+        else:  # mmCIF
+            last_serial = int(row["id"])
+            last_res_name = row.get("auth_comp_id", row.get("label_comp_id", ""))
+            last_chain_id = row.get("auth_asym_id", row.get("label_asym_id", ""))
+            last_res_seq = str(int(row.get("auth_seq_id", row.get("label_seq_id", 0))))
+            last_icode = (
+                row.get("pdbx_PDB_ins_code", "")
+                if pd.notna(row.get("pdbx_PDB_ins_code", ""))
+                else ""
+            )
+
+    # Add TER record for the last chain
+    if last_chain_id is not None:
+        # Format TER record according to PDB specification
+        ter_serial = str(last_serial + 1).rjust(5)
+        ter_res_name = last_res_name.strip().ljust(3)  # Strip and left-justify
+        ter_chain_id = last_chain_id
+        ter_res_seq = last_res_seq.rjust(4)
+        ter_icode = last_icode if last_icode else ""  # Use last recorded iCode
+
+        # Construct the TER line ensuring correct spacing for all fields
+        ter_line = f"TER   {ter_serial}      {ter_res_name} {ter_chain_id}{ter_res_seq}{ter_icode}"
+        buffer.write(ter_line.ljust(80) + "\n")
 
     # Add END record
     buffer.write("END\n")

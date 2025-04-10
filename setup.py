@@ -5,7 +5,7 @@ with open("README.md") as f:
 
 setup(
     name="RNApolis",
-    version="0.7.0",
+    version="0.8.0",
     packages=["rnapolis"],
     package_dir={"": "src"},
     author="Tomasz Zok",
@@ -36,6 +36,7 @@ setup(
             "transformer=rnapolis.transformer:main",
             "rfam-folder=rnapolis.rfam_folder:main",
             "unifier=rnapolis.unifier:main",
+            "splitter=rnapolis.splitter:main",
         ]
     },
     include_package_data=True,
