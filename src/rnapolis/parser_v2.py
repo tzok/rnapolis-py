@@ -245,10 +245,21 @@ def write_pdb(
 
         # Write TER record if chain changes
         if last_chain_id is not None and current_chain_id != last_chain_id:
-            ter_line = "TER   "
-            ter_line += str(last_serial + 1).rjust(5) + "      "  # Next serial number
-            ter_line += last_res_name.rjust(3) + " "
-            ter_line += last_chain_id + last_res_seq.rjust(4)
+            # Format TER record according to PDB specification
+            # Columns:
+            # 1-6: "TER   "
+            # 7-11: Serial number (right-justified)
+            # 18-20: Residue name (right-justified)
+            # 22: Chain ID
+            # 23-26: Residue sequence number (right-justified)
+            # 27: Insertion code (usually blank for TER)
+            ter_serial = str(last_serial + 1).rjust(5)
+            ter_res_name = last_res_name.rjust(3)
+            ter_chain_id = last_chain_id
+            ter_res_seq = last_res_seq.rjust(4)
+            # Insertion code is typically blank, handled by spacing
+
+            ter_line = f"TER   {ter_serial}      {ter_res_name} {ter_chain_id}{ter_res_seq}"
             buffer.write(ter_line.ljust(80) + "\n")
 
         # Initialize the line with spaces
@@ -395,10 +406,14 @@ def write_pdb(
 
     # Add TER record for the last chain
     if last_chain_id is not None:
-        ter_line = "TER   "
-        ter_line += str(last_serial + 1).rjust(5) + "      "  # Next serial number
-        ter_line += last_res_name.rjust(3) + " "
-        ter_line += last_chain_id + last_res_seq.rjust(4)
+        # Format TER record according to PDB specification
+        ter_serial = str(last_serial + 1).rjust(5)
+        ter_res_name = last_res_name.rjust(3)
+        ter_chain_id = last_chain_id
+        ter_res_seq = last_res_seq.rjust(4)
+        # Insertion code is typically blank, handled by spacing
+
+        ter_line = f"TER   {ter_serial}      {ter_res_name} {ter_chain_id}{ter_res_seq}"
         buffer.write(ter_line.ljust(80) + "\n")
 
     # Add END record
