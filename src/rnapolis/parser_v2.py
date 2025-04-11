@@ -398,21 +398,45 @@ def write_pdb(
         line = line[:76] + element.rjust(2) + line[78:]
 
         # Set charge
+        charge = "" # Default to empty string
         if format_type == "PDB":
-            charge = row["charge"]
-        else:  # mmCIF
-            charge = row.get("pdbx_formal_charge", "")
-            if charge and charge not in ["?", "."]:
-                # Convert numeric charge to PDB format (e.g., "1+" or "2-")
+            raw_charge = row["charge"]
+            if pd.notna(raw_charge) and raw_charge != "":
                 try:
-                    charge_val = int(charge)
+                    # Try converting to number and formatting like '1+', '2-'
+                    # Use float first to handle potential decimals (e.g., 1.0)
+                    charge_val = int(float(raw_charge))
                     if charge_val != 0:
                         charge = f"{abs(charge_val)}{'+' if charge_val > 0 else '-'}"
-                    else:
-                        charge = ""
+                    # else charge remains "" (zero charge is usually omitted)
                 except ValueError:
-                    pass
-        line = line[:78] + charge + line[80:]
+                    # If not a number (e.g., already '1+'), use its string representation
+                    charge = str(raw_charge)
+
+                # Ensure charge fits in 2 characters for PDB format
+                if len(charge) > 2:
+                    charge = charge[:2] # Truncate if necessary
+        else:  # mmCIF
+            raw_charge = row.get("pdbx_formal_charge", "")
+            # Process charge if it's not empty or a placeholder like '?' or '.'
+            if raw_charge and raw_charge not in ["?", "."]:
+                try:
+                    # Convert numeric charge (string) to PDB format (e.g., "1+" or "2-")
+                    charge_val = int(raw_charge)
+                    if charge_val != 0:
+                        charge = f"{abs(charge_val)}{'+' if charge_val > 0 else '-'}"
+                    # else charge remains "" (zero charge)
+                except ValueError:
+                     # If not an integer (e.g., already '1+'), use the raw value
+                     charge = str(raw_charge)
+
+                # Ensure charge fits in 2 characters
+                if len(charge) > 2:
+                    charge = charge[:2] # Truncate if necessary
+
+        # Place the charge string into the PDB line (columns 79-80)
+        # Ensure it's right-justified within the 2 characters
+        line = line[:78] + charge.rjust(2) + line[80:]
 
         # Write the line to the buffer
         buffer.write(line.rstrip() + "\n")
