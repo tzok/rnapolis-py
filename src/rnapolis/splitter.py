@@ -3,8 +3,6 @@ import argparse
 import os
 import sys
 
-import pandas as pd
-
 from rnapolis.parser import is_cif
 from rnapolis.parser_v2 import parse_cif_atoms, parse_pdb_atoms, write_cif, write_pdb
 
