@@ -398,7 +398,7 @@ def write_pdb(
         line = line[:76] + element.rjust(2) + line[78:]
 
         # Set charge
-        charge = "" # Default to empty string
+        charge = ""  # Default to empty string
         if format_type == "PDB":
             raw_charge = row["charge"]
             if pd.notna(raw_charge) and raw_charge != "":
@@ -415,7 +415,7 @@ def write_pdb(
 
                 # Ensure charge fits in 2 characters for PDB format
                 if len(charge) > 2:
-                    charge = charge[:2] # Truncate if necessary
+                    charge = charge[:2]  # Truncate if necessary
         else:  # mmCIF
             raw_charge = row.get("pdbx_formal_charge", "")
             # Process charge if it's not empty or a placeholder like '?' or '.'
@@ -427,12 +427,12 @@ def write_pdb(
                         charge = f"{abs(charge_val)}{'+' if charge_val > 0 else '-'}"
                     # else charge remains "" (zero charge)
                 except ValueError:
-                     # If not an integer (e.g., already '1+'), use the raw value
-                     charge = str(raw_charge)
+                    # If not an integer (e.g., already '1+'), use the raw value
+                    charge = str(raw_charge)
 
                 # Ensure charge fits in 2 characters
                 if len(charge) > 2:
-                    charge = charge[:2] # Truncate if necessary
+                    charge = charge[:2]  # Truncate if necessary
 
         # Place the charge string into the PDB line (columns 79-80)
         # Ensure it's right-justified within the 2 characters
