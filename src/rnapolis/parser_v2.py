@@ -398,13 +398,6 @@ def fit_to_pdb(df: pd.DataFrame) -> pd.DataFrame:
         return df
 
     # --- Fitting is required ---
-
-    if df.empty:
-        # Empty DataFrame can always be "fitted" to PDB
-        df_copy = df.copy()
-        df_copy.attrs["format"] = "PDB"
-        return df_copy
-
     if not format_type:
         raise ValueError("DataFrame format attribute is not set.")
 
@@ -428,12 +421,8 @@ def fit_to_pdb(df: pd.DataFrame) -> pd.DataFrame:
     if resseq_col not in df.columns:
         raise ValueError(f"Missing required residue sequence column: {resseq_col}")
 
-    # Ensure icode_col exists, even if all None, for grouping
-    if icode_col not in df.columns:
-        df[icode_col] = None  # Add the column if missing
-
-    # Fill NaN in iCode for grouping purposes
-    df[icode_col] = df[icode_col].fillna("")
+    # Fill NaN in iCode for grouping purposes temporarily for the check
+    temp_icode = df[icode_col].fillna("") if icode_col in df.columns else pd.Series([""] * len(df), index=df.index)
 
     unique_chains = df[chain_col].unique()
     num_chains = len(unique_chains)
@@ -462,13 +451,20 @@ def fit_to_pdb(df: pd.DataFrame) -> pd.DataFrame:
         df.groupby(chain_col)[[resseq_col, icode_col]]
         .nunique()
         .max()
-        .max()  # Get max across both columns then max of those
+        .max()  # Get max across both columns then max of those - This check is less accurate
     )
+
     # More accurate check: group by chain, then count unique (resSeq, iCode) tuples
-    residue_counts = df.groupby(chain_col).apply(
-        lambda x: x[[resseq_col, icode_col]].drop_duplicates().shape[0]
+    # Use a temporary structure to avoid modifying the original df
+    check_df = pd.DataFrame({
+        'chain': df[chain_col],
+        'resSeq': df[resseq_col],
+        'iCode': df[icode_col].fillna("") if icode_col in df.columns else ""
+    })
+    residue_counts = check_df.groupby('chain').apply(
+        lambda x: x[['resSeq', 'iCode']].drop_duplicates().shape[0]
     )
-    max_residues_per_chain = residue_counts.max()
+    max_residues_per_chain = residue_counts.max() if not residue_counts.empty else 0
 
     if max_residues_per_chain > max_pdb_residue:
         raise ValueError(
