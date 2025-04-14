@@ -684,12 +684,23 @@ def fit_to_pdb(df: pd.DataFrame) -> pd.DataFrame:
     ]
     for col in pdb_categorical_columns_final:
         if col in df_fitted.columns:
-            # Convert to object first to allow filling NA with new value ('')
-            df_fitted[col] = df_fitted[col].astype(object)
-            # Fill None/NaN with empty string
-            df_fitted[col].fillna("", inplace=True)
-            # Convert back to category, now including '' as a category
-            df_fitted[col] = df_fitted[col].astype("category")
+            # Ensure the column is categorical first
+            if not pd.api.types.is_categorical_dtype(df_fitted[col]):
+                # Convert non-categorical columns, handling potential NaNs
+                if df_fitted[col].isnull().any():
+                    df_fitted[col] = df_fitted[col].astype(object).fillna("").astype("category")
+                else:
+                    df_fitted[col] = df_fitted[col].astype("category")
+            else:
+                # If already categorical, check if '' needs to be added before fillna
+                has_nans = df_fitted[col].isnull().any()
+                if has_nans and "" not in df_fitted[col].cat.categories:
+                    # Add '' category explicitly
+                    df_fitted[col] = df_fitted[col].cat.add_categories([""])
+
+                # Fill None/NaN with empty string (now safe)
+                if has_nans:
+                    df_fitted[col].fillna("", inplace=True)
 
     return df_fitted
 
