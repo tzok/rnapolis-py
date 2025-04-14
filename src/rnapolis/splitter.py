@@ -4,7 +4,13 @@ import os
 import sys
 
 from rnapolis.parser import is_cif
-from rnapolis.parser_v2 import parse_cif_atoms, parse_pdb_atoms, write_cif, write_pdb
+from rnapolis.parser_v2 import (
+    fit_to_pdb,
+    parse_cif_atoms,
+    parse_pdb_atoms,
+    write_cif,
+    write_pdb,
+)
 
 
 def main():
@@ -95,12 +101,21 @@ def main():
 
         try:
             if output_format == "PDB":
-                write_pdb(model_df, output_path)
+                df_to_write = fit_to_pdb(model_df)
+                write_pdb(df_to_write, output_path)
             else:  # mmCIF
                 write_cif(model_df, output_path)
-        except Exception as e:
+        except ValueError as e:
+            # Handle errors specifically from fit_to_pdb
             print(
-                f"Error writing file {output_path}: {e}",
+                f"Error fitting model {model_num} from {args.file} to PDB: {e}. Skipping model.",
+                file=sys.stderr,
+            )
+            continue
+        except Exception as e:
+            # Handle general writing errors
+            print(
+                f"Error writing file {output_path} for model {model_num}: {e}",
                 file=sys.stderr,
             )
             # Optionally continue to next model or exit

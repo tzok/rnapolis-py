@@ -7,7 +7,13 @@ from collections import Counter
 import pandas as pd
 
 from rnapolis.parser import is_cif
-from rnapolis.parser_v2 import parse_cif_atoms, parse_pdb_atoms, write_cif, write_pdb
+from rnapolis.parser_v2 import (
+    fit_to_pdb,
+    parse_cif_atoms,
+    parse_pdb_atoms,
+    write_cif,
+    write_pdb,
+)
 from rnapolis.tertiary_v2 import Structure
 
 
@@ -140,13 +146,22 @@ def main():
 
         ext = ".pdb" if format == "PDB" else ".cif"
 
-        with open(f"{args.output}/{base}{ext}", "w") as f:
-            df = pd.concat([residue.atoms for residue in residues])
+        df = pd.concat([residue.atoms for residue in residues])
 
+        try:
             if format == "PDB":
-                write_pdb(df, f)
+                df_to_write = fit_to_pdb(df)
+                with open(f"{args.output}/{base}{ext}", "w") as f:
+                    write_pdb(df_to_write, f)
             else:
-                write_cif(df, f)
+                with open(f"{args.output}/{base}{ext}", "w") as f:
+                    write_cif(df, f)
+        except ValueError as e:
+            print(
+                f"Error processing {path} for PDB output: {e}. Skipping file.",
+                file=sys.stderr,
+            )
+            continue
 
 
 if __name__ == "__main__":
