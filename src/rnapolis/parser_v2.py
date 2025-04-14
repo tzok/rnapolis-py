@@ -489,24 +489,22 @@ def write_pdb(
                 "model": int(row.get("model", 1)),
             }
         elif format_type == "mmCIF":
-            # Pre-process mmCIF values to PDB compatible format
+            # Pre-process mmCIF values to PDB compatible format, converting None to empty strings
             raw_alt_loc = row.get("label_alt_id")
-            pdb_alt_loc = (
-                "" if pd.isna(raw_alt_loc) or raw_alt_loc == "." else str(raw_alt_loc)
-            )
+            pdb_alt_loc = "" if pd.isna(raw_alt_loc) else str(raw_alt_loc)
 
             raw_icode = row.get("pdbx_PDB_ins_code")
-            pdb_icode = "" if pd.isna(raw_icode) or raw_icode == "." else str(raw_icode)
+            pdb_icode = "" if pd.isna(raw_icode) else str(raw_icode)
 
             raw_element = row.get("type_symbol")
-            pdb_element = (
-                "" if pd.isna(raw_element) or raw_element == "?" else str(raw_element)
-            )
+            pdb_element = "" if pd.isna(raw_element) else str(raw_element)
 
             raw_charge = row.get("pdbx_formal_charge")
-            pdb_charge = (
-                "" if pd.isna(raw_charge) or raw_charge == "." else str(raw_charge)
-            )
+            pdb_charge = "" if pd.isna(raw_charge) else str(raw_charge)
+
+            # Prioritize auth_asym_id, fallback to label_asym_id for chainID
+            raw_chain_id = row.get("auth_asym_id", row.get("label_asym_id"))
+            pdb_chain_id = "" if pd.isna(raw_chain_id) else str(raw_chain_id)
 
             atom_data = {
                 "record_name": row.get("group_PDB", "ATOM"),
