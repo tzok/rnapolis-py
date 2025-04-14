@@ -414,30 +414,19 @@ def write_pdb(
                 "name": str(row.get("auth_atom_id", row.get("label_atom_id", ""))),
                 "altLoc": "" if pd.isna(alt_loc_val) or alt_loc_val == "." else str(alt_loc_val),
                 "resName": str(row.get("auth_comp_id", row.get("label_comp_id", ""))),
-                "chainID": str(row.get("auth_asym_id", row.get("label_asym_id", ""))),
                 "resSeq": int(row.get("auth_seq_id", row.get("label_seq_id", 0))),
-                "iCode": str(row.get("pdbx_PDB_ins_code", "")),
+                "iCode": "" if pd.isna(icode_val) or icode_val == "." else str(icode_val),
                 "x": float(row.get("Cartn_x", 0.0)),
                 "y": float(row.get("Cartn_y", 0.0)),
                 "z": float(row.get("Cartn_z", 0.0)),
                 "occupancy": float(row.get("occupancy", 1.0)),
                 "tempFactor": float(row.get("B_iso_or_equiv", 0.0)),
-                "element": str(row.get("type_symbol", "")),
-                "charge": str(row.get("pdbx_formal_charge", "")),
+                "element": "" if pd.isna(element_val) or element_val == "?" else str(element_val),
+                "charge": "" if pd.isna(charge_val) or charge_val == "." else str(charge_val),
                 "model": int(row.get("pdbx_PDB_model_num", 1)),
             }
         else:
             raise ValueError(f"Unsupported DataFrame format: {format_type}")
-
-        # Handle None values from DataFrame for optional fields, converting them to empty strings for PDB formatting
-        atom_data["altLoc"] = "" if pd.isna(row.get("altLoc")) else str(row.get("altLoc", ""))
-        atom_data["iCode"] = "" if pd.isna(row.get("iCode")) else str(row.get("iCode", ""))
-        atom_data["element"] = "" if pd.isna(row.get("element")) else str(row.get("element", ""))
-        atom_data["charge"] = "" if pd.isna(row.get("charge")) else str(row.get("charge", ""))
-
-        # Specific handling for mmCIF source format where '.' means empty altLoc
-        if format_type == "mmCIF" and row.get("label_alt_id") == ".":
-             atom_data["altLoc"] = ""
 
         # --- MODEL/ENDMDL Records ---
         current_model_num = atom_data["model"]
