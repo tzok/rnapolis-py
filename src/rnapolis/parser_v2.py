@@ -198,6 +198,7 @@ def parse_cif_atoms(content: Union[str, IO[str]]) -> pd.DataFrame:
         "occupancy",
         "B_iso_or_equiv",
         "pdbx_formal_charge",
+        "pdbx_PDB_model_num",  # Add model number here
     ]
 
     for col in numeric_columns:
