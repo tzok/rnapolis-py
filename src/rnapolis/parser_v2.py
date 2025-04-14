@@ -621,6 +621,47 @@ def fit_to_pdb(df: pd.DataFrame) -> pd.DataFrame:
     other_cols = [col for col in df_fitted.columns if col not in final_pdb_order]
     df_fitted = df_fitted[final_pdb_order + other_cols]
 
+    # --- Final Type Conversions for PDB format ---
+    # Convert numeric columns (similar to parse_pdb_atoms)
+    pdb_numeric_columns = [
+        "serial",
+        "resSeq",
+        "x",
+        "y",
+        "z",
+        "occupancy",
+        "tempFactor",
+        "model",
+    ]
+    for col in pdb_numeric_columns:
+        if col in df_fitted.columns:
+            # Use Int64 for integer-like columns that might have been NaN during processing
+            if col in ["serial", "resSeq", "model"]:
+                 df_fitted[col] = pd.to_numeric(df_fitted[col], errors="coerce").astype("Int64")
+            else: # Floats
+                 df_fitted[col] = pd.to_numeric(df_fitted[col], errors="coerce")
+
+
+    # Convert categorical columns (similar to parse_pdb_atoms)
+    # Note: chainID and iCode were already handled during fitting/renaming
+    pdb_categorical_columns_final = [
+        "record_type",
+        "name",
+        "altLoc",
+        "resName",
+        "chainID", # Already category, but ensure consistency
+        "iCode", # Already category, but ensure consistency
+        "element",
+        "charge",
+    ]
+    for col in pdb_categorical_columns_final:
+        if col in df_fitted.columns:
+             # Ensure None is handled before converting to category
+             if df_fitted[col].isnull().any():
+                  df_fitted[col] = df_fitted[col].astype(object).fillna('')
+             df_fitted[col] = df_fitted[col].astype("category")
+
+
     return df_fitted
 
 
