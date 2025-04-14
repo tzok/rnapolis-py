@@ -190,36 +190,59 @@ def parse_cif_atoms(content: Union[str, IO[str]]) -> pd.DataFrame:
     # Create DataFrame from records
     df = pd.DataFrame(records)
 
-    # Convert numeric columns to appropriate types
-    numeric_columns = [
-        "id",
-        "auth_seq_id",
-        "Cartn_x",
-        "Cartn_y",
-        "Cartn_z",
-        "occupancy",
-        "B_iso_or_equiv",
-        "pdbx_formal_charge",
+    # Define columns based on mmCIF specification for atom_site
+    float_cols = [
+        "aniso_B[1][1]", "aniso_B[1][1]_esd", "aniso_B[1][2]", "aniso_B[1][2]_esd",
+        "aniso_B[1][3]", "aniso_B[1][3]_esd", "aniso_B[2][2]", "aniso_B[2][2]_esd",
+        "aniso_B[2][3]", "aniso_B[2][3]_esd", "aniso_B[3][3]", "aniso_B[3][3]_esd",
+        "aniso_ratio",
+        "aniso_U[1][1]", "aniso_U[1][1]_esd", "aniso_U[1][2]", "aniso_U[1][2]_esd",
+        "aniso_U[1][3]", "aniso_U[1][3]_esd", "aniso_U[2][2]", "aniso_U[2][2]_esd",
+        "aniso_U[2][3]", "aniso_U[2][3]_esd", "aniso_U[3][3]", "aniso_U[3][3]_esd",
+        "B_equiv_geom_mean", "B_equiv_geom_mean_esd",
+        "B_iso_or_equiv", "B_iso_or_equiv_esd",
+        "Cartn_x", "Cartn_x_esd", "Cartn_y", "Cartn_y_esd", "Cartn_z", "Cartn_z_esd",
+        "fract_x", "fract_x_esd", "fract_y", "fract_y_esd", "fract_z", "fract_z_esd",
+        "occupancy", "occupancy_esd",
+        "U_equiv_geom_mean", "U_equiv_geom_mean_esd",
+        "U_iso_or_equiv", "U_iso_or_equiv_esd",
+    ]
+    int_cols = [
+        "attached_hydrogens",
+        "label_seq_id",
+        "symmetry_multiplicity",
         "pdbx_PDB_model_num",
+        "pdbx_formal_charge",
+        "pdbx_label_index",
+    ]
+    category_cols = [
+        "auth_asym_id", "auth_atom_id", "auth_comp_id", "auth_seq_id",
+        "calc_attached_atom", "calc_flag",
+        "disorder_assembly", "disorder_group",
+        "group_PDB", "id",
+        "label_alt_id", "label_asym_id", "label_atom_id", "label_comp_id", "label_entity_id",
+        "thermal_displace_type", "type_symbol",
+        "pdbx_atom_ambiguity", "adp_type",
+        "refinement_flags", "refinement_flags_adp", "refinement_flags_occupancy", "refinement_flags_posn",
+        "pdbx_auth_alt_id", "pdbx_PDB_ins_code",
+        "pdbx_PDB_residue_no", "pdbx_PDB_residue_name", "pdbx_PDB_strand_id", "pdbx_PDB_atom_name",
+        "pdbx_auth_atom_name", "pdbx_auth_comp_id", "pdbx_auth_asym_id", "pdbx_auth_seq_id",
+        "pdbx_tls_group_id", "pdbx_ncs_dom_id",
+        "pdbx_group_NDB", "pdbx_atom_group", "pdbx_label_seq_num", "pdbx_not_in_asym",
+        "pdbx_sifts_xref_db_name", "pdbx_sifts_xref_db_acc", "pdbx_sifts_xref_db_num", "pdbx_sifts_xref_db_res",
     ]
 
-    for col in numeric_columns:
+    # Convert columns to appropriate types
+    for col in float_cols:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce")
 
-    # Convert categorical columns
-    categorical_columns = [
-        "group_PDB",
-        "type_symbol",
-        "label_atom_id",
-        "label_comp_id",
-        "label_asym_id",
-        "auth_atom_id",
-        "auth_comp_id",
-        "auth_asym_id",
-    ]
+    for col in int_cols:
+        if col in df.columns:
+            # Use Int64 (nullable integer) to handle potential NaNs from coercion
+            df[col] = pd.to_numeric(df[col], errors="coerce").astype("Int64")
 
-    for col in categorical_columns:
+    for col in category_cols:
         if col in df.columns:
             df[col] = df[col].astype("category")
 
