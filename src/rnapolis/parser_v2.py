@@ -420,13 +420,6 @@ def fit_to_pdb(df: pd.DataFrame) -> pd.DataFrame:
     if resseq_col not in df.columns:
         raise ValueError(f"Missing required residue sequence column: {resseq_col}")
 
-    # Fill NaN in iCode for grouping purposes temporarily for the check
-    temp_icode = (
-        df[icode_col].fillna("")
-        if icode_col in df.columns
-        else pd.Series([""] * len(df), index=df.index)
-    )
-
     unique_chains = df[chain_col].unique()
     num_chains = len(unique_chains)
     total_atoms = len(df)
