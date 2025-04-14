@@ -576,13 +576,16 @@ def write_cif(
                 str(row["chainID"]),  # label_asym_id
                 entity_id,  # label_entity_id
                 str(int(row["resSeq"])),  # label_seq_id
-                str(row["iCode"]) if pd.notna(row["iCode"]) else ".",  # pdbx_PDB_ins_code (use '.' if None/NaN)
+                str(row["iCode"])
+                if pd.notna(row["iCode"])
+                else ".",  # pdbx_PDB_ins_code (use '.' if None/NaN)
                 f"{float(row['x']):.3f}",  # Cartn_x
                 f"{float(row['y']):.3f}",  # Cartn_y
                 f"{float(row['z']):.3f}",  # Cartn_z
                 f"{float(row['occupancy']):.2f}",  # occupancy
                 f"{float(row['tempFactor']):.2f}",  # B_iso_or_equiv
-                str(row.get("charge", "")) or ".",  # pdbx_formal_charge (use '.' if empty)
+                str(row.get("charge", ""))
+                or ".",  # pdbx_formal_charge (use '.' if empty)
                 str(int(row["resSeq"])),  # auth_seq_id
                 str(row["resName"]),  # auth_comp_id
                 str(row["chainID"]),  # auth_asym_id
