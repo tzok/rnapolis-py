@@ -479,35 +479,45 @@ def write_pdb(
                 "model": int(row.get("model", 1)),
             }
         elif format_type == "mmCIF":
-            # Convert None or '.' to empty string for optional PDB fields during extraction from mmCIF
-            alt_loc_val = row.get("label_alt_id")
-            icode_val = row.get("pdbx_PDB_ins_code")
-            element_val = row.get("type_symbol")
-            charge_val = row.get("pdbx_formal_charge")
+            # Pre-process mmCIF values to PDB compatible format
+            raw_alt_loc = row.get("label_alt_id")
+            pdb_alt_loc = (
+                "" if pd.isna(raw_alt_loc) or raw_alt_loc == "." else str(raw_alt_loc)
+            )
+
+            raw_icode = row.get("pdbx_PDB_ins_code")
+            pdb_icode = "" if pd.isna(raw_icode) or raw_icode == "." else str(raw_icode)
+
+            raw_element = row.get("type_symbol")
+            pdb_element = (
+                "" if pd.isna(raw_element) or raw_element == "?" else str(raw_element)
+            )
+
+            raw_charge = row.get("pdbx_formal_charge")
+            pdb_charge = (
+                "" if pd.isna(raw_charge) or raw_charge == "." else str(raw_charge)
+            )
+
+            # Prioritize auth_asym_id, fallback to label_asym_id for chainID
+            raw_chain_id = row.get("auth_asym_id", row.get("label_asym_id"))
+            pdb_chain_id = "" if pd.isna(raw_chain_id) else str(raw_chain_id)
 
             atom_data = {
                 "record_name": row.get("group_PDB", "ATOM"),
                 "serial": int(row.get("id", 0)),
                 "name": str(row.get("auth_atom_id", row.get("label_atom_id", ""))),
-                "altLoc": ""
-                if pd.isna(alt_loc_val) or alt_loc_val == "."
-                else str(alt_loc_val),
+                "altLoc": pdb_alt_loc,
                 "resName": str(row.get("auth_comp_id", row.get("label_comp_id", ""))),
+                "chainID": pdb_chain_id,  # Included chainID
                 "resSeq": int(row.get("auth_seq_id", row.get("label_seq_id", 0))),
-                "iCode": ""
-                if pd.isna(icode_val) or icode_val == "."
-                else str(icode_val),
+                "iCode": pdb_icode,
                 "x": float(row.get("Cartn_x", 0.0)),
                 "y": float(row.get("Cartn_y", 0.0)),
                 "z": float(row.get("Cartn_z", 0.0)),
                 "occupancy": float(row.get("occupancy", 1.0)),
                 "tempFactor": float(row.get("B_iso_or_equiv", 0.0)),
-                "element": ""
-                if pd.isna(element_val) or element_val == "?"
-                else str(element_val),
-                "charge": ""
-                if pd.isna(charge_val) or charge_val == "."
-                else str(charge_val),
+                "element": pdb_element,
+                "charge": pdb_charge,
                 "model": int(row.get("pdbx_PDB_model_num", 1)),
             }
         else:
