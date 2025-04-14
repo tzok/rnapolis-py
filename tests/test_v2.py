@@ -99,20 +99,20 @@ def compare_structures(df1: pd.DataFrame, df2: pd.DataFrame, rtol=1e-5, atol=1e-
 
 @pytest.fixture
 def data_dir():
-    "serial",
-    "name",
-    "altLoc",
-    "resName",
-    "chainID",
-    "resSeq",
-    "iCode",
-    "x",
-    "y",
-    "z",
-    "occupancy",
-    "tempFactor",
-    "element",
-    "charge",
+    ("serial",)
+    ("name",)
+    ("altLoc",)
+    ("resName",)
+    ("chainID",)
+    ("resSeq",)
+    ("iCode",)
+    ("x",)
+    ("y",)
+    ("z",)
+    ("occupancy",)
+    ("tempFactor",)
+    ("element",)
+    ("charge",)
     """Return the path to the test data directory."""
     return os.path.join(os.path.dirname(__file__))
 
