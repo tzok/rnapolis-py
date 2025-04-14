@@ -158,29 +158,34 @@ def parse_cif_atoms(content: Union[str, IO[str]]) -> pd.DataFrame:
     # Handle string, StringIO, and file-like objects
     if isinstance(content, str):
         # Create a temporary file for string input
-        with tempfile.NamedTemporaryFile(mode="w+", suffix=".cif", delete=False) as temp_file:
+        with tempfile.NamedTemporaryFile(
+            mode="w+", suffix=".cif", delete=False
+        ) as temp_file:
             temp_file.write(content)
             temp_file_path = temp_file.name
         try:
             data = adapter.readFile(temp_file_path)
         finally:
-            os.remove(temp_file_path) # Clean up the temporary file
+            os.remove(temp_file_path)  # Clean up the temporary file
     elif isinstance(content, io.StringIO):
         # Create a temporary file for StringIO input
-        with tempfile.NamedTemporaryFile(mode="w+", suffix=".cif", delete=False) as temp_file:
-            content.seek(0) # Ensure reading from the start
+        with tempfile.NamedTemporaryFile(
+            mode="w+", suffix=".cif", delete=False
+        ) as temp_file:
+            content.seek(0)  # Ensure reading from the start
             temp_file.write(content.read())
             temp_file_path = temp_file.name
         try:
             data = adapter.readFile(temp_file_path)
         finally:
-            os.remove(temp_file_path) # Clean up the temporary file
+            os.remove(temp_file_path)  # Clean up the temporary file
     elif hasattr(content, "name"):
         # Assume it's a file-like object with a name attribute (like an open file)
         data = adapter.readFile(content.name)
     else:
-        raise TypeError("Unsupported input type for parse_cif_atoms. Expected str, file-like object with name, or StringIO.")
-
+        raise TypeError(
+            "Unsupported input type for parse_cif_atoms. Expected str, file-like object with name, or StringIO."
+        )
 
     # Get the atom_site category
     category = data[0].getObj("atom_site")
