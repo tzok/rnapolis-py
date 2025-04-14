@@ -118,8 +118,9 @@ def compare_atom_dfs(
     # Compare object/categorical columns (handle None/NaN consistently)
     current_object_cols = [col for col in object_cols if col in common_cols]
     for col in current_object_cols:
-        s1 = df1_comp[col].fillna("").astype(str)
-        s2 = df2_comp[col].fillna("").astype(str)
+        # Convert to object type first to allow filling NA with '', then to string
+        s1 = df1_comp[col].astype(object).fillna("").astype(str)
+        s2 = df2_comp[col].astype(object).fillna("").astype(str)
         pd.testing.assert_series_equal(
             s1, s2, check_names=False, check_dtype=False, obj=f"{col} column comparison"
         )
