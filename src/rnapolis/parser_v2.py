@@ -395,17 +395,7 @@ def fit_to_pdb(df: pd.DataFrame) -> pd.DataFrame:
     format_type = df.attrs.get("format")
 
     if can_write_pdb(df):
-        if format_type == "PDB":
-            # Already PDB and fits, return a copy with format confirmed
-            df_copy = df.copy()
-            df_copy.attrs["format"] = "PDB"
-            return df_copy
-        elif format_type == "mmCIF":
-            # Is mmCIF but already fits PDB constraints, return original without changes
-            return df
-        else:
-            # Unknown format but somehow fits? Return original.
-            return df
+        return df
 
     # --- Fitting is required ---
 
