@@ -428,7 +428,7 @@ def fit_to_pdb(df: pd.DataFrame) -> pd.DataFrame:
 
     # Ensure icode_col exists, even if all None, for grouping
     if icode_col not in df.columns:
-        df[icode_col] = None # Add the column if missing
+        df[icode_col] = None  # Add the column if missing
 
     # Fill NaN in iCode for grouping purposes
     df[icode_col] = df[icode_col].fillna("")
@@ -460,14 +460,13 @@ def fit_to_pdb(df: pd.DataFrame) -> pd.DataFrame:
         df.groupby(chain_col)[[resseq_col, icode_col]]
         .nunique()
         .max()
-        .max() # Get max across both columns then max of those
+        .max()  # Get max across both columns then max of those
     )
     # More accurate check: group by chain, then count unique (resSeq, iCode) tuples
     residue_counts = df.groupby(chain_col).apply(
         lambda x: x[[resseq_col, icode_col]].drop_duplicates().shape[0]
     )
     max_residues_per_chain = residue_counts.max()
-
 
     if max_residues_per_chain > max_pdb_residue:
         raise ValueError(
@@ -485,10 +484,9 @@ def fit_to_pdb(df: pd.DataFrame) -> pd.DataFrame:
     # Ensure the chain column is treated as string/object after mapping
     df_fitted[chain_col] = df_fitted[chain_col].astype(object)
 
-
     # 2. Renumber Residues within each new chain
-    new_resseq_col = "new_resSeq" # Temporary column for new numbering
-    df_fitted[new_resseq_col] = -1 # Initialize
+    new_resseq_col = "new_resSeq"  # Temporary column for new numbering
+    df_fitted[new_resseq_col] = -1  # Initialize
 
     all_new_res_maps = {}
     for new_chain_id, group in df_fitted.groupby(chain_col):
@@ -496,7 +494,8 @@ def fit_to_pdb(df: pd.DataFrame) -> pd.DataFrame:
         original_residues = group[[resseq_col, icode_col]].drop_duplicates()
         # Create mapping: (orig_resSeq, orig_iCode) -> new_resSeq (1-based)
         residue_mapping = {
-            tuple(res): i + 1 for i, res in enumerate(original_residues.itertuples(index=False))
+            tuple(res): i + 1
+            for i, res in enumerate(original_residues.itertuples(index=False))
         }
         all_new_res_maps[new_chain_id] = residue_mapping
 
@@ -504,24 +503,24 @@ def fit_to_pdb(df: pd.DataFrame) -> pd.DataFrame:
         res_indices = group.set_index([resseq_col, icode_col]).index
         df_fitted.loc[group.index, new_resseq_col] = res_indices.map(residue_mapping)
 
-
     # Replace original residue number and clear insertion code
     df_fitted[resseq_col] = df_fitted[new_resseq_col]
-    df_fitted[icode_col] = None # Insertion codes are now redundant
+    df_fitted[icode_col] = None  # Insertion codes are now redundant
     df_fitted.drop(columns=[new_resseq_col], inplace=True)
     # Convert resseq_col back to Int64 if it was before, handling potential NaNs if any step failed
-    df_fitted[resseq_col] = df_fitted[resseq_col].astype('Int64')
-
+    df_fitted[resseq_col] = df_fitted[resseq_col].astype("Int64")
 
     # 3. Renumber Atom Serials
     new_serial_col = "new_serial"
-    df_fitted[new_serial_col] = -1 # Initialize
+    df_fitted[new_serial_col] = -1  # Initialize
     current_serial = 0
     last_chain_id_for_serial = None
 
     # Iterate in the potentially re-sorted order after grouping/mapping
     # Ensure stable sort order for consistent serial numbering
-    df_fitted.sort_index(inplace=True) # Sort by original index to maintain original atom order as much as possible
+    df_fitted.sort_index(
+        inplace=True
+    )  # Sort by original index to maintain original atom order as much as possible
 
     for index, row in df_fitted.iterrows():
         current_chain_id = row[chain_col]
@@ -533,8 +532,8 @@ def fit_to_pdb(df: pd.DataFrame) -> pd.DataFrame:
 
         current_serial += 1
         if current_serial > max_pdb_serial:
-             # This should have been caught by the initial check, but is a safeguard
-             raise ValueError("Serial number exceeded PDB limit during renumbering.")
+            # This should have been caught by the initial check, but is a safeguard
+            raise ValueError("Serial number exceeded PDB limit during renumbering.")
 
         df_fitted.loc[index, new_serial_col] = current_serial
         last_chain_id_for_serial = current_chain_id
@@ -543,8 +542,7 @@ def fit_to_pdb(df: pd.DataFrame) -> pd.DataFrame:
     df_fitted[serial_col] = df_fitted[new_serial_col]
     df_fitted.drop(columns=[new_serial_col], inplace=True)
     # Convert serial_col back to Int64
-    df_fitted[serial_col] = df_fitted[serial_col].astype('Int64')
-
+    df_fitted[serial_col] = df_fitted[serial_col].astype("Int64")
 
     # Update attributes and column types for PDB compatibility
     df_fitted.attrs["format"] = "PDB"
@@ -552,18 +550,28 @@ def fit_to_pdb(df: pd.DataFrame) -> pd.DataFrame:
     # Ensure final column types match expected PDB output (especially categories)
     # Reapply categorical conversion as some operations might change dtypes
     pdb_categorical_cols = [
-        "record_type", "name", "altLoc", "resName", chain_col, "element", "charge", icode_col
+        "record_type",
+        "name",
+        "altLoc",
+        "resName",
+        chain_col,
+        "element",
+        "charge",
+        icode_col,
     ]
-    if 'record_type' not in df_fitted.columns and 'group_PDB' in df_fitted.columns:
-         df_fitted.rename(columns={'group_PDB': 'record_type'}, inplace=True) # Ensure correct name
+    if "record_type" not in df_fitted.columns and "group_PDB" in df_fitted.columns:
+        df_fitted.rename(
+            columns={"group_PDB": "record_type"}, inplace=True
+        )  # Ensure correct name
 
     for col in pdb_categorical_cols:
-         if col in df_fitted.columns:
-              # Handle None explicitly before converting to category if needed
-              if df_fitted[col].isnull().any():
-                   df_fitted[col] = df_fitted[col].astype(object).fillna('') # Fill None with empty string for category
-              df_fitted[col] = df_fitted[col].astype("category")
-
+        if col in df_fitted.columns:
+            # Handle None explicitly before converting to category if needed
+            if df_fitted[col].isnull().any():
+                df_fitted[col] = (
+                    df_fitted[col].astype(object).fillna("")
+                )  # Fill None with empty string for category
+            df_fitted[col] = df_fitted[col].astype("category")
 
     # Rename columns if necessary from mmCIF to PDB standard names
     rename_map = {
@@ -571,8 +579,8 @@ def fit_to_pdb(df: pd.DataFrame) -> pd.DataFrame:
         "auth_asym_id": "chainID",
         "auth_seq_id": "resSeq",
         "pdbx_PDB_ins_code": "iCode",
-        "label_atom_id": "name", # Prefer label_atom_id if auth_atom_id not present? PDB uses 'name'
-        "label_comp_id": "resName", # Prefer label_comp_id if auth_comp_id not present? PDB uses 'resName'
+        "label_atom_id": "name",  # Prefer label_atom_id if auth_atom_id not present? PDB uses 'name'
+        "label_comp_id": "resName",  # Prefer label_comp_id if auth_comp_id not present? PDB uses 'resName'
         "type_symbol": "element",
         "pdbx_formal_charge": "charge",
         "Cartn_x": "x",
@@ -592,21 +600,37 @@ def fit_to_pdb(df: pd.DataFrame) -> pd.DataFrame:
     actual_rename_map = {k: v for k, v in rename_map.items() if k in df_fitted.columns}
     df_fitted.rename(columns=actual_rename_map, inplace=True)
 
-
     # Ensure essential PDB columns exist, even if empty, if they were created during fitting
-    pdb_essential_cols = ['record_type', 'serial', 'name', 'altLoc', 'resName', 'chainID', 'resSeq', 'iCode', 'x', 'y', 'z', 'occupancy', 'tempFactor', 'element', 'charge', 'model']
+    pdb_essential_cols = [
+        "record_type",
+        "serial",
+        "name",
+        "altLoc",
+        "resName",
+        "chainID",
+        "resSeq",
+        "iCode",
+        "x",
+        "y",
+        "z",
+        "occupancy",
+        "tempFactor",
+        "element",
+        "charge",
+        "model",
+    ]
     for col in pdb_essential_cols:
         if col not in df_fitted.columns:
-             # This case might occur if input mmCIF was missing fundamental columns mapped to PDB essentials
-             # Decide on default value or raise error. Adding empty series for now.
-             df_fitted[col] = pd.Series(dtype='object') # Add as object to handle potential None/mixed types initially
-
+            # This case might occur if input mmCIF was missing fundamental columns mapped to PDB essentials
+            # Decide on default value or raise error. Adding empty series for now.
+            df_fitted[col] = pd.Series(
+                dtype="object"
+            )  # Add as object to handle potential None/mixed types initially
 
     # Re-order columns to standard PDB order for clarity
     final_pdb_order = [col for col in pdb_essential_cols if col in df_fitted.columns]
     other_cols = [col for col in df_fitted.columns if col not in final_pdb_order]
     df_fitted = df_fitted[final_pdb_order + other_cols]
-
 
     return df_fitted
 
