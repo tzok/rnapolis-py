@@ -688,7 +688,9 @@ def fit_to_pdb(df: pd.DataFrame) -> pd.DataFrame:
             if not pd.api.types.is_categorical_dtype(df_fitted[col]):
                 # Convert non-categorical columns, handling potential NaNs
                 if df_fitted[col].isnull().any():
-                    df_fitted[col] = df_fitted[col].astype(object).fillna("").astype("category")
+                    df_fitted[col] = (
+                        df_fitted[col].astype(object).fillna("").astype("category")
+                    )
                 else:
                     df_fitted[col] = df_fitted[col].astype("category")
             else:
