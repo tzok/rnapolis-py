@@ -267,16 +267,18 @@ def _format_pdb_atom_line(atom_data: dict) -> str:
     alt_loc = atom_data.get("altLoc", "")[:1].ljust(1)  # Max 1 char
 
     # Residue name
-    res_name = atom_data.get("resName", "").rjust(3) # Spec says "Residue name", examples often right-justified
+    res_name = atom_data.get("resName", "").rjust(
+        3
+    )  # Spec says "Residue name", examples often right-justified
 
     # Chain identifier
-    chain_id = atom_data.get("chainID", "")[:1].ljust(1) # Max 1 char
+    chain_id = atom_data.get("chainID", "")[:1].ljust(1)  # Max 1 char
 
     # Residue sequence number
     res_seq = str(atom_data.get("resSeq", 0)).rjust(4)
 
     # Insertion code
-    icode = atom_data.get("iCode", "")[:1].ljust(1) # Max 1 char
+    icode = atom_data.get("iCode", "")[:1].ljust(1)  # Max 1 char
 
     # Coordinates
     x = f"{atom_data.get('x', 0.0):8.3f}"
@@ -298,7 +300,7 @@ def _format_pdb_atom_line(atom_data: dict) -> str:
     if charge_val:
         try:
             # Try converting numeric charge (e.g., +1, -2) to PDB format (1+, 2-)
-            charge_int = int(float(charge_val)) # Use float first for cases like "1.0"
+            charge_int = int(float(charge_val))  # Use float first for cases like "1.0"
             if charge_int != 0:
                 charge_fmt = f"{abs(charge_int)}{'+' if charge_int > 0 else '-'}"
         except ValueError:
@@ -307,14 +309,14 @@ def _format_pdb_atom_line(atom_data: dict) -> str:
         # Ensure it fits and is right-justified
         charge_fmt = charge_fmt.strip()[:2].rjust(2)
     else:
-        charge_fmt = "  " # Blank if no charge
+        charge_fmt = "  "  # Blank if no charge
 
     # Construct the full line
     # Ensure spacing is correct according to the spec
     # 1-6 Record name | 7-11 Serial | 12 Space | 13-16 Name | 17 AltLoc | 18-20 ResName | 21 Space | 22 ChainID | 23-26 ResSeq | 27 iCode | 28-30 Spaces | 31-38 X | 39-46 Y | 47-54 Z | 55-60 Occupancy | 61-66 TempFactor | 67-76 Spaces | 77-78 Element | 79-80 Charge
     line = (
         f"{record_name}{serial} {atom_name_fmt}{alt_loc}{res_name} {chain_id}{res_seq}{icode}   "
-        f"{x}{y}{z}{occupancy}{temp_factor}          " # 10 spaces
+        f"{x}{y}{z}{occupancy}{temp_factor}          "  # 10 spaces
         f"{element}{charge_fmt}"
     )
 
@@ -410,10 +412,15 @@ def write_pdb(
 
         # Handle missing/NaN values more explicitly
         atom_data["iCode"] = "" if pd.isna(atom_data["iCode"]) else atom_data["iCode"]
-        atom_data["altLoc"] = "" if pd.isna(atom_data["altLoc"]) else atom_data["altLoc"]
-        atom_data["charge"] = "" if pd.isna(atom_data["charge"]) else atom_data["charge"]
-        atom_data["element"] = "" if pd.isna(atom_data["element"]) else atom_data["element"]
-
+        atom_data["altLoc"] = (
+            "" if pd.isna(atom_data["altLoc"]) else atom_data["altLoc"]
+        )
+        atom_data["charge"] = (
+            "" if pd.isna(atom_data["charge"]) else atom_data["charge"]
+        )
+        atom_data["element"] = (
+            "" if pd.isna(atom_data["element"]) else atom_data["element"]
+        )
 
         # --- MODEL/ENDMDL Records ---
         current_model_num = atom_data["model"]
@@ -437,10 +444,12 @@ def write_pdb(
         # Write TER if chain ID changes within the same model
         if last_chain_id is not None and current_chain_id != last_chain_id:
             ter_serial = str(last_serial + 1).rjust(5)
-            ter_res_name = last_res_info[2].strip().rjust(3) # Use last residue's name
+            ter_res_name = last_res_info[2].strip().rjust(3)  # Use last residue's name
             ter_chain_id = last_chain_id
-            ter_res_seq = str(last_res_info[0]).rjust(4) # Use last residue's seq num
-            ter_icode = last_res_info[1] if last_res_info[1] else "" # Use last residue's icode
+            ter_res_seq = str(last_res_info[0]).rjust(4)  # Use last residue's seq num
+            ter_icode = (
+                last_res_info[1] if last_res_info[1] else ""
+            )  # Use last residue's icode
 
             ter_line = f"TER   {ter_serial}      {ter_res_name} {ter_chain_id}{ter_res_seq}{ter_icode}"
             buffer.write(ter_line.ljust(80) + "\n")
