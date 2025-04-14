@@ -346,7 +346,10 @@ def can_write_pdb(df: pd.DataFrame) -> bool:
 
     if format_type == "mmCIF":
         # Check serial number (id)
-        if "id" not in df.columns or df["id"].max() > 99999:
+        # Convert to numeric first to handle potential categorical type and NaNs
+        if "id" not in df.columns or (
+            pd.to_numeric(df["id"], errors="coerce").max() > 99999
+        ):
             return False
 
         # Check chain ID (auth_asym_id) length
@@ -356,7 +359,9 @@ def can_write_pdb(df: pd.DataFrame) -> bool:
             return False
 
         # Check residue sequence number (auth_seq_id)
-        if "auth_seq_id" not in df.columns or df["auth_seq_id"].max() > 9999:
+        if "auth_seq_id" not in df.columns or (
+            pd.to_numeric(df["auth_seq_id"], errors="coerce").max() > 9999
+        ):
             return False
 
         # All checks passed for mmCIF
