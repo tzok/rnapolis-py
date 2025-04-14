@@ -646,20 +646,15 @@ def write_cif(
 
     for _, row in df.iterrows():
         if format_type == "mmCIF":
-            # Use existing mmCIF data, converting None to '.' or '?' appropriately
+            # Use existing mmCIF data, converting None to '?' universally
             row_data = []
-            optional_dot_fields = {
-                "label_alt_id",
-                "pdbx_PDB_ins_code",
-                "pdbx_formal_charge",
-            }
             for attr in attributes:
                 value = row.get(attr)
                 if pd.isna(value):
-                    # Use '.' for specific optional fields, '?' otherwise
-                    placeholder = "." if attr in optional_dot_fields else "?"
-                    row_data.append(placeholder)
+                    # Use '?' as the standard placeholder for missing values
+                    row_data.append("?")
                 else:
+                    # Ensure all non-missing values are converted to string
                     row_data.append(str(value))
         else:  # PDB format
             # Map PDB data to mmCIF format, converting None to '.' or '?'
