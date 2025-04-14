@@ -684,9 +684,11 @@ def fit_to_pdb(df: pd.DataFrame) -> pd.DataFrame:
     ]
     for col in pdb_categorical_columns_final:
         if col in df_fitted.columns:
-            # Ensure None is handled before converting to category
-            if df_fitted[col].isnull().any():
-                df_fitted[col] = df_fitted[col].astype(object).fillna("")
+            # Convert to object first to allow filling NA with new value ('')
+            df_fitted[col] = df_fitted[col].astype(object)
+            # Fill None/NaN with empty string
+            df_fitted[col].fillna("", inplace=True)
+            # Convert back to category, now including '' as a category
             df_fitted[col] = df_fitted[col].astype("category")
 
     return df_fitted
