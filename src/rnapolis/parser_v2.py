@@ -156,8 +156,6 @@ def parse_cif_atoms(content: Union[str, IO[str]]) -> pd.DataFrame:
     # Handle both string content and file-like objects
     if isinstance(content, str):
         # Create a temporary file to use with the adapter
-        import tempfile
-
         with tempfile.NamedTemporaryFile(mode="w+", suffix=".cif") as temp_file:
             temp_file.write(content)
             temp_file.flush()
@@ -177,21 +175,13 @@ def parse_cif_atoms(content: Union[str, IO[str]]) -> pd.DataFrame:
     attributes = category.getAttributeList()
     rows = category.getRowList()
 
-    # Define columns where '?' or '.' should be treated as None
-    optional_cols = {
-        "label_alt_id",
-        "pdbx_PDB_ins_code",
-        "pdbx_formal_charge",
-        # Add other optional string columns if needed
-    }
-
     # Create a list of dictionaries for each atom
     records = []
     for row in rows:
         record = {}
         for attr, value in zip(attributes, row):
-            # Store None if the column is optional and value indicates missing data
-            if attr in optional_cols and value in ["?", "."]:
+            # Store None if value indicates missing data ('?' or '.')
+            if value in ["?", "."]:
                 record[attr] = None
             else:
                 record[attr] = value
