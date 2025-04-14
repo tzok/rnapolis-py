@@ -227,6 +227,101 @@ def parse_cif_atoms(content: Union[str, IO[str]]) -> pd.DataFrame:
     return df
 
 
+def _format_pdb_atom_line(atom_data: dict) -> str:
+    """Formats a dictionary of atom data into a PDB ATOM/HETATM line."""
+    # PDB format specification:
+    # COLUMNS        DATA TYPE     FIELD         DEFINITION
+    # -----------------------------------------------------------------------
+    #  1 -  6        Record name   "ATOM  " or "HETATM"
+    #  7 - 11        Integer       serial        Atom serial number.
+    # 13 - 16        Atom          name          Atom name.
+    # 17             Character     altLoc        Alternate location indicator.
+    # 18 - 20        Residue name  resName       Residue name.
+    # 22             Character     chainID       Chain identifier.
+    # 23 - 26        Integer       resSeq        Residue sequence number.
+    # 27             AChar         iCode         Code for insertion of residues.
+    # 31 - 38        Real(8.3)     x             Orthogonal coordinates for X.
+    # 39 - 46        Real(8.3)     y             Orthogonal coordinates for Y.
+    # 47 - 54        Real(8.3)     z             Orthogonal coordinates for Z.
+    # 55 - 60        Real(6.2)     occupancy     Occupancy.
+    # 61 - 66        Real(6.2)     tempFactor    Temperature factor.
+    # 77 - 78        LString(2)    element       Element symbol, right-justified.
+    # 79 - 80        LString(2)    charge        Charge on the atom.
+
+    # Record name (ATOM/HETATM)
+    record_name = atom_data.get("record_name", "ATOM").ljust(6)
+
+    # Serial number
+    serial = str(atom_data.get("serial", 0)).rjust(5)
+
+    # Atom name - special alignment rules
+    atom_name = atom_data.get("name", "")
+    if len(atom_name) < 4 and atom_name[:1].isalpha():
+        # Pad with space on left for 1-3 char names starting with a letter
+        atom_name_fmt = (" " + atom_name).ljust(4)
+    else:
+        # Use as is, left-justified, for 4-char names or those starting with a digit
+        atom_name_fmt = atom_name.ljust(4)
+
+    # Alternate location indicator
+    alt_loc = atom_data.get("altLoc", "")[:1].ljust(1)  # Max 1 char
+
+    # Residue name
+    res_name = atom_data.get("resName", "").rjust(3) # Spec says "Residue name", examples often right-justified
+
+    # Chain identifier
+    chain_id = atom_data.get("chainID", "")[:1].ljust(1) # Max 1 char
+
+    # Residue sequence number
+    res_seq = str(atom_data.get("resSeq", 0)).rjust(4)
+
+    # Insertion code
+    icode = atom_data.get("iCode", "")[:1].ljust(1) # Max 1 char
+
+    # Coordinates
+    x = f"{atom_data.get('x', 0.0):8.3f}"
+    y = f"{atom_data.get('y', 0.0):8.3f}"
+    z = f"{atom_data.get('z', 0.0):8.3f}"
+
+    # Occupancy
+    occupancy = f"{atom_data.get('occupancy', 1.0):6.2f}"
+
+    # Temperature factor
+    temp_factor = f"{atom_data.get('tempFactor', 0.0):6.2f}"
+
+    # Element symbol
+    element = atom_data.get("element", "").rjust(2)
+
+    # Charge
+    charge_val = atom_data.get("charge", "")
+    charge_fmt = ""
+    if charge_val:
+        try:
+            # Try converting numeric charge (e.g., +1, -2) to PDB format (1+, 2-)
+            charge_int = int(float(charge_val)) # Use float first for cases like "1.0"
+            if charge_int != 0:
+                charge_fmt = f"{abs(charge_int)}{'+' if charge_int > 0 else '-'}"
+        except ValueError:
+            # If already formatted (e.g., "1+", "FE2+"), use its string representation
+            charge_fmt = str(charge_val)
+        # Ensure it fits and is right-justified
+        charge_fmt = charge_fmt.strip()[:2].rjust(2)
+    else:
+        charge_fmt = "  " # Blank if no charge
+
+    # Construct the full line
+    # Ensure spacing is correct according to the spec
+    # 1-6 Record name | 7-11 Serial | 12 Space | 13-16 Name | 17 AltLoc | 18-20 ResName | 21 Space | 22 ChainID | 23-26 ResSeq | 27 iCode | 28-30 Spaces | 31-38 X | 39-46 Y | 47-54 Z | 55-60 Occupancy | 61-66 TempFactor | 67-76 Spaces | 77-78 Element | 79-80 Charge
+    line = (
+        f"{record_name}{serial} {atom_name_fmt}{alt_loc}{res_name} {chain_id}{res_seq}{icode}   "
+        f"{x}{y}{z}{occupancy}{temp_factor}          " # 10 spaces
+        f"{element}{charge_fmt}"
+    )
+
+    # Ensure the line is exactly 80 characters long
+    return line.ljust(80)
+
+
 def write_pdb(
     df: pd.DataFrame, output: Union[str, TextIO, None] = None
 ) -> Union[str, None]:
@@ -236,7 +331,8 @@ def write_pdb(
     Parameters:
     -----------
     df : pd.DataFrame
-        DataFrame containing atom records, as created by parse_pdb_atoms or parse_cif_atoms
+        DataFrame containing atom records, as created by parse_pdb_atoms or parse_cif_atoms.
+        Must contain columns mappable to PDB format fields.
     output : Union[str, TextIO, None], optional
         Output file path or file-like object. If None, returns the PDB content as a string.
 
@@ -245,242 +341,141 @@ def write_pdb(
     Union[str, None]
         If output is None, returns the PDB content as a string. Otherwise, returns None.
     """
-    # Create a buffer to store the PDB content
     buffer = io.StringIO()
+    format_type = df.attrs.get("format", "PDB")  # Assume PDB if not specified
 
-    # Get the format of the DataFrame
-    format_type = df.attrs.get("format", "PDB")
-
-    # Variables to track chain changes for TER records
+    last_model_num = None
     last_chain_id = None
-    last_res_seq = None
-    last_res_name = None
-    last_serial = None
-    last_icode = None
+    last_res_info = None  # Tuple (resSeq, iCode, resName) for TER record
+    last_serial = 0
 
-    # Process each row in the DataFrame
-    for index, row in df.iterrows():
-        # Get current chain ID
+    # Check if DataFrame is empty
+    if df.empty:
+        buffer.write("END\n")
+        content = buffer.getvalue()
+        buffer.close()
+        if output is not None:
+            if isinstance(output, str):
+                with open(output, "w") as f:
+                    f.write(content)
+            else:
+                output.write(content)
+            return None
+        return content
+
+    for _, row in df.iterrows():
+        atom_data = {}
+
+        # --- Data Extraction ---
         if format_type == "PDB":
-            current_chain_id = row["chainID"]
-        else:  # mmCIF
-            current_chain_id = row.get("auth_asym_id", row.get("label_asym_id", ""))
+            atom_data = {
+                "record_name": row.get("record_type", "ATOM"),
+                "serial": int(row.get("serial", 0)),
+                "name": str(row.get("name", "")),
+                "altLoc": str(row.get("altLoc", "")),
+                "resName": str(row.get("resName", "")),
+                "chainID": str(row.get("chainID", "")),
+                "resSeq": int(row.get("resSeq", 0)),
+                "iCode": str(row.get("iCode", "")),
+                "x": float(row.get("x", 0.0)),
+                "y": float(row.get("y", 0.0)),
+                "z": float(row.get("z", 0.0)),
+                "occupancy": float(row.get("occupancy", 1.0)),
+                "tempFactor": float(row.get("tempFactor", 0.0)),
+                "element": str(row.get("element", "")),
+                "charge": str(row.get("charge", "")),
+                "model": int(row.get("model", 1)),
+            }
+        elif format_type == "mmCIF":
+            atom_data = {
+                "record_name": row.get("group_PDB", "ATOM"),
+                "serial": int(row.get("id", 0)),
+                "name": str(row.get("auth_atom_id", row.get("label_atom_id", ""))),
+                "altLoc": str(row.get("label_alt_id", "")),
+                "resName": str(row.get("auth_comp_id", row.get("label_comp_id", ""))),
+                "chainID": str(row.get("auth_asym_id", row.get("label_asym_id", ""))),
+                "resSeq": int(row.get("auth_seq_id", row.get("label_seq_id", 0))),
+                "iCode": str(row.get("pdbx_PDB_ins_code", "")),
+                "x": float(row.get("Cartn_x", 0.0)),
+                "y": float(row.get("Cartn_y", 0.0)),
+                "z": float(row.get("Cartn_z", 0.0)),
+                "occupancy": float(row.get("occupancy", 1.0)),
+                "tempFactor": float(row.get("B_iso_or_equiv", 0.0)),
+                "element": str(row.get("type_symbol", "")),
+                "charge": str(row.get("pdbx_formal_charge", "")),
+                "model": int(row.get("pdbx_PDB_model_num", 1)),
+            }
+        else:
+            raise ValueError(f"Unsupported DataFrame format: {format_type}")
 
-        # Write TER record if chain changes
+        # Handle missing/NaN values more explicitly
+        atom_data["iCode"] = "" if pd.isna(atom_data["iCode"]) else atom_data["iCode"]
+        atom_data["altLoc"] = "" if pd.isna(atom_data["altLoc"]) else atom_data["altLoc"]
+        atom_data["charge"] = "" if pd.isna(atom_data["charge"]) else atom_data["charge"]
+        atom_data["element"] = "" if pd.isna(atom_data["element"]) else atom_data["element"]
+
+
+        # --- MODEL/ENDMDL Records ---
+        current_model_num = atom_data["model"]
+        if current_model_num != last_model_num:
+            if last_model_num is not None:
+                buffer.write("ENDMDL\n")
+            buffer.write(f"MODEL     {current_model_num:>4}\n")
+            last_model_num = current_model_num
+            # Reset chain/residue tracking for the new model
+            last_chain_id = None
+            last_res_info = None
+
+        # --- TER Records ---
+        current_chain_id = atom_data["chainID"]
+        current_res_info = (
+            atom_data["resSeq"],
+            atom_data["iCode"],
+            atom_data["resName"],
+        )
+
+        # Write TER if chain ID changes within the same model
         if last_chain_id is not None and current_chain_id != last_chain_id:
-            # Format TER record according to PDB specification
-            # Columns:
-            # 1-6: "TER   "
-            # 7-11: Serial number (right-justified)
-            # 18-20: Residue name (right-justified)
-            # 22: Chain ID
-            # 23-26: Residue sequence number (right-justified)
-            # 27: Insertion code
             ter_serial = str(last_serial + 1).rjust(5)
-            ter_res_name = last_res_name.strip().ljust(3)  # Strip and left-justify
+            ter_res_name = last_res_info[2].strip().rjust(3) # Use last residue's name
             ter_chain_id = last_chain_id
-            ter_res_seq = last_res_seq.rjust(4)
-            ter_icode = last_icode if last_icode else ""  # Use last recorded iCode
+            ter_res_seq = str(last_res_info[0]).rjust(4) # Use last residue's seq num
+            ter_icode = last_res_info[1] if last_res_info[1] else "" # Use last residue's icode
 
-            # Construct the TER line ensuring correct spacing for all fields
-            # TER (1-6), serial (7-11), space (12-17), resName (18-20), space (21),
-            # chainID (22), resSeq (23-26), iCode (27)
             ter_line = f"TER   {ter_serial}      {ter_res_name} {ter_chain_id}{ter_res_seq}{ter_icode}"
             buffer.write(ter_line.ljust(80) + "\n")
 
-        # Initialize the line with spaces
-        line = " " * 80
+        # --- Format and Write ATOM/HETATM Line ---
+        pdb_line = _format_pdb_atom_line(atom_data)
+        buffer.write(pdb_line + "\n")
 
-        # Set record type (ATOM or HETATM)
-        if format_type == "PDB":
-            record_type = row["record_type"]
-        else:  # mmCIF
-            record_type = row.get("group_PDB", "ATOM")
-        line = record_type.ljust(6) + line[6:]
+        # --- Update Tracking Variables ---
+        last_serial = atom_data["serial"]
+        last_chain_id = current_chain_id
+        last_res_info = current_res_info
 
-        # Set atom serial number
-        if format_type == "PDB":
-            serial = str(int(row["serial"]))
-        else:  # mmCIF
-            serial = str(int(row["id"]))
-        line = line[:6] + serial.rjust(5) + line[11:]
-
-        # Set atom name
-        if format_type == "PDB":
-            atom_name = row["name"]
-        else:  # mmCIF
-            atom_name = row.get("auth_atom_id", row.get("label_atom_id", ""))
-
-        # Right-justify atom name if it starts with a number
-        if atom_name and atom_name[0].isdigit():
-            line = line[:12] + atom_name.ljust(4) + line[16:]
-        else:
-            line = line[:12] + " " + atom_name.ljust(3) + line[16:]
-
-        # Set alternate location indicator
-        if format_type == "PDB":
-            alt_loc = row.get("altLoc", "")
-        else:  # mmCIF
-            alt_loc = row.get("label_alt_id", "")
-        line = line[:16] + alt_loc + line[17:]
-
-        # Set residue name
-        if format_type == "PDB":
-            res_name = row["resName"]
-        else:  # mmCIF
-            res_name = row.get("auth_comp_id", row.get("label_comp_id", ""))
-        line = line[:17] + res_name.ljust(3) + line[20:]
-
-        # Set chain identifier
-        if format_type == "PDB":
-            chain_id = row["chainID"]
-        else:  # mmCIF
-            chain_id = row.get("auth_asym_id", row.get("label_asym_id", ""))
-        line = line[:21] + chain_id + line[22:]
-
-        # Set residue sequence number
-        if format_type == "PDB":
-            res_seq = str(int(row["resSeq"]))
-        else:  # mmCIF
-            res_seq = str(int(row.get("auth_seq_id", row.get("label_seq_id", 0))))
-        line = line[:22] + res_seq.rjust(4) + line[26:]
-
-        # Set insertion code
-        if format_type == "PDB":
-            icode = row["iCode"] if pd.notna(row["iCode"]) else ""
-        else:  # mmCIF
-            icode = (
-                row.get("pdbx_PDB_ins_code", "")
-                if pd.notna(row.get("pdbx_PDB_ins_code", ""))
-                else ""
-            )
-        line = line[:26] + icode + line[27:]
-
-        # Set X coordinate
-        if format_type == "PDB":
-            x = float(row["x"])
-        else:  # mmCIF
-            x = float(row["Cartn_x"])
-        line = line[:30] + f"{x:8.3f}" + line[38:]
-
-        # Set Y coordinate
-        if format_type == "PDB":
-            y = float(row["y"])
-        else:  # mmCIF
-            y = float(row["Cartn_y"])
-        line = line[:38] + f"{y:8.3f}" + line[46:]
-
-        # Set Z coordinate
-        if format_type == "PDB":
-            z = float(row["z"])
-        else:  # mmCIF
-            z = float(row["Cartn_z"])
-        line = line[:46] + f"{z:8.3f}" + line[54:]
-
-        # Set occupancy
-        if format_type == "PDB":
-            occupancy = float(row["occupancy"])
-        else:  # mmCIF
-            occupancy = float(row.get("occupancy", 1.0))
-        line = line[:54] + f"{occupancy:6.2f}" + line[60:]
-
-        # Set temperature factor
-        if format_type == "PDB":
-            temp_factor = float(row["tempFactor"])
-        else:  # mmCIF
-            temp_factor = float(row.get("B_iso_or_equiv", 0.0))
-        line = line[:60] + f"{temp_factor:6.2f}" + line[66:]
-
-        # Set element symbol
-        if format_type == "PDB":
-            element = row["element"]
-        else:  # mmCIF
-            element = row.get("type_symbol", "")
-        line = line[:76] + element.rjust(2) + line[78:]
-
-        # Set charge
-        charge = ""  # Default to empty string
-        if format_type == "PDB":
-            raw_charge = row["charge"]
-            if pd.notna(raw_charge) and raw_charge != "":
-                try:
-                    # Try converting to number and formatting like '1+', '2-'
-                    # Use float first to handle potential decimals (e.g., 1.0)
-                    charge_val = int(float(raw_charge))
-                    if charge_val != 0:
-                        charge = f"{abs(charge_val)}{'+' if charge_val > 0 else '-'}"
-                    # else charge remains "" (zero charge is usually omitted)
-                except ValueError:
-                    # If not a number (e.g., already '1+'), use its string representation
-                    charge = str(raw_charge)
-
-                # Ensure charge fits in 2 characters for PDB format
-                if len(charge) > 2:
-                    charge = charge[:2]  # Truncate if necessary
-        else:  # mmCIF
-            raw_charge = row.get("pdbx_formal_charge", "")
-            # Process charge if it's not empty or a placeholder like '?' or '.'
-            if raw_charge and raw_charge not in ["?", "."]:
-                try:
-                    # Convert numeric charge (string) to PDB format (e.g., "1+" or "2-")
-                    charge_val = int(raw_charge)
-                    if charge_val != 0:
-                        charge = f"{abs(charge_val)}{'+' if charge_val > 0 else '-'}"
-                    # else charge remains "" (zero charge)
-                except ValueError:
-                    # If not an integer (e.g., already '1+'), use the raw value
-                    charge = str(raw_charge)
-
-                # Ensure charge fits in 2 characters
-                if len(charge) > 2:
-                    charge = charge[:2]  # Truncate if necessary
-
-        # Place the charge string into the PDB line (columns 79-80)
-        # Ensure it's right-justified within the 2 characters
-        line = line[:78] + charge.rjust(2) + line[80:]
-
-        # Write the line to the buffer
-        buffer.write(line.rstrip() + "\n")
-
-        # Update last atom info for potential TER record
-        if format_type == "PDB":
-            last_serial = int(row["serial"])
-            last_res_name = row["resName"]
-            last_chain_id = row["chainID"]
-            last_res_seq = str(int(row["resSeq"]))
-            last_icode = row["iCode"] if pd.notna(row["iCode"]) else ""
-        else:  # mmCIF
-            last_serial = int(row["id"])
-            last_res_name = row.get("auth_comp_id", row.get("label_comp_id", ""))
-            last_chain_id = row.get("auth_asym_id", row.get("label_asym_id", ""))
-            last_res_seq = str(int(row.get("auth_seq_id", row.get("label_seq_id", 0))))
-            last_icode = (
-                row.get("pdbx_PDB_ins_code", "")
-                if pd.notna(row.get("pdbx_PDB_ins_code", ""))
-                else ""
-            )
-
-    # Add TER record for the last chain
+    # --- Final Records ---
+    # Add TER record for the very last chain in the last model
     if last_chain_id is not None:
-        # Format TER record according to PDB specification
         ter_serial = str(last_serial + 1).rjust(5)
-        ter_res_name = last_res_name.strip().ljust(3)  # Strip and left-justify
+        ter_res_name = last_res_info[2].strip().rjust(3)
         ter_chain_id = last_chain_id
-        ter_res_seq = last_res_seq.rjust(4)
-        ter_icode = last_icode if last_icode else ""  # Use last recorded iCode
+        ter_res_seq = str(last_res_info[0]).rjust(4)
+        ter_icode = last_res_info[1] if last_res_info[1] else ""
 
-        # Construct the TER line ensuring correct spacing for all fields
         ter_line = f"TER   {ter_serial}      {ter_res_name} {ter_chain_id}{ter_res_seq}{ter_icode}"
         buffer.write(ter_line.ljust(80) + "\n")
 
-    # Add END record
+    # Add ENDMDL if models were used
+    if last_model_num is not None:
+        buffer.write("ENDMDL\n")
+
     buffer.write("END\n")
 
-    # Get the content as a string
+    # --- Output Handling ---
     content = buffer.getvalue()
     buffer.close()
 
-    # Write to output if provided
     if output is not None:
         if isinstance(output, str):
             with open(output, "w") as f:
@@ -488,9 +483,8 @@ def write_pdb(
         else:
             output.write(content)
         return None
-
-    # Return the content as a string
-    return content
+    else:
+        return content
 
 
 def write_cif(
