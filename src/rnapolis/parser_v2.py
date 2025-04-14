@@ -502,10 +502,6 @@ def write_pdb(
             raw_charge = row.get("pdbx_formal_charge")
             pdb_charge = "" if pd.isna(raw_charge) else str(raw_charge)
 
-            # Prioritize auth_asym_id, fallback to label_asym_id for chainID
-            raw_chain_id = row.get("auth_asym_id", row.get("label_asym_id"))
-            pdb_chain_id = "" if pd.isna(raw_chain_id) else str(raw_chain_id)
-
             atom_data = {
                 "record_name": row.get("group_PDB", "ATOM"),
                 "serial": int(row.get("id", 0)),
