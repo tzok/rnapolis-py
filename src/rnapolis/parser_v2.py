@@ -456,26 +456,36 @@ def write_pdb(
         atom_data = {}
 
         # --- Data Extraction ---
-        # Convert None to empty string for optional PDB fields during extraction
         if format_type == "PDB":
+            # Pre-process PDB values, converting None to empty strings for optional fields
+            raw_alt_loc = row.get("altLoc")
+            pdb_alt_loc = "" if pd.isna(raw_alt_loc) else str(raw_alt_loc)
+
+            raw_icode = row.get("iCode")
+            pdb_icode = "" if pd.isna(raw_icode) else str(raw_icode)
+
+            raw_element = row.get("element")
+            pdb_element = "" if pd.isna(raw_element) else str(raw_element)
+
+            raw_charge = row.get("charge")
+            pdb_charge = "" if pd.isna(raw_charge) else str(raw_charge)
+
             atom_data = {
                 "record_name": row.get("record_type", "ATOM"),
                 "serial": int(row.get("serial", 0)),
                 "name": str(row.get("name", "")),
-                "altLoc": "" if pd.isna(row.get("altLoc")) else str(row.get("altLoc")),
+                "altLoc": pdb_alt_loc,
                 "resName": str(row.get("resName", "")),
                 "chainID": str(row.get("chainID", "")),
                 "resSeq": int(row.get("resSeq", 0)),
-                "iCode": "" if pd.isna(row.get("iCode")) else str(row.get("iCode")),
+                "iCode": pdb_icode,
                 "x": float(row.get("x", 0.0)),
                 "y": float(row.get("y", 0.0)),
                 "z": float(row.get("z", 0.0)),
                 "occupancy": float(row.get("occupancy", 1.0)),
                 "tempFactor": float(row.get("tempFactor", 0.0)),
-                "element": ""
-                if pd.isna(row.get("element"))
-                else str(row.get("element")),
-                "charge": "" if pd.isna(row.get("charge")) else str(row.get("charge")),
+                "element": pdb_element,
+                "charge": pdb_charge,
                 "model": int(row.get("model", 1)),
             }
         elif format_type == "mmCIF":
