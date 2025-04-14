@@ -99,8 +99,14 @@ def compare_atom_dfs(
     # Check if essential sorting columns are present
     sort_cols_present1 = [col for col in sort_cols if col in df1.columns]
     sort_cols_present2 = [col for col in sort_cols if col in df2.columns]
-    if not sort_cols_present1 or not sort_cols_present2 or sort_cols_present1 != sort_cols_present2:
-         raise ValueError(f"Cannot compare DataFrames: Missing or mismatched sort columns. DF1: {sort_cols_present1}, DF2: {sort_cols_present2}")
+    if (
+        not sort_cols_present1
+        or not sort_cols_present2
+        or sort_cols_present1 != sort_cols_present2
+    ):
+        raise ValueError(
+            f"Cannot compare DataFrames: Missing or mismatched sort columns. DF1: {sort_cols_present1}, DF2: {sort_cols_present2}"
+        )
 
     df1_comp = df1[common_cols].copy()
     df2_comp = df2[common_cols].copy()
@@ -133,13 +139,13 @@ def compare_atom_dfs(
         # Compare non-NaN values
         mask = ~nan_mask1
         if mask.any():
-             np.testing.assert_allclose(
-                 v1[mask].values,
-                 v2[mask].values,
-                 rtol=rtol,
-                 atol=atol,
-                 err_msg=f"{col} column comparison failed",
-             )
+            np.testing.assert_allclose(
+                v1[mask].values,
+                v2[mask].values,
+                rtol=rtol,
+                atol=atol,
+                err_msg=f"{col} column comparison failed",
+            )
 
 
 @pytest.fixture
@@ -392,7 +398,9 @@ def test_pdb_cif_pdb_roundtrip(data_dir):
 
     # 4. Write Final PDB
     pdb_final_str = write_pdb(df_intermediate_cif)
-    assert pdb_final_str is not None and "ATOM" in pdb_final_str, "Writing final PDB failed"
+    assert pdb_final_str is not None and "ATOM" in pdb_final_str, (
+        "Writing final PDB failed"
+    )
 
     # 5. Parse Final PDB
     df_final_pdb = parse_pdb_atoms(io.StringIO(pdb_final_str))
@@ -435,7 +443,9 @@ def test_cif_pdb_cif_roundtrip(data_dir):
 
     # 4. Write Final CIF
     cif_final_str = write_cif(df_from_pdb)
-    assert cif_final_str is not None and "atom_site" in cif_final_str, "Writing final CIF failed"
+    assert cif_final_str is not None and "atom_site" in cif_final_str, (
+        "Writing final CIF failed"
+    )
 
     # 5. Parse Final CIF
     df_final_cif = parse_cif_atoms(io.StringIO(cif_final_str))
