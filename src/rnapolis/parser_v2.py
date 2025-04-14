@@ -450,13 +450,6 @@ def fit_to_pdb(df: pd.DataFrame) -> pd.DataFrame:
         )
 
     # Check 3: Max residues per chain <= 9999
-    max_residues_per_chain = (
-        df.groupby(chain_col)[[resseq_col, icode_col]]
-        .nunique()
-        .max()
-        .max()  # Get max across both columns then max of those - This check is less accurate
-    )
-
     # More accurate check: group by chain, then count unique (resSeq, iCode) tuples
     # Use a temporary structure to avoid modifying the original df
     check_df = pd.DataFrame(
