@@ -637,10 +637,11 @@ def fit_to_pdb(df: pd.DataFrame) -> pd.DataFrame:
         if col in df_fitted.columns:
             # Use Int64 for integer-like columns that might have been NaN during processing
             if col in ["serial", "resSeq", "model"]:
-                 df_fitted[col] = pd.to_numeric(df_fitted[col], errors="coerce").astype("Int64")
-            else: # Floats
-                 df_fitted[col] = pd.to_numeric(df_fitted[col], errors="coerce")
-
+                df_fitted[col] = pd.to_numeric(df_fitted[col], errors="coerce").astype(
+                    "Int64"
+                )
+            else:  # Floats
+                df_fitted[col] = pd.to_numeric(df_fitted[col], errors="coerce")
 
     # Convert categorical columns (similar to parse_pdb_atoms)
     # Note: chainID and iCode were already handled during fitting/renaming
@@ -649,18 +650,17 @@ def fit_to_pdb(df: pd.DataFrame) -> pd.DataFrame:
         "name",
         "altLoc",
         "resName",
-        "chainID", # Already category, but ensure consistency
-        "iCode", # Already category, but ensure consistency
+        "chainID",  # Already category, but ensure consistency
+        "iCode",  # Already category, but ensure consistency
         "element",
         "charge",
     ]
     for col in pdb_categorical_columns_final:
         if col in df_fitted.columns:
-             # Ensure None is handled before converting to category
-             if df_fitted[col].isnull().any():
-                  df_fitted[col] = df_fitted[col].astype(object).fillna('')
-             df_fitted[col] = df_fitted[col].astype("category")
-
+            # Ensure None is handled before converting to category
+            if df_fitted[col].isnull().any():
+                df_fitted[col] = df_fitted[col].astype(object).fillna("")
+            df_fitted[col] = df_fitted[col].astype("category")
 
     return df_fitted
 
