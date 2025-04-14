@@ -508,17 +508,13 @@ def write_pdb(
                 "" if pd.isna(raw_charge) or raw_charge == "." else str(raw_charge)
             )
 
-            # Prioritize auth_asym_id, fallback to label_asym_id for chainID
-            raw_chain_id = row.get("auth_asym_id", row.get("label_asym_id"))
-            pdb_chain_id = "" if pd.isna(raw_chain_id) else str(raw_chain_id)
-
             atom_data = {
                 "record_name": row.get("group_PDB", "ATOM"),
                 "serial": int(row.get("id", 0)),
                 "name": str(row.get("auth_atom_id", row.get("label_atom_id", ""))),
                 "altLoc": pdb_alt_loc,
                 "resName": str(row.get("auth_comp_id", row.get("label_comp_id", ""))),
-                "chainID": pdb_chain_id,  # Included chainID
+                "chainID": str(row.get("auth_asym_id", row.get("label_asym_id"))),
                 "resSeq": int(row.get("auth_seq_id", row.get("label_seq_id", 0))),
                 "iCode": pdb_icode,
                 "x": float(row.get("Cartn_x", 0.0)),
