@@ -52,23 +52,27 @@ def parse_pdb_atoms(content: Union[str, IO[str]]) -> pd.DataFrame:
             continue
 
         # Parse fields according to PDB format specification
+        alt_loc = line[16:17].strip()
         icode = line[26:27].strip()
+        element = line[76:78].strip()
+        charge = line[78:80].strip()
+
         record = {
             "record_type": record_type,
             "serial": line[6:11].strip(),
             "name": line[12:16].strip(),
-            "altLoc": line[16:17].strip(),
+            "altLoc": None if not alt_loc else alt_loc,  # Store None if empty
             "resName": line[17:20].strip(),
             "chainID": line[21:22].strip(),
             "resSeq": line[22:26].strip(),
-            "iCode": None if not icode else icode,  # Convert empty string to None
+            "iCode": None if not icode else icode,  # Store None if empty
             "x": line[30:38].strip(),
             "y": line[38:46].strip(),
             "z": line[46:54].strip(),
             "occupancy": line[54:60].strip(),
             "tempFactor": line[60:66].strip(),
-            "element": line[76:78].strip(),
-            "charge": line[78:80].strip(),
+            "element": None if not element else element,  # Store None if empty
+            "charge": None if not charge else charge,  # Store None if empty
             "model": current_model,  # Add the current model number
         }
 
@@ -173,16 +177,24 @@ def parse_cif_atoms(content: Union[str, IO[str]]) -> pd.DataFrame:
     attributes = category.getAttributeList()
     rows = category.getRowList()
 
+    # Define columns where '?' or '.' should be treated as None
+    optional_cols = {
+        "label_alt_id",
+        "pdbx_PDB_ins_code",
+        "pdbx_formal_charge",
+        # Add other optional string columns if needed
+    }
+
     # Create a list of dictionaries for each atom
     records = []
     for row in rows:
-        record = dict(zip(attributes, row))
-
-        # Convert "?" or "." in insertion code to None
-        if "pdbx_PDB_ins_code" in record:
-            if record["pdbx_PDB_ins_code"] in ["?", ".", ""]:
-                record["pdbx_PDB_ins_code"] = None
-
+        record = {}
+        for attr, value in zip(attributes, row):
+            # Store None if the column is optional and value indicates missing data
+            if attr in optional_cols and value in ["?", "."]:
+                record[attr] = None
+            else:
+                record[attr] = value
         records.append(record)
 
     # Create DataFrame from records
