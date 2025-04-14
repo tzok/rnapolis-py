@@ -543,7 +543,7 @@ def write_cif(
             "auth_comp_id",  # resName
             "auth_asym_id",  # chainID
             "auth_atom_id",  # name
-            "pdbx_PDB_model_num",  # (generated)
+            "pdbx_PDB_model_num",  # model
         ]
 
     # Prepare rows for the atom_site category
@@ -556,7 +556,8 @@ def write_cif(
         else:  # PDB format
             # Map PDB data to mmCIF format
             entity_id = "1"  # Default entity ID
-            model_num = "1"  # Default model number
+            # Use the model number from the DataFrame
+            model_num = str(int(row["model"]))
 
             row_data = [
                 str(row["record_type"]),  # group_PDB
