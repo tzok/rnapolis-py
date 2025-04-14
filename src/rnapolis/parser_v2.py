@@ -555,8 +555,11 @@ def write_cif(
 
     for _, row in df.iterrows():
         if format_type == "mmCIF":
-            # Use existing mmCIF data
-            row_data = [str(row.get(attr, "?")) for attr in attributes]
+            # Use existing mmCIF data, converting None to '?'
+            row_data = []
+            for attr in attributes:
+                value = row.get(attr)
+                row_data.append(str(value) if pd.notna(value) else "?")
         else:  # PDB format
             # Map PDB data to mmCIF format
             entity_id = "1"  # Default entity ID
@@ -566,22 +569,20 @@ def write_cif(
             row_data = [
                 str(row["record_type"]),  # group_PDB
                 str(int(row["serial"])),  # id
-                str(row["element"]),  # type_symbol
+                str(row["element"]) or "?",  # type_symbol (use '?' if empty)
                 str(row["name"]),  # label_atom_id
-                str(row.get("altLoc", "")),  # label_alt_id
+                str(row.get("altLoc", "")) or ".",  # label_alt_id (use '.' if empty)
                 str(row["resName"]),  # label_comp_id
                 str(row["chainID"]),  # label_asym_id
                 entity_id,  # label_entity_id
                 str(int(row["resSeq"])),  # label_seq_id
-                str(row["iCode"])
-                if pd.notna(row["iCode"])
-                else "?",  # pdbx_PDB_ins_code
+                str(row["iCode"]) if pd.notna(row["iCode"]) else ".",  # pdbx_PDB_ins_code (use '.' if None/NaN)
                 f"{float(row['x']):.3f}",  # Cartn_x
                 f"{float(row['y']):.3f}",  # Cartn_y
                 f"{float(row['z']):.3f}",  # Cartn_z
                 f"{float(row['occupancy']):.2f}",  # occupancy
                 f"{float(row['tempFactor']):.2f}",  # B_iso_or_equiv
-                str(row.get("charge", "")) or "?",  # pdbx_formal_charge
+                str(row.get("charge", "")) or ".",  # pdbx_formal_charge (use '.' if empty)
                 str(int(row["resSeq"])),  # auth_seq_id
                 str(row["resName"]),  # auth_comp_id
                 str(row["chainID"]),  # auth_asym_id
