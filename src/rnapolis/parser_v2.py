@@ -397,7 +397,9 @@ def write_pdb(
                 "z": float(row.get("z", 0.0)),
                 "occupancy": float(row.get("occupancy", 1.0)),
                 "tempFactor": float(row.get("tempFactor", 0.0)),
-                "element": "" if pd.isna(row.get("element")) else str(row.get("element")),
+                "element": ""
+                if pd.isna(row.get("element"))
+                else str(row.get("element")),
                 "charge": "" if pd.isna(row.get("charge")) else str(row.get("charge")),
                 "model": int(row.get("model", 1)),
             }
@@ -412,17 +414,25 @@ def write_pdb(
                 "record_name": row.get("group_PDB", "ATOM"),
                 "serial": int(row.get("id", 0)),
                 "name": str(row.get("auth_atom_id", row.get("label_atom_id", ""))),
-                "altLoc": "" if pd.isna(alt_loc_val) or alt_loc_val == "." else str(alt_loc_val),
+                "altLoc": ""
+                if pd.isna(alt_loc_val) or alt_loc_val == "."
+                else str(alt_loc_val),
                 "resName": str(row.get("auth_comp_id", row.get("label_comp_id", ""))),
                 "resSeq": int(row.get("auth_seq_id", row.get("label_seq_id", 0))),
-                "iCode": "" if pd.isna(icode_val) or icode_val == "." else str(icode_val),
+                "iCode": ""
+                if pd.isna(icode_val) or icode_val == "."
+                else str(icode_val),
                 "x": float(row.get("Cartn_x", 0.0)),
                 "y": float(row.get("Cartn_y", 0.0)),
                 "z": float(row.get("Cartn_z", 0.0)),
                 "occupancy": float(row.get("occupancy", 1.0)),
                 "tempFactor": float(row.get("B_iso_or_equiv", 0.0)),
-                "element": "" if pd.isna(element_val) or element_val == "?" else str(element_val),
-                "charge": "" if pd.isna(charge_val) or charge_val == "." else str(charge_val),
+                "element": ""
+                if pd.isna(element_val) or element_val == "?"
+                else str(element_val),
+                "charge": ""
+                if pd.isna(charge_val) or charge_val == "."
+                else str(charge_val),
                 "model": int(row.get("pdbx_PDB_model_num", 1)),
             }
         else:
@@ -563,7 +573,11 @@ def write_cif(
         if format_type == "mmCIF":
             # Use existing mmCIF data, converting None to '.' or '?' appropriately
             row_data = []
-            optional_dot_fields = {"label_alt_id", "pdbx_PDB_ins_code", "pdbx_formal_charge"}
+            optional_dot_fields = {
+                "label_alt_id",
+                "pdbx_PDB_ins_code",
+                "pdbx_formal_charge",
+            }
             for attr in attributes:
                 value = row.get(attr)
                 if pd.isna(value):
@@ -581,20 +595,28 @@ def write_cif(
             row_data = [
                 str(row["record_type"]),  # group_PDB
                 str(int(row["serial"])),  # id
-                "?" if pd.isna(row.get("element")) else str(row["element"]), # type_symbol
+                "?"
+                if pd.isna(row.get("element"))
+                else str(row["element"]),  # type_symbol
                 str(row["name"]),  # label_atom_id
-                "." if pd.isna(row.get("altLoc")) else str(row["altLoc"]), # label_alt_id
+                "."
+                if pd.isna(row.get("altLoc"))
+                else str(row["altLoc"]),  # label_alt_id
                 str(row["resName"]),  # label_comp_id
                 str(row["chainID"]),  # label_asym_id
                 entity_id,  # label_entity_id
                 str(int(row["resSeq"])),  # label_seq_id
-                "." if pd.isna(row.get("iCode")) else str(row["iCode"]), # pdbx_PDB_ins_code
+                "."
+                if pd.isna(row.get("iCode"))
+                else str(row["iCode"]),  # pdbx_PDB_ins_code
                 f"{float(row['x']):.3f}",  # Cartn_x
                 f"{float(row['y']):.3f}",  # Cartn_y
                 f"{float(row['z']):.3f}",  # Cartn_z
                 f"{float(row['occupancy']):.2f}",  # occupancy
                 f"{float(row['tempFactor']):.2f}",  # B_iso_or_equiv
-                "." if pd.isna(row.get("charge")) else str(row["charge"]), # pdbx_formal_charge
+                "."
+                if pd.isna(row.get("charge"))
+                else str(row["charge"]),  # pdbx_formal_charge
                 str(int(row["resSeq"])),  # auth_seq_id
                 str(row["resName"]),  # auth_comp_id
                 str(row["chainID"]),  # auth_asym_id
