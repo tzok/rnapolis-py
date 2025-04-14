@@ -314,6 +314,57 @@ def parse_cif_atoms(content: Union[str, IO[str]]) -> pd.DataFrame:
     return df
 
 
+def can_write_pdb(df: pd.DataFrame) -> bool:
+    """
+    Check if the DataFrame can be losslessly represented in PDB format.
+
+    PDB format has limitations on field widths:
+    - Atom serial number (id): max 99999
+    - Chain identifier (auth_asym_id): max 1 character
+    - Residue sequence number (auth_seq_id): max 9999
+
+    Parameters:
+    -----------
+    df : pd.DataFrame
+        DataFrame containing atom records, as created by parse_pdb_atoms or parse_cif_atoms.
+
+    Returns:
+    --------
+    bool
+        True if the DataFrame can be written to PDB format without data loss/truncation, False otherwise.
+    """
+    format_type = df.attrs.get("format")
+
+    if format_type == "PDB":
+        # Assume data originally from PDB already fits PDB constraints
+        return True
+
+    if df.empty:
+        # An empty DataFrame can be represented as an empty PDB file
+        return True
+
+    if format_type == "mmCIF":
+        # Check serial number (id)
+        if "id" not in df.columns or df["id"].max() > 99999:
+            return False
+
+        # Check chain ID (auth_asym_id) length
+        if "auth_asym_id" not in df.columns or (
+            df["auth_asym_id"].dropna().astype(str).str.len().max() > 1
+        ):
+            return False
+
+        # Check residue sequence number (auth_seq_id)
+        if "auth_seq_id" not in df.columns or df["auth_seq_id"].max() > 9999:
+            return False
+
+        # All checks passed for mmCIF
+        return True
+
+    # If format is unknown or not PDB/mmCIF, assume it cannot be safely written
+    return False
+
+
 def _format_pdb_atom_line(atom_data: dict) -> str:
     """Formats a dictionary of atom data into a PDB ATOM/HETATM line."""
     # PDB format specification:
