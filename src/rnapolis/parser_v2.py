@@ -667,6 +667,9 @@ def write_cif(
             icode_val = "." if pd.isna(row.get("iCode")) else str(row["iCode"])
             charge_val = "." if pd.isna(row.get("charge")) else str(row["charge"])
 
+            row_data = [
+                str(row["record_type"]),  # group_PDB
+                str(int(row["serial"])),  # id
                 element_val,  # type_symbol
                 str(row["name"]),  # label_atom_id
                 altloc_val,  # label_alt_id
