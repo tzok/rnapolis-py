@@ -518,7 +518,7 @@ def write_cif(
     format_type = df.attrs.get("format", "PDB")
 
     # Create a new DataContainer
-    data_container = DataContainer("data_structure")
+    data_container = DataContainer("rnapolis")
 
     # Define the attributes for atom_site category
     if format_type == "mmCIF":
