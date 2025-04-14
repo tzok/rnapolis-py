@@ -659,34 +659,28 @@ def write_cif(
         else:  # PDB format
             # Map PDB data to mmCIF format, converting None to '.' or '?'
             entity_id = "1"  # Default entity ID
-            # Use the model number from the DataFrame
             model_num = str(int(row["model"]))
 
-            row_data = [
-                str(row["record_type"]),  # group_PDB
-                str(int(row["serial"])),  # id
-                "?"
-                if pd.isna(row.get("element"))
-                else str(row["element"]),  # type_symbol
+            # Pre-process optional fields for mmCIF placeholders
+            element_val = "?" if pd.isna(row.get("element")) else str(row["element"])
+            altloc_val = "." if pd.isna(row.get("altLoc")) else str(row["altLoc"])
+            icode_val = "." if pd.isna(row.get("iCode")) else str(row["iCode"])
+            charge_val = "." if pd.isna(row.get("charge")) else str(row["charge"])
+
+                element_val,  # type_symbol
                 str(row["name"]),  # label_atom_id
-                "."
-                if pd.isna(row.get("altLoc"))
-                else str(row["altLoc"]),  # label_alt_id
+                altloc_val,  # label_alt_id
                 str(row["resName"]),  # label_comp_id
                 str(row["chainID"]),  # label_asym_id
                 entity_id,  # label_entity_id
                 str(int(row["resSeq"])),  # label_seq_id
-                "."
-                if pd.isna(row.get("iCode"))
-                else str(row["iCode"]),  # pdbx_PDB_ins_code
+                icode_val,  # pdbx_PDB_ins_code
                 f"{float(row['x']):.3f}",  # Cartn_x
                 f"{float(row['y']):.3f}",  # Cartn_y
                 f"{float(row['z']):.3f}",  # Cartn_z
                 f"{float(row['occupancy']):.2f}",  # occupancy
                 f"{float(row['tempFactor']):.2f}",  # B_iso_or_equiv
-                "."
-                if pd.isna(row.get("charge"))
-                else str(row["charge"]),  # pdbx_formal_charge
+                charge_val,  # pdbx_formal_charge
                 str(int(row["resSeq"])),  # auth_seq_id
                 str(row["resName"]),  # auth_comp_id
                 str(row["chainID"]),  # auth_asym_id
