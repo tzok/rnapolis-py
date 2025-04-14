@@ -394,12 +394,11 @@ def fit_to_pdb(df: pd.DataFrame) -> pd.DataFrame:
     """
     format_type = df.attrs.get("format")
 
-    if can_write_pdb(df):
-        return df
-
-    # --- Fitting is required ---
     if not format_type:
         raise ValueError("DataFrame format attribute is not set.")
+
+    if can_write_pdb(df):
+        return df
 
     # Determine column names based on format
     if format_type == "PDB":
@@ -422,7 +421,11 @@ def fit_to_pdb(df: pd.DataFrame) -> pd.DataFrame:
         raise ValueError(f"Missing required residue sequence column: {resseq_col}")
 
     # Fill NaN in iCode for grouping purposes temporarily for the check
-    temp_icode = df[icode_col].fillna("") if icode_col in df.columns else pd.Series([""] * len(df), index=df.index)
+    temp_icode = (
+        df[icode_col].fillna("")
+        if icode_col in df.columns
+        else pd.Series([""] * len(df), index=df.index)
+    )
 
     unique_chains = df[chain_col].unique()
     num_chains = len(unique_chains)
@@ -456,13 +459,15 @@ def fit_to_pdb(df: pd.DataFrame) -> pd.DataFrame:
 
     # More accurate check: group by chain, then count unique (resSeq, iCode) tuples
     # Use a temporary structure to avoid modifying the original df
-    check_df = pd.DataFrame({
-        'chain': df[chain_col],
-        'resSeq': df[resseq_col],
-        'iCode': df[icode_col].fillna("") if icode_col in df.columns else ""
-    })
-    residue_counts = check_df.groupby('chain').apply(
-        lambda x: x[['resSeq', 'iCode']].drop_duplicates().shape[0]
+    check_df = pd.DataFrame(
+        {
+            "chain": df[chain_col],
+            "resSeq": df[resseq_col],
+            "iCode": df[icode_col].fillna("") if icode_col in df.columns else "",
+        }
+    )
+    residue_counts = check_df.groupby("chain").apply(
+        lambda x: x[["resSeq", "iCode"]].drop_duplicates().shape[0]
     )
     max_residues_per_chain = residue_counts.max() if not residue_counts.empty else 0
 
