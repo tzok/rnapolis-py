@@ -381,31 +381,38 @@ def write_pdb(
         atom_data = {}
 
         # --- Data Extraction ---
+        # Convert None to empty string for optional PDB fields during extraction
         if format_type == "PDB":
             atom_data = {
                 "record_name": row.get("record_type", "ATOM"),
                 "serial": int(row.get("serial", 0)),
                 "name": str(row.get("name", "")),
-                "altLoc": str(row.get("altLoc", "")),
+                "altLoc": "" if pd.isna(row.get("altLoc")) else str(row.get("altLoc")),
                 "resName": str(row.get("resName", "")),
                 "chainID": str(row.get("chainID", "")),
                 "resSeq": int(row.get("resSeq", 0)),
-                "iCode": str(row.get("iCode", "")),
+                "iCode": "" if pd.isna(row.get("iCode")) else str(row.get("iCode")),
                 "x": float(row.get("x", 0.0)),
                 "y": float(row.get("y", 0.0)),
                 "z": float(row.get("z", 0.0)),
                 "occupancy": float(row.get("occupancy", 1.0)),
                 "tempFactor": float(row.get("tempFactor", 0.0)),
-                "element": str(row.get("element", "")),
-                "charge": str(row.get("charge", "")),
+                "element": "" if pd.isna(row.get("element")) else str(row.get("element")),
+                "charge": "" if pd.isna(row.get("charge")) else str(row.get("charge")),
                 "model": int(row.get("model", 1)),
             }
         elif format_type == "mmCIF":
+            # Convert None or '.' to empty string for optional PDB fields during extraction from mmCIF
+            alt_loc_val = row.get("label_alt_id")
+            icode_val = row.get("pdbx_PDB_ins_code")
+            element_val = row.get("type_symbol")
+            charge_val = row.get("pdbx_formal_charge")
+
             atom_data = {
                 "record_name": row.get("group_PDB", "ATOM"),
                 "serial": int(row.get("id", 0)),
                 "name": str(row.get("auth_atom_id", row.get("label_atom_id", ""))),
-                "altLoc": str(row.get("label_alt_id", "")),
+                "altLoc": "" if pd.isna(alt_loc_val) or alt_loc_val == "." else str(alt_loc_val),
                 "resName": str(row.get("auth_comp_id", row.get("label_comp_id", ""))),
                 "chainID": str(row.get("auth_asym_id", row.get("label_asym_id", ""))),
                 "resSeq": int(row.get("auth_seq_id", row.get("label_seq_id", 0))),
@@ -422,17 +429,15 @@ def write_pdb(
         else:
             raise ValueError(f"Unsupported DataFrame format: {format_type}")
 
-        # Handle missing/NaN values more explicitly
-        atom_data["iCode"] = "" if pd.isna(atom_data["iCode"]) else atom_data["iCode"]
-        atom_data["altLoc"] = (
-            "" if pd.isna(atom_data["altLoc"]) else atom_data["altLoc"]
-        )
-        atom_data["charge"] = (
-            "" if pd.isna(atom_data["charge"]) else atom_data["charge"]
-        )
-        atom_data["element"] = (
-            "" if pd.isna(atom_data["element"]) else atom_data["element"]
-        )
+        # Handle None values from DataFrame for optional fields, converting them to empty strings for PDB formatting
+        atom_data["altLoc"] = "" if pd.isna(row.get("altLoc")) else str(row.get("altLoc", ""))
+        atom_data["iCode"] = "" if pd.isna(row.get("iCode")) else str(row.get("iCode", ""))
+        atom_data["element"] = "" if pd.isna(row.get("element")) else str(row.get("element", ""))
+        atom_data["charge"] = "" if pd.isna(row.get("charge")) else str(row.get("charge", ""))
+
+        # Specific handling for mmCIF source format where '.' means empty altLoc
+        if format_type == "mmCIF" and row.get("label_alt_id") == ".":
+             atom_data["altLoc"] = ""
 
         # --- MODEL/ENDMDL Records ---
         current_model_num = atom_data["model"]
@@ -567,13 +572,19 @@ def write_cif(
 
     for _, row in df.iterrows():
         if format_type == "mmCIF":
-            # Use existing mmCIF data, converting None to '?'
+            # Use existing mmCIF data, converting None to '.' or '?' appropriately
             row_data = []
+            optional_dot_fields = {"label_alt_id", "pdbx_PDB_ins_code", "pdbx_formal_charge"}
             for attr in attributes:
                 value = row.get(attr)
-                row_data.append(str(value) if pd.notna(value) else "?")
+                if pd.isna(value):
+                    # Use '.' for specific optional fields, '?' otherwise
+                    placeholder = "." if attr in optional_dot_fields else "?"
+                    row_data.append(placeholder)
+                else:
+                    row_data.append(str(value))
         else:  # PDB format
-            # Map PDB data to mmCIF format
+            # Map PDB data to mmCIF format, converting None to '.' or '?'
             entity_id = "1"  # Default entity ID
             # Use the model number from the DataFrame
             model_num = str(int(row["model"]))
@@ -581,23 +592,20 @@ def write_cif(
             row_data = [
                 str(row["record_type"]),  # group_PDB
                 str(int(row["serial"])),  # id
-                str(row["element"]) or "?",  # type_symbol (use '?' if empty)
+                "?" if pd.isna(row.get("element")) else str(row["element"]), # type_symbol
                 str(row["name"]),  # label_atom_id
-                str(row.get("altLoc", "")) or ".",  # label_alt_id (use '.' if empty)
+                "." if pd.isna(row.get("altLoc")) else str(row["altLoc"]), # label_alt_id
                 str(row["resName"]),  # label_comp_id
                 str(row["chainID"]),  # label_asym_id
                 entity_id,  # label_entity_id
                 str(int(row["resSeq"])),  # label_seq_id
-                str(row["iCode"])
-                if pd.notna(row["iCode"])
-                else ".",  # pdbx_PDB_ins_code (use '.' if None/NaN)
+                "." if pd.isna(row.get("iCode")) else str(row["iCode"]), # pdbx_PDB_ins_code
                 f"{float(row['x']):.3f}",  # Cartn_x
                 f"{float(row['y']):.3f}",  # Cartn_y
                 f"{float(row['z']):.3f}",  # Cartn_z
                 f"{float(row['occupancy']):.2f}",  # occupancy
                 f"{float(row['tempFactor']):.2f}",  # B_iso_or_equiv
-                str(row.get("charge", ""))
-                or ".",  # pdbx_formal_charge (use '.' if empty)
+                "." if pd.isna(row.get("charge")) else str(row["charge"]), # pdbx_formal_charge
                 str(int(row["resSeq"])),  # auth_seq_id
                 str(row["resName"]),  # auth_comp_id
                 str(row["chainID"]),  # auth_asym_id
