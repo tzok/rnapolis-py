@@ -870,7 +870,7 @@ class Mapping2D3D:
 
             for row in [row1, row2]:
                 if row:
-                    bpseq = self.__generate_bpseq(row)
+                    bpseq, _ = self.__generate_bpseq(row)  # Unpack the tuple
                     dbns = self.__generate_dot_bracket_per_strand(
                         bpseq.dot_bracket.structure
                     )
