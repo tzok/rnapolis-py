@@ -822,19 +822,28 @@ class Mapping2D3D:
         min_endpoint_distance = min(endpoint_distances.values())
         closest_pair_key = min(endpoint_distances, key=endpoint_distances.get)
 
-        # Select the points for torsion and line distance based on the closest pair
+        # Select the points for torsion and line distance based on the closest pair.
+        # s1p2 and s2p1 must be the endpoints involved in the minimum distance.
         if closest_pair_key == "first_first":
-            s1p1, s1p2 = stem1_centroids[0], stem1_centroids[1]
+            # Closest: s1_first and s2_first
+            # Torsion points: s1_second, s1_first, s2_first, s2_second
+            s1p1, s1p2 = stem1_centroids[1], stem1_centroids[0]
             s2p1, s2p2 = stem2_centroids[0], stem2_centroids[1]
         elif closest_pair_key == "first_last":
-            s1p1, s1p2 = stem1_centroids[0], stem1_centroids[1]
-            s2p1, s2p2 = stem2_centroids[-2], stem2_centroids[-1]
+            # Closest: s1_first and s2_last
+            # Torsion points: s1_second, s1_first, s2_last, s2_second_last
+            s1p1, s1p2 = stem1_centroids[1], stem1_centroids[0]
+            s2p1, s2p2 = stem2_centroids[-1], stem2_centroids[-2]
         elif closest_pair_key == "last_first":
+            # Closest: s1_last and s2_first
+            # Torsion points: s1_second_last, s1_last, s2_first, s2_second
             s1p1, s1p2 = stem1_centroids[-2], stem1_centroids[-1]
             s2p1, s2p2 = stem2_centroids[0], stem2_centroids[1]
         else:  # last_last
+            # Closest: s1_last and s2_last
+            # Torsion points: s1_second_last, s1_last, s2_last, s2_second_last
             s1p1, s1p2 = stem1_centroids[-2], stem1_centroids[-1]
-            s2p1, s2p2 = stem2_centroids[-2], stem2_centroids[-1]
+            s2p1, s2p2 = stem2_centroids[-1], stem2_centroids[-2]
 
         # Calculate torsion angle
         torsion = calculate_torsion_angle_coords(s1p1, s1p2, s2p1, s2p2)
