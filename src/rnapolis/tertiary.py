@@ -751,37 +751,79 @@ class Mapping2D3D:
         Optional[numpy.typing.NDArray[numpy.floating]],
     ]:
         """
-        Calculates the geometric center of base atoms for the first and last pairs of a stem.
+        Calculates two points representing the stem axis by fitting a line to
+        the centroids of all base pairs in the stem.
+
+        The method calculates the centroid for each base pair, fits a 3D line
+        to these points using least-squares (via SVD), and then projects the
+        centroids of the first and last base pairs onto this line.
 
         Args:
             stem: The Stem object.
 
         Returns:
-            A tuple containing two numpy arrays: the centroid of the first pair
-            and the centroid of the last pair. Returns None for a centroid if
-            residues are missing or base atoms cannot be determined.
+            A tuple containing two numpy arrays representing the start and end
+            points of the fitted stem axis segment, corresponding to the projections
+            of the first and last pair centroids. Returns (None, None) if a line
+            cannot be fitted (e.g., fewer than 2 pairs or missing residues).
         """
-        try:
-            # First pair: start of 5' strand, end of 3' strand (reversed)
-            res5p_first = self.bpseq_index_to_residue_map[stem.strand5p.first]
-            res3p_last = self.bpseq_index_to_residue_map[stem.strand3p.last]
-            first_pair_centroid = self._calculate_pair_centroid(res5p_first, res3p_last)
-        except KeyError:
+        all_pair_centroids = []
+        first_pair_centroid_actual = None
+        last_pair_centroid_actual = None
+
+        stem_len = stem.strand5p.last - stem.strand5p.first + 1
+
+        for i in range(stem_len):
+            idx5p = stem.strand5p.first + i
+            idx3p = stem.strand3p.last - i
+            try:
+                res5p = self.bpseq_index_to_residue_map[idx5p]
+                res3p = self.bpseq_index_to_residue_map[idx3p]
+                centroid = self._calculate_pair_centroid(res5p, res3p)
+                if centroid is not None:
+                    all_pair_centroids.append(centroid)
+                    if i == 0:
+                        first_pair_centroid_actual = centroid
+                    if i == stem_len - 1:
+                        last_pair_centroid_actual = centroid
+            except KeyError:
+                logging.warning(
+                    f"Could not find residues for pair {idx5p}-{idx3p} in stem {stem}"
+                )
+                # If first or last pair residues are missing, set actual centroids to None
+                if i == 0:
+                    first_pair_centroid_actual = None
+                if i == stem_len - 1:
+                    last_pair_centroid_actual = None
+                continue # Continue calculating other centroids
+
+        if len(all_pair_centroids) < 2:
             logging.warning(
-                f"Could not find residues for the first pair of stem {stem}"
+                f"Could not fit line for stem {stem}: Found {len(all_pair_centroids)} valid pair centroids (minimum 2 required)."
             )
-            first_pair_centroid = None
+            # Return the actual (potentially None) first/last centroids if line fit fails
+            return first_pair_centroid_actual, last_pair_centroid_actual
 
-        try:
-            # Last pair: end of 5' strand, start of 3' strand (reversed)
-            res5p_last = self.bpseq_index_to_residue_map[stem.strand5p.last]
-            res3p_first = self.bpseq_index_to_residue_map[stem.strand3p.first]
-            last_pair_centroid = self._calculate_pair_centroid(res5p_last, res3p_first)
-        except KeyError:
-            logging.warning(f"Could not find residues for the last pair of stem {stem}")
-            last_pair_centroid = None
+        # Fit a 3D line using SVD
+        centroids_array = numpy.array(all_pair_centroids)
+        mean_centroid = centroids_array.mean(axis=0)
+        uu, dd, vv = numpy.linalg.svd(centroids_array - mean_centroid)
+        direction_vector = vv[0] # First principal component
 
-        return first_pair_centroid, last_pair_centroid
+        # Project the actual first and last centroids onto the fitted line
+        projected_first = None
+        if first_pair_centroid_actual is not None:
+            projected_first = mean_centroid + numpy.dot(
+                first_pair_centroid_actual - mean_centroid, direction_vector
+            ) * direction_vector
+
+        projected_last = None
+        if last_pair_centroid_actual is not None:
+            projected_last = mean_centroid + numpy.dot(
+                last_pair_centroid_actual - mean_centroid, direction_vector
+            ) * direction_vector
+
+        return projected_first, projected_last
 
     def calculate_inter_stem_parameters(
         self, stem1: Stem, stem2: Stem
