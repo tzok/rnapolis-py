@@ -795,7 +795,7 @@ class Mapping2D3D:
                     first_pair_centroid_actual = None
                 if i == stem_len - 1:
                     last_pair_centroid_actual = None
-                continue # Continue calculating other centroids
+                continue  # Continue calculating other centroids
 
         if len(all_pair_centroids) < 2:
             logging.warning(
@@ -808,20 +808,26 @@ class Mapping2D3D:
         centroids_array = numpy.array(all_pair_centroids)
         mean_centroid = centroids_array.mean(axis=0)
         uu, dd, vv = numpy.linalg.svd(centroids_array - mean_centroid)
-        direction_vector = vv[0] # First principal component
+        direction_vector = vv[0]  # First principal component
 
         # Project the actual first and last centroids onto the fitted line
         projected_first = None
         if first_pair_centroid_actual is not None:
-            projected_first = mean_centroid + numpy.dot(
-                first_pair_centroid_actual - mean_centroid, direction_vector
-            ) * direction_vector
+            projected_first = (
+                mean_centroid
+                + numpy.dot(
+                    first_pair_centroid_actual - mean_centroid, direction_vector
+                )
+                * direction_vector
+            )
 
         projected_last = None
         if last_pair_centroid_actual is not None:
-            projected_last = mean_centroid + numpy.dot(
-                last_pair_centroid_actual - mean_centroid, direction_vector
-            ) * direction_vector
+            projected_last = (
+                mean_centroid
+                + numpy.dot(last_pair_centroid_actual - mean_centroid, direction_vector)
+                * direction_vector
+            )
 
         return projected_first, projected_last
 
