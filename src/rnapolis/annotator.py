@@ -22,7 +22,7 @@ from rnapolis.common import (
     BaseRibose,
     BPh,
     BpSeq,
-    InterStemParameters, # Added import
+    InterStemParameters,  # Added import
     LeontisWesthof,
     Residue,
     Saenger,
@@ -505,12 +505,14 @@ def extract_secondary_structure(
         stem1 = stems[i]
         stem2 = stems[j]
         torsion, distance = mapping.calculate_inter_stem_parameters(stem1, stem2)
-        if torsion is not None or distance is not None: # Only add if calculation was successful
-             inter_stem_params.append(
-                 InterStemParameters(
-                     stem1_idx=i, stem2_idx=j, torsion=torsion, distance=distance
-                 )
-             )
+        if (
+            torsion is not None or distance is not None
+        ):  # Only add if calculation was successful
+            inter_stem_params.append(
+                InterStemParameters(
+                    stem1_idx=i, stem2_idx=j, torsion=torsion, distance=distance
+                )
+            )
 
     structure2d = Structure2D(
         base_interactions,
@@ -521,7 +523,7 @@ def extract_secondary_structure(
         single_strands,
         hairpins,
         loops,
-        inter_stem_params, # Added inter-stem parameters
+        inter_stem_params,  # Added inter-stem parameters
     )
     if all_dot_brackets:
         return structure2d, mapping.all_dot_brackets
