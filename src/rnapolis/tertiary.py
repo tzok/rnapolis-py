@@ -19,6 +19,7 @@ from rnapolis.common import (
     ResidueLabel,
     Saenger,
     Stacking,
+    Stem,
     Strand,
 )
 
