@@ -1,6 +1,7 @@
 #! /usr/bin/env python
 import argparse
 import csv
+import itertools
 import logging
 import math
 import os
