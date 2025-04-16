@@ -1,15 +1,19 @@
 #! /usr/bin/env python
 import argparse
-import csv
 import itertools  # Added for combinations
 import logging
+import math
 import os
 from enum import Enum
 from typing import Dict, List, Optional, Tuple
 
 import orjson
 
-from rnapolis.annotator import generate_pymol_script
+from rnapolis.annotator import (
+    add_common_output_arguments,
+    generate_pymol_script,
+    handle_output_arguments,
+)
 from rnapolis.common import (
     BR,
     BaseInteractions,
