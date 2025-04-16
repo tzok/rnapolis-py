@@ -774,7 +774,7 @@ class Mapping2D3D:
                 logging.warning(
                     f"Could not find residues for pair {idx5p}-{idx3p} in stem {stem}"
                 )
-                continue # Continue calculating other centroids
+                continue  # Continue calculating other centroids
 
         return all_pair_centroids
 

@@ -548,7 +548,9 @@ def generate_pymol_script(mapping: Mapping2D3D, stems: List[Stem]) -> str:
 
         # Need at least 2 centroids to draw a segment
         if len(centroids) < 2:
-            logging.warning(f"Skipping stem {stem_idx+1} in PML script: less than 2 base pairs.")
+            logging.warning(
+                f"Skipping stem {stem_idx + 1} in PML script: less than 2 base pairs."
+            )
             continue
 
         # Draw cylinders between consecutive centroids
@@ -561,7 +563,9 @@ def generate_pymol_script(mapping: Mapping2D3D, stems: List[Stem]) -> str:
             # Use 9.0 for CYLINDER code
             # Use same color for both ends
             cgo_object = f"[ 9.0, {x1:.3f}, {y1:.3f}, {z1:.3f}, {x2:.3f}, {y2:.3f}, {z2:.3f}, {radius}, {r}, {g}, {b}, {r}, {g}, {b} ]"
-            pymol_commands.append(f'cmd.load_cgo({cgo_object}, "stem_{stem_idx + 1}_seg_{seg_idx + 1}")')
+            pymol_commands.append(
+                f'cmd.load_cgo({cgo_object}, "stem_{stem_idx + 1}_seg_{seg_idx + 1}")'
+            )
 
     return "\n".join(pymol_commands)
 
