@@ -609,7 +609,7 @@ def generate_pymol_script(mapping: Mapping2D3D, stems: List[Stem]) -> str:
             # Use same color for both ends
             cgo_object = f"[ 9.0, {x1:.3f}, {y1:.3f}, {z1:.3f}, {x2:.3f}, {y2:.3f}, {z2:.3f}, {radius}, {r}, {g}, {b}, {r}, {g}, {b} ]"
             pymol_commands.append(
-                f'cmd.load_cgo({cgo_object}, "stem_{stem_idx + 1}_seg_{seg_idx + 1}")'
+                f'cmd.load_cgo({cgo_object}, "stem_{stem_idx}_seg_{seg_idx}")'
             )
 
     return "\n".join(pymol_commands)
