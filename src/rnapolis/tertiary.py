@@ -746,31 +746,19 @@ class Mapping2D3D:
 
     def get_stem_coordinates(
         self, stem: Stem
-    ) -> Tuple[
-        Optional[numpy.typing.NDArray[numpy.floating]],
-        Optional[numpy.typing.NDArray[numpy.floating]],
-    ]:
+    ) -> List[numpy.typing.NDArray[numpy.floating]]:
         """
-        Calculates two points representing the stem axis by fitting a line to
-        the centroids of all base pairs in the stem.
-
-        The method calculates the centroid for each base pair, fits a 3D line
-        to these points using least-squares (via SVD), and then projects the
-        centroids of the first and last base pairs onto this line.
+        Calculates the geometric centroid for each base pair in the stem.
 
         Args:
             stem: The Stem object.
 
         Returns:
-            A tuple containing two numpy arrays representing the start and end
-            points of the fitted stem axis segment, corresponding to the projections
-            of the first and last pair centroids. Returns (None, None) if a line
-            cannot be fitted (e.g., fewer than 2 pairs or missing residues).
+            A list of numpy arrays, where each array is the centroid of a
+            base pair in the stem. Returns an empty list if no centroids
+            can be calculated.
         """
         all_pair_centroids = []
-        first_pair_centroid_actual = None
-        last_pair_centroid_actual = None
-
         stem_len = stem.strand5p.last - stem.strand5p.first + 1
 
         for i in range(stem_len):
@@ -782,54 +770,13 @@ class Mapping2D3D:
                 centroid = self._calculate_pair_centroid(res5p, res3p)
                 if centroid is not None:
                     all_pair_centroids.append(centroid)
-                    if i == 0:
-                        first_pair_centroid_actual = centroid
-                    if i == stem_len - 1:
-                        last_pair_centroid_actual = centroid
             except KeyError:
                 logging.warning(
                     f"Could not find residues for pair {idx5p}-{idx3p} in stem {stem}"
                 )
-                # If first or last pair residues are missing, set actual centroids to None
-                if i == 0:
-                    first_pair_centroid_actual = None
-                if i == stem_len - 1:
-                    last_pair_centroid_actual = None
-                continue  # Continue calculating other centroids
+                continue # Continue calculating other centroids
 
-        if len(all_pair_centroids) < 2:
-            logging.warning(
-                f"Could not fit line for stem {stem}: Found {len(all_pair_centroids)} valid pair centroids (minimum 2 required)."
-            )
-            # Return the actual (potentially None) first/last centroids if line fit fails
-            return first_pair_centroid_actual, last_pair_centroid_actual
-
-        # Fit a 3D line using SVD
-        centroids_array = numpy.array(all_pair_centroids)
-        mean_centroid = centroids_array.mean(axis=0)
-        uu, dd, vv = numpy.linalg.svd(centroids_array - mean_centroid)
-        direction_vector = vv[0]  # First principal component
-
-        # Project the actual first and last centroids onto the fitted line
-        projected_first = None
-        if first_pair_centroid_actual is not None:
-            projected_first = (
-                mean_centroid
-                + numpy.dot(
-                    first_pair_centroid_actual - mean_centroid, direction_vector
-                )
-                * direction_vector
-            )
-
-        projected_last = None
-        if last_pair_centroid_actual is not None:
-            projected_last = (
-                mean_centroid
-                + numpy.dot(last_pair_centroid_actual - mean_centroid, direction_vector)
-                * direction_vector
-            )
-
-        return projected_first, projected_last
+        return all_pair_centroids
 
     def calculate_inter_stem_parameters(
         self, stem1: Stem, stem2: Stem
@@ -843,27 +790,39 @@ class Mapping2D3D:
 
         Returns:
             A tuple containing:
-            - The torsion angle defined by the four centroids (start_stem1, end_stem1, start_stem2, end_stem2).
-            - The shortest distance between the line segments defined by the centroids of each stem.
-            Returns (None, None) if any centroid cannot be calculated.
+            - The torsion angle between segments defined by the first/last two centroids of each stem.
+            - The shortest distance between these line segments.
+            Returns (None, None) if either stem has fewer than 2 base pairs or centroids cannot be calculated.
         """
-        coords1 = self.get_stem_coordinates(stem1)
-        coords2 = self.get_stem_coordinates(stem2)
+        stem1_centroids = self.get_stem_coordinates(stem1)
+        stem2_centroids = self.get_stem_coordinates(stem2)
 
-        p1, p2 = coords1
-        p3, p4 = coords2
-
-        if p1 is None or p2 is None or p3 is None or p4 is None:
+        # Need at least 2 centroids (base pairs) per stem
+        if len(stem1_centroids) < 2 or len(stem2_centroids) < 2:
             logging.warning(
-                f"Could not calculate centroids for stems {stem1} or {stem2}"
+                f"Cannot calculate inter-stem parameters for stems {stem1} and {stem2}: "
+                f"Insufficient base pairs ({len(stem1_centroids)} and {len(stem2_centroids)} respectively)."
             )
             return None, None
 
+        # Determine relative order based on average BpSeq index
+        avg_idx_stem1 = (stem1.strand5p.first + stem1.strand3p.last) / 2.0
+        avg_idx_stem2 = (stem2.strand5p.first + stem2.strand3p.last) / 2.0
+
+        if avg_idx_stem1 < avg_idx_stem2:
+            # Stem1 is "before" Stem2: use last 2 of stem1, first 2 of stem2
+            s1p1, s1p2 = stem1_centroids[-2], stem1_centroids[-1]
+            s2p1, s2p2 = stem2_centroids[0], stem2_centroids[1]
+        else:
+            # Stem2 is "before" Stem1 (or they overlap): use first 2 of stem1, last 2 of stem2
+            s1p1, s1p2 = stem1_centroids[0], stem1_centroids[1]
+            s2p1, s2p2 = stem2_centroids[-2], stem2_centroids[-1]
+
         # Calculate torsion angle
-        torsion = calculate_torsion_angle_coords(p1, p2, p3, p4)
+        torsion = calculate_torsion_angle_coords(s1p1, s1p2, s2p1, s2p2)
 
         # Calculate shortest distance between line segments
-        distance = distance_between_lines(p1, p2, p3, p4)
+        distance = distance_between_lines(s1p1, s1p2, s2p1, s2p2)
 
         return torsion, distance
 

@@ -28,6 +28,7 @@ from rnapolis.common import (
     Saenger,
     Stacking,
     StackingTopology,
+    Stem,
     Structure2D,
 )
 from rnapolis.parser import read_3d_structure
@@ -40,11 +41,10 @@ from rnapolis.tertiary import (
     PHOSPHATE_ACCEPTORS,
     RIBOSE_ACCEPTORS,
     Atom,
-    Mapping2D3D,
+    Mapping2D3D,  # Added import
     Residue3D,
     Structure3D,
     torsion_angle,
-    Mapping2D3D, # Added import
 )
 from rnapolis.util import handle_input_file
 
@@ -543,22 +543,25 @@ def generate_pymol_script(mapping: Mapping2D3D, stems: List[Stem]) -> str:
     radius = 0.5
     r, g, b = 1.0, 0.0, 0.0  # Red color
 
-    for i, stem in enumerate(stems):
-        # Skip stems with only one base pair
-        if (stem.strand5p.last - stem.strand5p.first + 1) <= 1:
+    for stem_idx, stem in enumerate(stems):
+        centroids = mapping.get_stem_coordinates(stem)
+
+        # Need at least 2 centroids to draw a segment
+        if len(centroids) < 2:
+            logging.warning(f"Skipping stem {stem_idx+1} in PML script: less than 2 base pairs.")
             continue
 
-        coords = mapping.get_stem_coordinates(stem)
-        p1, p2 = coords
-
-        if p1 is not None and p2 is not None:
+        # Draw cylinders between consecutive centroids
+        for seg_idx in range(len(centroids) - 1):
+            p1 = centroids[seg_idx]
+            p2 = centroids[seg_idx + 1]
             x1, y1, z1 = p1
             x2, y2, z2 = p2
             # Format: [CYLINDER, x1, y1, z1, x2, y2, z2, radius, r1, g1, b1, r2, g2, b2]
             # Use 9.0 for CYLINDER code
             # Use same color for both ends
             cgo_object = f"[ 9.0, {x1:.3f}, {y1:.3f}, {z1:.3f}, {x2:.3f}, {y2:.3f}, {z2:.3f}, {radius}, {r}, {g}, {b}, {r}, {g}, {b} ]"
-            pymol_commands.append(f'cmd.load_cgo({cgo_object}, "stem_{i+1}")')
+            pymol_commands.append(f'cmd.load_cgo({cgo_object}, "stem_{stem_idx + 1}_seg_{seg_idx + 1}")')
 
     return "\n".join(pymol_commands)
 
@@ -661,30 +664,30 @@ def main():
         "--find-gaps",
         action="store_true",
         help="(optional) if set, the program will detect gaps and break the PDB chain into two or more strands; "
-       f"the gap is defined as O3'-P distance greater then {1.5 * AVERAGE_OXYGEN_PHOSPHORUS_DISTANCE_COVALENT}",
-   )
-   parser.add_argument("-d", "--dot", help="(optional) path to output DOT file")
-   parser.add_argument(
-       "-p", "--pml", help="(optional) path to output PyMOL PML script for stems"
-   )
-   args = parser.parse_args()
+        f"the gap is defined as O3'-P distance greater then {1.5 * AVERAGE_OXYGEN_PHOSPHORUS_DISTANCE_COVALENT}",
+    )
+    parser.add_argument("-d", "--dot", help="(optional) path to output DOT file")
+    parser.add_argument(
+        "-p", "--pml", help="(optional) path to output PyMOL PML script for stems"
+    )
+    args = parser.parse_args()
 
     file = handle_input_file(args.input)
     structure3d = read_3d_structure(file, None)
     structure2d, dot_brackets = extract_secondary_structure(
         structure3d, None, args.find_gaps, args.all_dot_brackets
-   )
+    )
 
-   # Need the mapping object for PML generation
-   mapping = Mapping2D3D(
-       structure3d,
-       structure2d.baseInteractions.basePairs,
-       structure2d.baseInteractions.stackings,
-       args.find_gaps,
-   )
+    # Need the mapping object for PML generation
+    mapping = Mapping2D3D(
+        structure3d,
+        structure2d.baseInteractions.basePairs,
+        structure2d.baseInteractions.stackings,
+        args.find_gaps,
+    )
 
-   if args.csv:
-       write_csv(args.csv, structure2d)
+    if args.csv:
+        write_csv(args.csv, structure2d)
 
     if args.json:
         write_json(args.json, structure2d)
@@ -702,6 +705,11 @@ def main():
 
     if args.dot:
         print(BpSeq.from_string(structure2d.bpseq).graphviz)
+
+    if args.pml:
+        pml_script = generate_pymol_script(mapping, structure2d.stems)
+        with open(args.pml, "w") as f:
+            f.write(pml_script)
 
 
 if __name__ == "__main__":
