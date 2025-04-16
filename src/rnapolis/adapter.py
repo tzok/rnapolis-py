@@ -9,6 +9,7 @@ from typing import Dict, List, Optional, Tuple
 
 import orjson
 
+from rnapolis.annotator import generate_pymol_script
 from rnapolis.common import (
     BR,
     BaseInteractions,
@@ -319,7 +320,7 @@ def process_external_tool_output(
     model: Optional[int] = None,
     find_gaps: bool = False,
     all_dot_brackets: bool = False,
-) -> Tuple[Structure2D, List[str], Mapping2D3D]: # Added Mapping2D3D to return tuple
+) -> Tuple[Structure2D, List[str], Mapping2D3D]:  # Added Mapping2D3D to return tuple
     """
     Process external tool output and create a secondary structure representation.
 
@@ -353,7 +354,7 @@ def extract_secondary_structure_from_external(
     model: Optional[int] = None,
     find_gaps: bool = False,
     all_dot_brackets: bool = False,
-) -> Tuple[Structure2D, List[str], Mapping2D3D]: # Added Mapping2D3D to return tuple
+) -> Tuple[Structure2D, List[str], Mapping2D3D]:  # Added Mapping2D3D to return tuple
     """
     Create a secondary structure representation using interactions from an external tool.
 
@@ -390,9 +391,13 @@ def extract_secondary_structure_from_external(
             if (
                 torsion is not None or distance is not None
             ):  # Only add if calculation was successful
+                torsion_degrees = math.degrees(torsion) if torsion is not None else None
                 inter_stem_params.append(
                     InterStemParameters(
-                        stem1_idx=i, stem2_idx=j, torsion=torsion, distance=distance
+                        stem1_idx=i,
+                        stem2_idx=j,
+                        torsion=torsion_degrees,
+                        distance=distance,
                     )
                 )
 
@@ -405,12 +410,12 @@ def extract_secondary_structure_from_external(
         single_strands,
         hairpins,
         loops,
-       inter_stem_params,  # Added inter-stem parameters
-   )
-   if all_dot_brackets:
-       return structure2d, mapping.all_dot_brackets, mapping  # Return mapping
-   else:
-       return structure2d, [structure2d.dotBracket], mapping  # Return mapping
+        inter_stem_params,  # Added inter-stem parameters
+    )
+    if all_dot_brackets:
+        return structure2d, mapping.all_dot_brackets, mapping  # Return mapping
+    else:
+        return structure2d, [structure2d.dotBracket], mapping  # Return mapping
 
 
 def write_json(path: str, structure2d: BaseInteractions):
@@ -520,20 +525,20 @@ def main():
     parser.add_argument(
         "-f",
         "--find-gaps",
-       action="store_true",
-       help="(optional) if set, the program will detect gaps and break the PDB chain into two or more strands",
-   )
-   parser.add_argument("-d", "--dot", help="(optional) path to output DOT file")
-   parser.add_argument(
-       "-p", "--pml", help="(optional) path to output PyMOL PML script for stems"
-   )
-   args = parser.parse_args()
+        action="store_true",
+        help="(optional) if set, the program will detect gaps and break the PDB chain into two or more strands",
+    )
+    parser.add_argument("-d", "--dot", help="(optional) path to output DOT file")
+    parser.add_argument(
+        "-p", "--pml", help="(optional) path to output PyMOL PML script for stems"
+    )
+    args = parser.parse_args()
 
     file = handle_input_file(args.input)
     structure3d = read_3d_structure(file, None)
 
     # Process external tool output and get secondary structure
-    structure2d, dot_brackets = process_external_tool_output(
+    structure2d, dot_brackets, mapping = process_external_tool_output(
         structure3d,
         args.external,
         ExternalTool(args.tool),
@@ -561,6 +566,11 @@ def main():
 
     if args.dot:
         print(BpSeq.from_string(structure2d.bpseq).graphviz)
+
+    if args.pml:
+        pml_script = generate_pymol_script(mapping, structure2d.stems)
+        with open(args.pml, "w") as f:
+            f.write(pml_script)
 
 
 if __name__ == "__main__":

@@ -514,9 +514,13 @@ def extract_secondary_structure(
             if (
                 torsion is not None or distance is not None
             ):  # Only add if calculation was successful
+                torsion_degrees = math.degrees(torsion) if torsion is not None else None
                 inter_stem_params.append(
                     InterStemParameters(
-                        stem1_idx=i, stem2_idx=j, torsion=torsion, distance=distance
+                        stem1_idx=i,
+                        stem2_idx=j,
+                        torsion=torsion_degrees,
+                        distance=distance,
                     )
                 )
 
