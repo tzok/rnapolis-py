@@ -379,10 +379,14 @@ def extract_secondary_structure_from_external(
     for i, j in itertools.combinations(range(len(stems)), 2):
         stem1 = stems[i]
         stem2 = stems[j]
-        torsion, distance = mapping.calculate_inter_stem_parameters(stem1, stem2)
-        if (
-            torsion is not None or distance is not None
-        ):  # Only add if calculation was successful
+
+        # Skip calculation if either stem has only one base pair
+        if (stem1.strand5p.last - stem1.strand5p.first + 1) > 1 and \
+           (stem2.strand5p.last - stem2.strand5p.first + 1) > 1:
+            torsion, distance = mapping.calculate_inter_stem_parameters(stem1, stem2)
+            if (
+                torsion is not None or distance is not None
+            ):  # Only add if calculation was successful
             inter_stem_params.append(
                 InterStemParameters(
                     stem1_idx=i, stem2_idx=j, torsion=torsion, distance=distance
