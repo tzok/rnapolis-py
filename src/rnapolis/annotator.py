@@ -507,8 +507,9 @@ def extract_secondary_structure(
         stem2 = stems[j]
 
         # Skip calculation if either stem has only one base pair
-        if (stem1.strand5p.last - stem1.strand5p.first + 1) > 1 and \
-           (stem2.strand5p.last - stem2.strand5p.first + 1) > 1:
+        if (stem1.strand5p.last - stem1.strand5p.first + 1) > 1 and (
+            stem2.strand5p.last - stem2.strand5p.first + 1
+        ) > 1:
             torsion, distance = mapping.calculate_inter_stem_parameters(stem1, stem2)
             if (
                 torsion is not None or distance is not None
