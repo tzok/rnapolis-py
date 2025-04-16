@@ -507,20 +507,27 @@ def extract_secondary_structure(
         stem2 = stems[j]
 
         # Skip calculation if either stem has only one base pair
+        # Ensure both stems have at least 2 base pairs for parameter calculation
         if (stem1.strand5p.last - stem1.strand5p.first + 1) > 1 and (
             stem2.strand5p.last - stem2.strand5p.first + 1
         ) > 1:
-            torsion, distance = mapping.calculate_inter_stem_parameters(stem1, stem2)
+            torsion, line_distance, min_endpoint_distance = (
+                mapping.calculate_inter_stem_parameters(stem1, stem2)
+            )
+            # Only add if calculation returned valid values
             if (
-                torsion is not None or distance is not None
-            ):  # Only add if calculation was successful
+                torsion is not None
+                or line_distance is not None
+                or min_endpoint_distance is not None
+            ):
                 torsion_degrees = math.degrees(torsion) if torsion is not None else None
                 inter_stem_params.append(
                     InterStemParameters(
                         stem1_idx=i,
                         stem2_idx=j,
                         torsion=torsion_degrees,
-                        distance=distance,
+                        distance=line_distance,
+                        min_endpoint_distance=min_endpoint_distance,
                     )
                 )
 

@@ -780,9 +780,9 @@ class Mapping2D3D:
 
     def calculate_inter_stem_parameters(
         self, stem1: Stem, stem2: Stem
-    ) -> Tuple[Optional[float], Optional[float]]:
+    ) -> Tuple[Optional[float], Optional[float], Optional[float]]:
         """
-        Calculates geometric parameters between two stems.
+        Calculates geometric parameters between two stems based on closest endpoints.
 
         Args:
             stem1: The first Stem object.
@@ -790,9 +790,10 @@ class Mapping2D3D:
 
         Returns:
             A tuple containing:
-            - The torsion angle between segments defined by the first/last two centroids of each stem.
+            - The torsion angle between segments defined by the two centroids closest to the minimum endpoint distance.
             - The shortest distance between these line segments.
-            Returns (None, None) if either stem has fewer than 2 base pairs or centroids cannot be calculated.
+            - The minimum distance between the endpoints of the two stems.
+            Returns (None, None, None) if either stem has fewer than 2 base pairs or centroids cannot be calculated.
         """
         stem1_centroids = self.get_stem_coordinates(stem1)
         stem2_centroids = self.get_stem_coordinates(stem2)
@@ -803,28 +804,45 @@ class Mapping2D3D:
                 f"Cannot calculate inter-stem parameters for stems {stem1} and {stem2}: "
                 f"Insufficient base pairs ({len(stem1_centroids)} and {len(stem2_centroids)} respectively)."
             )
-            return None, None
+            return None, None, None
 
-        # Determine relative order based on average BpSeq index
-        avg_idx_stem1 = (stem1.strand5p.first + stem1.strand3p.last) / 2.0
-        avg_idx_stem2 = (stem2.strand5p.first + stem2.strand3p.last) / 2.0
+        # Define the endpoints for each stem
+        s1_first, s1_last = stem1_centroids[0], stem1_centroids[-1]
+        s2_first, s2_last = stem2_centroids[0], stem2_centroids[-1]
 
-        if avg_idx_stem1 < avg_idx_stem2:
-            # Stem1 is "before" Stem2: use last 2 of stem1, first 2 of stem2
+        # Calculate distances between the four endpoint pairs
+        endpoint_distances = {
+            "first_first": numpy.linalg.norm(s1_first - s2_first),
+            "first_last": numpy.linalg.norm(s1_first - s2_last),
+            "last_first": numpy.linalg.norm(s1_last - s2_first),
+            "last_last": numpy.linalg.norm(s1_last - s2_last),
+        }
+
+        # Find the minimum endpoint distance and the corresponding pair
+        min_endpoint_distance = min(endpoint_distances.values())
+        closest_pair_key = min(endpoint_distances, key=endpoint_distances.get)
+
+        # Select the points for torsion and line distance based on the closest pair
+        if closest_pair_key == "first_first":
+            s1p1, s1p2 = stem1_centroids[0], stem1_centroids[1]
+            s2p1, s2p2 = stem2_centroids[0], stem2_centroids[1]
+        elif closest_pair_key == "first_last":
+            s1p1, s1p2 = stem1_centroids[0], stem1_centroids[1]
+            s2p1, s2p2 = stem2_centroids[-2], stem2_centroids[-1]
+        elif closest_pair_key == "last_first":
             s1p1, s1p2 = stem1_centroids[-2], stem1_centroids[-1]
             s2p1, s2p2 = stem2_centroids[0], stem2_centroids[1]
-        else:
-            # Stem2 is "before" Stem1 (or they overlap): use first 2 of stem1, last 2 of stem2
-            s1p1, s1p2 = stem1_centroids[0], stem1_centroids[1]
+        else:  # last_last
+            s1p1, s1p2 = stem1_centroids[-2], stem1_centroids[-1]
             s2p1, s2p2 = stem2_centroids[-2], stem2_centroids[-1]
 
         # Calculate torsion angle
         torsion = calculate_torsion_angle_coords(s1p1, s1p2, s2p1, s2p2)
 
         # Calculate shortest distance between line segments
-        distance = distance_between_lines(s1p1, s1p2, s2p1, s2p2)
+        line_distance = distance_between_lines(s1p1, s1p2, s2p1, s2p2)
 
-        return torsion, distance
+        return torsion, line_distance, min_endpoint_distance
 
     def __generate_dot_bracket_per_strand(self, dbn_structure: str) -> List[str]:
         dbn = dbn_structure
