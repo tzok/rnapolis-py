@@ -848,10 +848,7 @@ class Mapping2D3D:
         # Calculate torsion angle
         torsion = calculate_torsion_angle_coords(s1p1, s1p2, s2p1, s2p2)
 
-        # Calculate shortest distance between line segments
-        line_distance = distance_between_lines(s1p1, s1p2, s2p1, s2p2)
-
-        return torsion, line_distance, min_endpoint_distance
+        return torsion, min_endpoint_distance
 
     def __generate_dot_bracket_per_strand(self, dbn_structure: str) -> List[str]:
         dbn = dbn_structure

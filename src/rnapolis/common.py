@@ -1062,7 +1062,6 @@ class InterStemParameters:
     stem1_idx: int
     stem2_idx: int
     torsion: Optional[float]  # Torsion angle between stem segments (degrees)
-    distance: Optional[float]  # Shortest distance between stem segments
     min_endpoint_distance: Optional[float]  # Minimum distance between stem endpoints
 
 
