@@ -659,13 +659,13 @@ def write_csv(path: str, structure2d: Structure2D):
                     "",
                 ]
             )
-        for base_ribose in structure2d.baseInteractions.basePhosphateInteractions:
+        for base_ribose in structure2d.baseInteractions.baseRiboseInteractions:
             writer.writerow(
                 [
                     base_ribose.nt1.full_name,
                     base_ribose.nt2.full_name,
                     "base-ribose interaction",
-                    base_ribose.bph.value if base_ribose.bph is not None else "",
+                    base_ribose.br.value if base_ribose.br is not None else "",
                     "",
                 ]
             )
@@ -686,9 +686,8 @@ def write_bpseq(path: str, bpseq: BpSeq):
         f.write(str(bpseq))
 
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("input", help="Path to PDB or mmCIF file")
+def add_common_output_arguments(parser: argparse.ArgumentParser):
+    """Adds common output and processing arguments to the parser."""
     parser.add_argument(
         "-a",
         "--all-dot-brackets",
@@ -708,33 +707,19 @@ def main():
         action="store_true",
         help="(optional) if set, the program will print extended secondary structure to the standard output",
     )
-    parser.add_argument(
-        "-f",
-        "--find-gaps",
-        action="store_true",
-        help="(optional) if set, the program will detect gaps and break the PDB chain into two or more strands; "
-        f"the gap is defined as O3'-P distance greater then {1.5 * AVERAGE_OXYGEN_PHOSPHORUS_DISTANCE_COVALENT}",
-    )
     parser.add_argument("-d", "--dot", help="(optional) path to output DOT file")
     parser.add_argument(
         "-p", "--pml", help="(optional) path to output PyMOL PML script for stems"
     )
-    args = parser.parse_args()
 
-    file = handle_input_file(args.input)
-    structure3d = read_3d_structure(file, None)
-    structure2d, dot_brackets = extract_secondary_structure(
-        structure3d, None, args.find_gaps, args.all_dot_brackets
-    )
 
-    # Need the mapping object for PML generation
-    mapping = Mapping2D3D(
-        structure3d,
-        structure2d.baseInteractions.basePairs,
-        structure2d.baseInteractions.stackings,
-        args.find_gaps,
-    )
-
+def handle_output_arguments(
+    args: argparse.Namespace,
+    structure2d: Structure2D,
+    dot_brackets: List[str],
+    mapping: Mapping2D3D,
+):
+    """Handles writing output based on provided arguments."""
     if args.csv:
         write_csv(args.csv, structure2d)
 
@@ -759,6 +744,36 @@ def main():
         pml_script = generate_pymol_script(mapping, structure2d.stems)
         with open(args.pml, "w") as f:
             f.write(pml_script)
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("input", help="Path to PDB or mmCIF file")
+    parser.add_argument(
+        "-f",
+        "--find-gaps",
+        action="store_true",
+        help="(optional) if set, the program will detect gaps and break the PDB chain into two or more strands; "
+        f"the gap is defined as O3'-P distance greater then {1.5 * AVERAGE_OXYGEN_PHOSPHORUS_DISTANCE_COVALENT}",
+    )
+    add_common_output_arguments(parser)
+    args = parser.parse_args()
+
+    file = handle_input_file(args.input)
+    structure3d = read_3d_structure(file, None)
+    structure2d, dot_brackets = extract_secondary_structure(
+        structure3d, None, args.find_gaps, args.all_dot_brackets
+    )
+
+    # Need the mapping object for PML generation
+    mapping = Mapping2D3D(
+        structure3d,
+        structure2d.baseInteractions.basePairs,
+        structure2d.baseInteractions.stackings,
+        args.find_gaps,
+    )
+
+    handle_output_arguments(args, structure2d, dot_brackets, mapping)
 
 
 if __name__ == "__main__":
