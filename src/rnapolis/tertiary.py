@@ -691,6 +691,16 @@ class Mapping2D3D:
         """Finds the Residue3D object corresponding to a BpSeq Entry."""
         return self.bpseq_index_to_residue_map.get(entry.index_)
 
+    def get_residues_for_strand(self, strand: "Strand") -> List[Residue3D]:
+        """Retrieves the list of Residue3D objects corresponding to a Strand."""
+        residues = []
+        # Strand indices are 1-based and inclusive
+        for index_ in range(strand.first, strand.last + 1):
+            residue = self.bpseq_index_to_residue_map.get(index_)
+            if residue:
+                residues.append(residue)
+        return residues
+
     @cached_property
     def dot_bracket(self) -> str:
         dbns = self.__generate_dot_bracket_per_strand(self.bpseq.dot_bracket.structure)
