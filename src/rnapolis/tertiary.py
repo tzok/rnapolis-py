@@ -716,6 +716,72 @@ class Mapping2D3D:
             i += len(sequence)
         return "\n".join(result)
 
+    def _calculate_pair_centroid(
+        self, residue1: Residue3D, residue2: Residue3D
+    ) -> Optional[numpy.typing.NDArray[numpy.floating]]:
+        """Calculates the geometric mean of base atoms for a pair of residues."""
+        base_atoms = []
+        for residue in [residue1, residue2]:
+            base_atom_names = Residue3D.nucleobase_heavy_atoms.get(
+                residue.one_letter_name.upper(), set()
+            )
+            if not base_atom_names:
+                logging.warning(
+                    f"Could not find base atom definition for residue {residue.full_name}"
+                )
+                continue
+            for atom in residue.atoms:
+                if atom.name in base_atom_names:
+                    base_atoms.append(atom)
+
+        if not base_atoms:
+            logging.warning(
+                f"No base atoms found for pair {residue1.full_name} - {residue2.full_name}"
+            )
+            return None
+
+        coordinates = [atom.coordinates for atom in base_atoms]
+        return numpy.mean(coordinates, axis=0)
+
+    def get_stem_coordinates(
+        self, stem: Stem
+    ) -> Tuple[
+        Optional[numpy.typing.NDArray[numpy.floating]],
+        Optional[numpy.typing.NDArray[numpy.floating]],
+    ]:
+        """
+        Calculates the geometric center of base atoms for the first and last pairs of a stem.
+
+        Args:
+            stem: The Stem object.
+
+        Returns:
+            A tuple containing two numpy arrays: the centroid of the first pair
+            and the centroid of the last pair. Returns None for a centroid if
+            residues are missing or base atoms cannot be determined.
+        """
+        try:
+            # First pair: start of 5' strand, end of 3' strand (reversed)
+            res5p_first = self.bpseq_index_to_residue_map[stem.strand5p.first]
+            res3p_last = self.bpseq_index_to_residue_map[stem.strand3p.last]
+            first_pair_centroid = self._calculate_pair_centroid(res5p_first, res3p_last)
+        except KeyError:
+            logging.warning(
+                f"Could not find residues for the first pair of stem {stem}"
+            )
+            first_pair_centroid = None
+
+        try:
+            # Last pair: end of 5' strand, start of 3' strand (reversed)
+            res5p_last = self.bpseq_index_to_residue_map[stem.strand5p.last]
+            res3p_first = self.bpseq_index_to_residue_map[stem.strand3p.first]
+            last_pair_centroid = self._calculate_pair_centroid(res5p_last, res3p_first)
+        except KeyError:
+            logging.warning(f"Could not find residues for the last pair of stem {stem}")
+            last_pair_centroid = None
+
+        return first_pair_centroid, last_pair_centroid
+
     def __generate_dot_bracket_per_strand(self, dbn_structure: str) -> List[str]:
         dbn = dbn_structure
         i = 0
