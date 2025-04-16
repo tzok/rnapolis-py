@@ -319,7 +319,7 @@ def process_external_tool_output(
     model: Optional[int] = None,
     find_gaps: bool = False,
     all_dot_brackets: bool = False,
-) -> Tuple[Structure2D, List[str]]:
+) -> Tuple[Structure2D, List[str], Mapping2D3D]: # Added Mapping2D3D to return tuple
     """
     Process external tool output and create a secondary structure representation.
 
@@ -335,7 +335,8 @@ def process_external_tool_output(
         all_dot_brackets: Whether to return all possible dot-bracket notations
 
     Returns:
-        A tuple containing the Structure2D object and a list of dot-bracket notations
+        A tuple containing the Structure2D object, a list of dot-bracket notations,
+        and the Mapping2D3D object.
     """
     # Parse external tool output
     base_interactions = parse_external_output(external_file_path, tool, structure3d)
@@ -352,7 +353,7 @@ def extract_secondary_structure_from_external(
     model: Optional[int] = None,
     find_gaps: bool = False,
     all_dot_brackets: bool = False,
-) -> Tuple[Structure2D, List[str]]:
+) -> Tuple[Structure2D, List[str], Mapping2D3D]: # Added Mapping2D3D to return tuple
     """
     Create a secondary structure representation using interactions from an external tool.
 
@@ -364,7 +365,8 @@ def extract_secondary_structure_from_external(
         all_dot_brackets: Whether to return all possible dot-bracket notations
 
     Returns:
-        A tuple containing the Structure2D object and a list of dot-bracket notations
+        A tuple containing the Structure2D object, a list of dot-bracket notations,
+        and the Mapping2D3D object.
     """
     mapping = Mapping2D3D(
         tertiary_structure,

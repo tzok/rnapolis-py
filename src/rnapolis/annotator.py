@@ -44,6 +44,7 @@ from rnapolis.tertiary import (
     Residue3D,
     Structure3D,
     torsion_angle,
+    Mapping2D3D, # Added import
 )
 from rnapolis.util import handle_input_file
 
@@ -500,7 +501,6 @@ def extract_secondary_structure(
     stems, single_strands, hairpins, loops = mapping.bpseq.elements
 
     # Calculate inter-stem parameters
-    breakpoint()
     inter_stem_params = []
     for i, j in itertools.combinations(range(len(stems)), 2):
         stem1 = stems[i]
@@ -535,6 +535,32 @@ def extract_secondary_structure(
         return structure2d, mapping.all_dot_brackets
     else:
         return structure2d, [structure2d.dotBracket]
+
+
+def generate_pymol_script(mapping: Mapping2D3D, stems: List[Stem]) -> str:
+    """Generates a PyMOL script to draw stems as cylinders."""
+    pymol_commands = []
+    radius = 0.5
+    r, g, b = 1.0, 0.0, 0.0  # Red color
+
+    for i, stem in enumerate(stems):
+        # Skip stems with only one base pair
+        if (stem.strand5p.last - stem.strand5p.first + 1) <= 1:
+            continue
+
+        coords = mapping.get_stem_coordinates(stem)
+        p1, p2 = coords
+
+        if p1 is not None and p2 is not None:
+            x1, y1, z1 = p1
+            x2, y2, z2 = p2
+            # Format: [CYLINDER, x1, y1, z1, x2, y2, z2, radius, r1, g1, b1, r2, g2, b2]
+            # Use 9.0 for CYLINDER code
+            # Use same color for both ends
+            cgo_object = f"[ 9.0, {x1:.3f}, {y1:.3f}, {z1:.3f}, {x2:.3f}, {y2:.3f}, {z2:.3f}, {radius}, {r}, {g}, {b}, {r}, {g}, {b} ]"
+            pymol_commands.append(f'cmd.load_cgo({cgo_object}, "stem_{i+1}")')
+
+    return "\n".join(pymol_commands)
 
 
 def write_json(path: str, structure2d: Structure2D):
@@ -644,10 +670,18 @@ def main():
     structure3d = read_3d_structure(file, None)
     structure2d, dot_brackets = extract_secondary_structure(
         structure3d, None, args.find_gaps, args.all_dot_brackets
-    )
+   )
 
-    if args.csv:
-        write_csv(args.csv, structure2d)
+   # Need the mapping object for PML generation
+   mapping = Mapping2D3D(
+       structure3d,
+       structure2d.baseInteractions.basePairs,
+       structure2d.baseInteractions.stackings,
+       args.find_gaps,
+   )
+
+   if args.csv:
+       write_csv(args.csv, structure2d)
 
     if args.json:
         write_json(args.json, structure2d)
