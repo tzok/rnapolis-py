@@ -1,6 +1,7 @@
 #! /usr/bin/env python
 import argparse
 import csv
+import itertools # Added for combinations
 import logging
 import os
 from enum import Enum
@@ -16,6 +17,7 @@ from rnapolis.common import (
     BaseRibose,
     BPh,
     BpSeq,
+    InterStemParameters, # Added import
     LeontisWesthof,
     OtherInteraction,
     Residue,
@@ -371,6 +373,20 @@ def extract_secondary_structure_from_external(
         find_gaps,
     )
     stems, single_strands, hairpins, loops = mapping.bpseq.elements
+
+    # Calculate inter-stem parameters
+    inter_stem_params = []
+    for i, j in itertools.combinations(range(len(stems)), 2):
+        stem1 = stems[i]
+        stem2 = stems[j]
+        torsion, distance = mapping.calculate_inter_stem_parameters(stem1, stem2)
+        if torsion is not None or distance is not None: # Only add if calculation was successful
+             inter_stem_params.append(
+                 InterStemParameters(
+                     stem1_idx=i, stem2_idx=j, torsion=torsion, distance=distance
+                 )
+             )
+
     structure2d = Structure2D(
         base_interactions,
         str(mapping.bpseq),
@@ -380,6 +396,7 @@ def extract_secondary_structure_from_external(
         single_strands,
         hairpins,
         loops,
+        inter_stem_params, # Added inter-stem parameters
     )
     if all_dot_brackets:
         return structure2d, mapping.all_dot_brackets

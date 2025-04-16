@@ -1058,6 +1058,14 @@ class BaseInteractions:
 
 
 @dataclass(frozen=True, order=True)
+class InterStemParameters:
+    stem1_idx: int
+    stem2_idx: int
+    torsion: Optional[float]
+    distance: Optional[float]
+
+
+@dataclass(frozen=True, order=True)
 class Structure2D:
     baseInteractions: BaseInteractions
     bpseq: str
@@ -1067,3 +1075,4 @@ class Structure2D:
     singleStrands: List[SingleStrand]
     hairpins: List[Hairpin]
     loops: List[Loop]
+    interStemParameters: List[InterStemParameters]
