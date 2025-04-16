@@ -783,6 +783,42 @@ class Mapping2D3D:
 
         return first_pair_centroid, last_pair_centroid
 
+    def calculate_inter_stem_parameters(
+        self, stem1: Stem, stem2: Stem
+    ) -> Tuple[Optional[float], Optional[float]]:
+        """
+        Calculates geometric parameters between two stems.
+
+        Args:
+            stem1: The first Stem object.
+            stem2: The second Stem object.
+
+        Returns:
+            A tuple containing:
+            - The torsion angle defined by the four centroids (start_stem1, end_stem1, start_stem2, end_stem2).
+            - The shortest distance between the line segments defined by the centroids of each stem.
+            Returns (None, None) if any centroid cannot be calculated.
+        """
+        coords1 = self.get_stem_coordinates(stem1)
+        coords2 = self.get_stem_coordinates(stem2)
+
+        p1, p2 = coords1
+        p3, p4 = coords2
+
+        if p1 is None or p2 is None or p3 is None or p4 is None:
+            logging.warning(
+                f"Could not calculate centroids for stems {stem1} or {stem2}"
+            )
+            return None, None
+
+        # Calculate torsion angle
+        torsion = calculate_torsion_angle_coords(p1, p2, p3, p4)
+
+        # Calculate shortest distance between line segments
+        distance = distance_between_lines(p1, p2, p3, p4)
+
+        return torsion, distance
+
     def __generate_dot_bracket_per_strand(self, dbn_structure: str) -> List[str]:
         dbn = dbn_structure
         i = 0
@@ -852,4 +888,113 @@ def torsion_angle(a1: Atom, a2: Atom, a3: Atom, a4: Atom) -> float:
     t1: numpy.typing.NDArray[numpy.floating] = numpy.cross(v1, v2)
     t2: numpy.typing.NDArray[numpy.floating] = numpy.cross(v2, v3)
     t3: numpy.typing.NDArray[numpy.floating] = v1 * numpy.linalg.norm(v2)
-    return math.atan2(numpy.dot(t2, t3), numpy.dot(t1, t2))
+    angle = math.atan2(numpy.dot(t2, t3), numpy.dot(t1, t2))
+    return angle if not math.isnan(angle) else 0.0
+
+
+def calculate_torsion_angle_coords(
+    p1: numpy.typing.NDArray[numpy.floating],
+    p2: numpy.typing.NDArray[numpy.floating],
+    p3: numpy.typing.NDArray[numpy.floating],
+    p4: numpy.typing.NDArray[numpy.floating],
+) -> float:
+    """Calculates the torsion angle between four points defined by their coordinates."""
+    v1 = p2 - p1
+    v2 = p3 - p2
+    v3 = p4 - p3
+
+    # Normalize vectors to avoid issues with very short vectors
+    v1_norm = v1 / numpy.linalg.norm(v1) if numpy.linalg.norm(v1) > 1e-6 else v1
+    v2_norm = v2 / numpy.linalg.norm(v2) if numpy.linalg.norm(v2) > 1e-6 else v2
+    v3_norm = v3 / numpy.linalg.norm(v3) if numpy.linalg.norm(v3) > 1e-6 else v3
+
+    t1 = numpy.cross(v1_norm, v2_norm)
+    t2 = numpy.cross(v2_norm, v3_norm)
+    t3 = v1_norm * numpy.linalg.norm(v2_norm)
+
+    # Ensure t1 and t2 are not zero vectors before calculating dot products
+    if numpy.linalg.norm(t1) < 1e-6 or numpy.linalg.norm(t2) < 1e-6:
+        return 0.0  # Or handle as undefined/error
+
+    dot_t1_t2 = numpy.dot(t1, t2)
+    dot_t2_t3 = numpy.dot(t2, t3)
+
+    # Clamp dot product arguments for acos/atan2 to avoid domain errors
+    dot_t1_t2 = numpy.clip(dot_t1_t2, -1.0, 1.0)
+
+    angle = math.atan2(dot_t2_t3, dot_t1_t2)
+    return angle if not math.isnan(angle) else 0.0
+
+
+def distance_between_lines(
+    p1: numpy.typing.NDArray[numpy.floating],
+    p2: numpy.typing.NDArray[numpy.floating],
+    p3: numpy.typing.NDArray[numpy.floating],
+    p4: numpy.typing.NDArray[numpy.floating],
+) -> float:
+    """
+    Calculates the shortest distance between two line segments in 3D space.
+    Line segment 1: p1 to p2
+    Line segment 2: p3 to p4
+    Based on: http://geomalgorithms.com/a07-_distance.html#dist3D_Segment_to_Segment
+    """
+    u = p2 - p1
+    v = p4 - p3
+    w = p1 - p3
+
+    a = numpy.dot(u, u)  # always >= 0
+    b = numpy.dot(u, v)
+    c = numpy.dot(v, v)  # always >= 0
+    d = numpy.dot(u, w)
+    e = numpy.dot(v, w)
+    D = a * c - b * b  # always >= 0
+    sc, sN, sD = D, D, D  # sc = sN / sD, default sD = D >= 0
+    tc, tN, tD = D, D, D  # tc = tN / tD, default tD = D >= 0
+
+    # compute the line parameters of the two closest points
+    if D < 1e-8:  # the lines are almost parallel
+        sN = 0.0  # force using point P0 on segment S1
+        sD = 1.0  # to prevent possible division by 0.0 later
+        tN = e
+        tD = c
+    else:  # get the closest points on the infinite lines
+        sN = b * e - c * d
+        tN = a * e - b * d
+        if sN < 0.0:  # sc < 0 => the s=0 edge is visible
+            sN = 0.0
+            tN = e
+            tD = c
+        elif sN > sD:  # sc > 1 => the s=1 edge is visible
+            sN = sD
+            tN = e + b
+            tD = c
+
+    if tN < 0.0:  # tc < 0 => the t=0 edge is visible
+        tN = 0.0
+        # recompute sc for this edge
+        if -d < 0.0:
+            sN = 0.0
+        elif -d > a:
+            sN = sD
+        else:
+            sN = -d
+            sD = a
+    elif tN > tD:  # tc > 1 => the t=1 edge is visible
+        tN = tD
+        # recompute sc for this edge
+        if (-d + b) < 0.0:
+            sN = 0
+        elif (-d + b) > a:
+            sN = sD
+        else:
+            sN = -d + b
+            sD = a
+
+    # finally do the division to get sc and tc
+    sc = 0.0 if abs(sN) < 1e-8 else sN / sD
+    tc = 0.0 if abs(tN) < 1e-8 else tN / tD
+
+    # get the difference of the two closest points
+    dP = w + (sc * u) - (tc * v)  # = S1(sc) - S2(tc)
+
+    return numpy.linalg.norm(dP)
