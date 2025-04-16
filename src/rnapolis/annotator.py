@@ -533,7 +533,8 @@ def extract_secondary_structure(
 
 def write_json(path: str, structure2d: Structure2D):
     with open(path, "wb") as f:
-        f.write(orjson.dumps(structure2d))
+        # Add OPT_SERIALIZE_NUMPY to handle numpy types like float64
+        f.write(orjson.dumps(structure2d, option=orjson.OPT_SERIALIZE_NUMPY))
 
 
 def write_csv(path: str, structure2d: Structure2D):
