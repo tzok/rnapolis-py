@@ -513,11 +513,11 @@ def extract_secondary_structure(
             if (
                 torsion is not None or distance is not None
             ):  # Only add if calculation was successful
-            inter_stem_params.append(
-                InterStemParameters(
-                    stem1_idx=i, stem2_idx=j, torsion=torsion, distance=distance
+                inter_stem_params.append(
+                    InterStemParameters(
+                        stem1_idx=i, stem2_idx=j, torsion=torsion, distance=distance
+                    )
                 )
-            )
 
     structure2d = Structure2D(
         base_interactions,
