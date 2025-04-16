@@ -19,6 +19,7 @@ from rnapolis.common import (
     ResidueLabel,
     Saenger,
     Stacking,
+    Strand,
 )
 
 BASE_ATOMS = {
@@ -691,7 +692,7 @@ class Mapping2D3D:
         """Finds the Residue3D object corresponding to a BpSeq Entry."""
         return self.bpseq_index_to_residue_map.get(entry.index_)
 
-    def get_residues_for_strand(self, strand: "Strand") -> List[Residue3D]:
+    def get_residues_for_strand(self, strand: Strand) -> List[Residue3D]:
         """Retrieves the list of Residue3D objects corresponding to a Strand."""
         residues = []
         # Strand indices are 1-based and inclusive
