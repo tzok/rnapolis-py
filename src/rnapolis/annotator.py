@@ -556,20 +556,38 @@ def generate_pymol_script(mapping: Mapping2D3D, stems: List[Stem]) -> str:
             res3p_last = mapping.bpseq_index_to_residue_map[stem.strand3p.last]
 
             # Prefer auth chain/number if available
-            chain5p = res5p_first.auth.chain if res5p_first.auth else res5p_first.label.chain
-            num5p_first = res5p_first.auth.number if res5p_first.auth else res5p_first.label.number
-            num5p_last = res5p_last.auth.number if res5p_last.auth else res5p_last.label.number
+            chain5p = (
+                res5p_first.auth.chain if res5p_first.auth else res5p_first.label.chain
+            )
+            num5p_first = (
+                res5p_first.auth.number
+                if res5p_first.auth
+                else res5p_first.label.number
+            )
+            num5p_last = (
+                res5p_last.auth.number if res5p_last.auth else res5p_last.label.number
+            )
 
-            chain3p = res3p_first.auth.chain if res3p_first.auth else res3p_first.label.chain
-            num3p_first = res3p_first.auth.number if res3p_first.auth else res3p_first.label.number
-            num3p_last = res3p_last.auth.number if res3p_last.auth else res3p_last.label.number
+            chain3p = (
+                res3p_first.auth.chain if res3p_first.auth else res3p_first.label.chain
+            )
+            num3p_first = (
+                res3p_first.auth.number
+                if res3p_first.auth
+                else res3p_first.label.number
+            )
+            num3p_last = (
+                res3p_last.auth.number if res3p_last.auth else res3p_last.label.number
+            )
 
             # Format selection string: select stem0, A/1-5/ or A/10-15/
             selection_str = f"{chain5p}/{num5p_first}-{num5p_last}/ or {chain3p}/{num3p_first}-{num3p_last}/"
-            pymol_commands.append(f'select stem{stem_idx}, {selection_str}')
+            pymol_commands.append(f"select stem{stem_idx}, {selection_str}")
 
         except (KeyError, AttributeError) as e:
-             logging.warning(f"Could not generate selection string for stem {stem_idx}: Missing residue data ({e})")
+            logging.warning(
+                f"Could not generate selection string for stem {stem_idx}: Missing residue data ({e})"
+            )
 
         centroids = mapping.get_stem_coordinates(stem)
 
