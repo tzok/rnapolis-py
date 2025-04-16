@@ -594,12 +594,65 @@ class Mapping2D3D:
             else:
                 break
 
+        return self._generated_bpseq_data[0]
+
+    @cached_property
+    def bpseq_index_to_residue_map(self) -> Dict[int, Residue3D]:
+        """Mapping from BpSeq entry index to the corresponding Residue3D object."""
+        return self._generated_bpseq_data[1]
+
+    @cached_property
+    def _generated_bpseq_data(self) -> Tuple[BpSeq, Dict[int, Residue3D]]:
+        """Helper property to compute BpSeq and index map simultaneously."""
+
+        def pair_scoring_function(pair: BasePair3D) -> int:
+            if pair.saenger is not None:
+                if pair.saenger in (Saenger.XIX, Saenger.XX):
+                    return 0, pair.nt1, pair.nt2
+                else:
+                    return 1, pair.nt1, pair.nt2
+
+            sequence = "".join(
+                sorted(
+                    [
+                        pair.nt1_3d.one_letter_name.upper(),
+                        pair.nt2_3d.one_letter_name.upper(),
+                    ]
+                )
+            )
+            if sequence in ("AU", "AT", "CG"):
+                return 0, pair.nt1, pair.nt2
+            return 1, pair.nt1, pair.nt2
+
+        canonical = [
+            base_pair
+            for base_pair in self.base_pairs
+            if base_pair.is_canonical and base_pair.nt1 < base_pair.nt2
+        ]
+
+        while True:
+            matches = defaultdict(set)
+
+            for base_pair in canonical:
+                matches[base_pair.nt1_3d].add(base_pair)
+                matches[base_pair.nt2_3d].add(base_pair)
+
+            for pairs in matches.values():
+                if len(pairs) > 1:
+                    pairs = sorted(pairs, key=pair_scoring_function)
+                    canonical.remove(pairs[-1])
+                    break
+            else:
+                break
+
         return self.__generate_bpseq(canonical)
 
-    def __generate_bpseq(self, base_pairs):
+    def __generate_bpseq(self, base_pairs) -> Tuple[BpSeq, Dict[int, Residue3D]]:
+        """Generates BpSeq entries and a map from index to Residue3D."""
         nucleotides = list(filter(lambda r: r.is_nucleotide, self.structure3d.residues))
         result: Dict[int, List] = {}
         residue_map: Dict[Residue3D, int] = {}
+        index_to_residue_map: Dict[int, Residue3D] = {}
         i = 1
 
         for j, residue in enumerate(nucleotides):
@@ -616,6 +669,7 @@ class Mapping2D3D:
 
             result[i] = [i, residue.one_letter_name, 0]
             residue_map[residue] = i
+            index_to_residue_map[i] = residue
             i += 1
 
         for base_pair in base_pairs:
@@ -631,7 +685,11 @@ class Mapping2D3D:
                 Entry(index_, sequence, pair)
                 for index_, sequence, pair in result.values()
             ]
-        )
+        ), index_to_residue_map
+
+    def find_residue_for_entry(self, entry: Entry) -> Optional[Residue3D]:
+        """Finds the Residue3D object corresponding to a BpSeq Entry."""
+        return self.bpseq_index_to_residue_map.get(entry.index_)
 
     @cached_property
     def dot_bracket(self) -> str:
