@@ -916,14 +916,10 @@ class Mapping2D3D:
 
 
 def torsion_angle(a1: Atom, a2: Atom, a3: Atom, a4: Atom) -> float:
-    v1 = a2.coordinates - a1.coordinates
-    v2 = a3.coordinates - a2.coordinates
-    v3 = a4.coordinates - a3.coordinates
-    t1: numpy.typing.NDArray[numpy.floating] = numpy.cross(v1, v2)
-    t2: numpy.typing.NDArray[numpy.floating] = numpy.cross(v2, v3)
-    t3: numpy.typing.NDArray[numpy.floating] = v1 * numpy.linalg.norm(v2)
-    angle = math.atan2(numpy.dot(t2, t3), numpy.dot(t1, t2))
-    return angle if not math.isnan(angle) else 0.0
+    """Calculates the torsion angle between four atoms."""
+    return calculate_torsion_angle_coords(
+        a1.coordinates, a2.coordinates, a3.coordinates, a4.coordinates
+    )
 
 
 def calculate_torsion_angle_coords(
@@ -958,77 +954,3 @@ def calculate_torsion_angle_coords(
 
     angle = math.atan2(dot_t2_t3, dot_t1_t2)
     return angle if not math.isnan(angle) else 0.0
-
-
-def distance_between_lines(
-    p1: numpy.typing.NDArray[numpy.floating],
-    p2: numpy.typing.NDArray[numpy.floating],
-    p3: numpy.typing.NDArray[numpy.floating],
-    p4: numpy.typing.NDArray[numpy.floating],
-) -> float:
-    """
-    Calculates the shortest distance between two line segments in 3D space.
-    Line segment 1: p1 to p2
-    Line segment 2: p3 to p4
-    Based on: http://geomalgorithms.com/a07-_distance.html#dist3D_Segment_to_Segment
-    """
-    u = p2 - p1
-    v = p4 - p3
-    w = p1 - p3
-
-    a = numpy.dot(u, u)  # always >= 0
-    b = numpy.dot(u, v)
-    c = numpy.dot(v, v)  # always >= 0
-    d = numpy.dot(u, w)
-    e = numpy.dot(v, w)
-    D = a * c - b * b  # always >= 0
-    sc, sN, sD = D, D, D  # sc = sN / sD, default sD = D >= 0
-    tc, tN, tD = D, D, D  # tc = tN / tD, default tD = D >= 0
-
-    # compute the line parameters of the two closest points
-    if D < 1e-8:  # the lines are almost parallel
-        sN = 0.0  # force using point P0 on segment S1
-        sD = 1.0  # to prevent possible division by 0.0 later
-        tN = e
-        tD = c
-    else:  # get the closest points on the infinite lines
-        sN = b * e - c * d
-        tN = a * e - b * d
-        if sN < 0.0:  # sc < 0 => the s=0 edge is visible
-            sN = 0.0
-            tN = e
-            tD = c
-        elif sN > sD:  # sc > 1 => the s=1 edge is visible
-            sN = sD
-            tN = e + b
-            tD = c
-
-    if tN < 0.0:  # tc < 0 => the t=0 edge is visible
-        tN = 0.0
-        # recompute sc for this edge
-        if -d < 0.0:
-            sN = 0.0
-        elif -d > a:
-            sN = sD
-        else:
-            sN = -d
-            sD = a
-    elif tN > tD:  # tc > 1 => the t=1 edge is visible
-        tN = tD
-        # recompute sc for this edge
-        if (-d + b) < 0.0:
-            sN = 0
-        elif (-d + b) > a:
-            sN = sD
-        else:
-            sN = -d + b
-            sD = a
-
-    # finally do the division to get sc and tc
-    sc = 0.0 if abs(sN) < 1e-8 else sN / sD
-    tc = 0.0 if abs(tN) < 1e-8 else tN / tD
-
-    # get the difference of the two closest points
-    dP = w + (sc * u) - (tc * v)  # = S1(sc) - S2(tc)
-
-    return numpy.linalg.norm(dP)
