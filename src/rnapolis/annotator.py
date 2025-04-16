@@ -661,10 +661,13 @@ def main():
         "--find-gaps",
         action="store_true",
         help="(optional) if set, the program will detect gaps and break the PDB chain into two or more strands; "
-        f"the gap is defined as O3'-P distance greater then {1.5 * AVERAGE_OXYGEN_PHOSPHORUS_DISTANCE_COVALENT}",
-    )
-    parser.add_argument("-d", "--dot", help="(optional) path to output DOT file")
-    args = parser.parse_args()
+       f"the gap is defined as O3'-P distance greater then {1.5 * AVERAGE_OXYGEN_PHOSPHORUS_DISTANCE_COVALENT}",
+   )
+   parser.add_argument("-d", "--dot", help="(optional) path to output DOT file")
+   parser.add_argument(
+       "-p", "--pml", help="(optional) path to output PyMOL PML script for stems"
+   )
+   args = parser.parse_args()
 
     file = handle_input_file(args.input)
     structure3d = read_3d_structure(file, None)

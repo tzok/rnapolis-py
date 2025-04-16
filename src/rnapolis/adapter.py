@@ -405,12 +405,12 @@ def extract_secondary_structure_from_external(
         single_strands,
         hairpins,
         loops,
-        inter_stem_params,  # Added inter-stem parameters
-    )
-    if all_dot_brackets:
-        return structure2d, mapping.all_dot_brackets
-    else:
-        return structure2d, [structure2d.dotBracket]
+       inter_stem_params,  # Added inter-stem parameters
+   )
+   if all_dot_brackets:
+       return structure2d, mapping.all_dot_brackets, mapping  # Return mapping
+   else:
+       return structure2d, [structure2d.dotBracket], mapping  # Return mapping
 
 
 def write_json(path: str, structure2d: BaseInteractions):
@@ -520,11 +520,14 @@ def main():
     parser.add_argument(
         "-f",
         "--find-gaps",
-        action="store_true",
-        help="(optional) if set, the program will detect gaps and break the PDB chain into two or more strands",
-    )
-    parser.add_argument("-d", "--dot", help="(optional) path to output DOT file")
-    args = parser.parse_args()
+       action="store_true",
+       help="(optional) if set, the program will detect gaps and break the PDB chain into two or more strands",
+   )
+   parser.add_argument("-d", "--dot", help="(optional) path to output DOT file")
+   parser.add_argument(
+       "-p", "--pml", help="(optional) path to output PyMOL PML script for stems"
+   )
+   args = parser.parse_args()
 
     file = handle_input_file(args.input)
     structure3d = read_3d_structure(file, None)
