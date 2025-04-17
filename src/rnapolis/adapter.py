@@ -426,8 +426,6 @@ def main():
     add_common_output_arguments(parser)
     # The --inter-stem-csv and --stems-csv arguments are now added by add_common_output_arguments
     args = parser.parse_args()
-    )
-    args = parser.parse_args()
 
     file = handle_input_file(args.input)
     structure3d = read_3d_structure(file, None)
