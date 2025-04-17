@@ -946,19 +946,15 @@ class Mapping2D3D:
         return "\n".join(["\n".join(r) for r in result])
 
 
-def calculate_all_inter_stem_parameters(
-    mapping: Mapping2D3D, stems: List[Stem]
-) -> List[InterStemParameters]:
+def calculate_all_inter_stem_parameters(mapping: Mapping2D3D) -> List[InterStemParameters]:
     """
-    Calculates InterStemParameters for all valid pairs of stems.
+    Calculates InterStemParameters for all valid pairs of stems found in the mapping.
 
     Args:
-        mapping: The Mapping2D3D object containing structure and mapping info.
-        stems: A list of Stem objects.
+        mapping: The Mapping2D3D object containing structure, 2D info, and mapping.
 
-    Returns:
-        A list of InterStemParameters objects.
     """
+    stems = mapping.bpseq.elements[0]  # Get stems from mapping
     inter_stem_params = []
     for i, j in itertools.combinations(range(len(stems)), 2):
         stem1 = stems[i]

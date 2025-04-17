@@ -381,7 +381,7 @@ def extract_secondary_structure_from_external(
     stems, single_strands, hairpins, loops = mapping.bpseq.elements
 
     # Calculate inter-stem parameters using the helper function
-    inter_stem_params = calculate_all_inter_stem_parameters(mapping, stems)
+    inter_stem_params = calculate_all_inter_stem_parameters(mapping)
 
     structure2d = Structure2D(
         base_interactions,
