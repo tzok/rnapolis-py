@@ -30,7 +30,11 @@ from rnapolis.common import (
     Structure2D,
 )
 from rnapolis.parser import read_3d_structure
-from rnapolis.tertiary import Mapping2D3D, Structure3D
+from rnapolis.tertiary import (
+    Mapping2D3D,
+    Structure3D,
+    calculate_all_inter_stem_parameters,  # Import the new helper function
+)
 from rnapolis.util import handle_input_file
 
 
@@ -379,30 +383,8 @@ def extract_secondary_structure_from_external(
     )
     stems, single_strands, hairpins, loops = mapping.bpseq.elements
 
-    # Calculate inter-stem parameters
-    inter_stem_params = []
-    for i, j in itertools.combinations(range(len(stems)), 2):
-        stem1 = stems[i]
-        stem2 = stems[j]
-
-        # Skip calculation if either stem has only one base pair
-        # Ensure both stems have at least 2 base pairs for parameter calculation
-        if (stem1.strand5p.last - stem1.strand5p.first + 1) > 1 and (
-            stem2.strand5p.last - stem2.strand5p.first + 1
-        ) > 1:
-            params = mapping.calculate_inter_stem_parameters(stem1, stem2)
-            # Only add if calculation returned valid values
-            if params is not None:
-                inter_stem_params.append(
-                    InterStemParameters(
-                        stem1_idx=i,
-                        stem2_idx=j,
-                        type=params["type"],
-                        torsion=params["torsion_angle"],
-                        min_endpoint_distance=params["min_endpoint_distance"],
-                        torsion_angle_probability=params["torsion_angle_probability"],
-                    )
-                )
+    # Calculate inter-stem parameters using the helper function
+    inter_stem_params = calculate_all_inter_stem_parameters(mapping, stems)
 
     structure2d = Structure2D(
         base_interactions,

@@ -944,6 +944,44 @@ class Mapping2D3D:
         return "\n".join(["\n".join(r) for r in result])
 
 
+def calculate_all_inter_stem_parameters(
+    mapping: Mapping2D3D, stems: List[Stem]
+) -> List[InterStemParameters]:
+    """
+    Calculates InterStemParameters for all valid pairs of stems.
+
+    Args:
+        mapping: The Mapping2D3D object containing structure and mapping info.
+        stems: A list of Stem objects.
+
+    Returns:
+        A list of InterStemParameters objects.
+    """
+    inter_stem_params = []
+    for i, j in itertools.combinations(range(len(stems)), 2):
+        stem1 = stems[i]
+        stem2 = stems[j]
+
+        # Ensure both stems have at least 2 base pairs for parameter calculation
+        if (stem1.strand5p.last - stem1.strand5p.first + 1) > 1 and (
+            stem2.strand5p.last - stem2.strand5p.first + 1
+        ) > 1:
+            params = mapping.calculate_inter_stem_parameters(stem1, stem2)
+            # Only add if calculation returned valid values
+            if params is not None:
+                inter_stem_params.append(
+                    InterStemParameters(
+                        stem1_idx=i,
+                        stem2_idx=j,
+                        type=params["type"],
+                        torsion=params["torsion_angle"],
+                        min_endpoint_distance=params["min_endpoint_distance"],
+                        torsion_angle_probability=params["torsion_angle_probability"],
+                    )
+                )
+    return inter_stem_params
+
+
 def torsion_angle(a1: Atom, a2: Atom, a3: Atom, a4: Atom) -> float:
     """Calculates the torsion angle between four atoms."""
     return calculate_torsion_angle_coords(
