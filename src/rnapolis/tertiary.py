@@ -882,7 +882,7 @@ class Mapping2D3D:
         torsion_probability = vm_dist.pdf(torsion_radians)
 
         # Calculate the probability density for the minimum endpoint distance
-        distance_probability = lennard_jones_like_pdf(min_endpoint_distance)
+        distance_probability = distance_pdf(min_endpoint_distance) # Use the new function
 
         # Calculate the coaxial probability
         # Max torsion probability occurs at mu (location of the distribution)
@@ -970,32 +970,35 @@ class Mapping2D3D:
         return "\n".join(["\n".join(r) for r in result])
 
 
-def lennard_jones_like_pdf(
-    x: float, min_dist: float = 2.0, best_dist: float = 4.5, steepness: float = 1.0
+def distance_pdf(
+    x: float, lower_bound: float = 3.0, upper_bound: float = 7.0, steepness: float = 5.0
 ) -> float:
     """
-    Calculates a probability density based on distance, similar to Lennard-Jones potential.
+    Calculates a probability density based on distance using a plateau function.
 
-    The function returns 0 for distances less than min_dist, peaks at 1.0 for
-    best_dist, and decays for distances greater than best_dist, controlled by steepness.
+    The function uses the product of two sigmoid functions to create a distribution
+    that is close to 1.0 between lower_bound and upper_bound, and drops off
+    rapidly outside this range.
 
     Args:
         x: The distance value.
-        min_dist: The minimum distance threshold (default: 2.0). Probability is 0 below this.
-        best_dist: The distance at which probability is maximum (1.0) (default: 4.5).
-        steepness: Controls the decay rate after best_dist (default: 1.0). Smaller values
-                   mean faster decay. With default values, probability is near zero at x=7.
+        lower_bound: The start of the high-probability plateau (default: 3.0).
+        upper_bound: The end of the high-probability plateau (default: 7.0).
+        steepness: Controls how quickly the probability drops outside the plateau
+                   (default: 5.0). Higher values mean steeper drops.
 
     Returns:
         The calculated probability density (between 0.0 and 1.0).
     """
-    if x < min_dist:
-        return 0.0
-    # Gaussian-like decay centered at best_dist
-    exponent = -(((x - best_dist) / steepness) ** 2)
-    # Clamp exponent to avoid potential underflow/overflow with extreme inputs
-    exponent = max(exponent, -700.0)  # Corresponds to exp(-700) approx 1e-304
-    return math.exp(exponent)
+    # Sigmoid function increasing around lower_bound
+    sigmoid1 = 1.0 / (1.0 + math.exp(-steepness * (x - lower_bound)))
+    # Sigmoid function decreasing around upper_bound
+    sigmoid2 = 1.0 / (1.0 + math.exp(steepness * (x - upper_bound)))
+
+    # The product creates the plateau effect
+    probability = sigmoid1 * sigmoid2
+    # Clamp to handle potential floating point inaccuracies near 0 and 1
+    return max(0.0, min(1.0, probability))
 
 
 def calculate_all_inter_stem_parameters(
