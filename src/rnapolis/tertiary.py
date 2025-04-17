@@ -851,13 +851,13 @@ class Mapping2D3D:
             # Torsion points: s1_second, s1_first, s2_last, s2_second_last
             s1p1, s1p2 = stem1_centroids[1], stem1_centroids[0]
             s2p1, s2p2 = stem2_centroids[-1], stem2_centroids[-2]
-            mu_degrees = 0.0 + a_rna_twist
+            mu_degrees = 0.0 - a_rna_twist
         elif closest_pair_key == "cs35":
             # Closest: s1_last and s2_first
             # Torsion points: s1_second_last, s1_last, s2_first, s2_second
             s1p1, s1p2 = stem1_centroids[-2], stem1_centroids[-1]
             s2p1, s2p2 = stem2_centroids[0], stem2_centroids[1]
-            mu_degrees = 0.0 - a_rna_twist
+            mu_degrees = 0.0 + a_rna_twist
         elif closest_pair_key == "cs33":
             # Closest: s1_last and s2_last
             # Torsion points: s1_second_last, s1_last, s2_last, s2_second_last
