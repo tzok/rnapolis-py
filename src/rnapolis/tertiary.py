@@ -781,10 +781,11 @@ class Mapping2D3D:
 
     def calculate_inter_stem_parameters(
         self, stem1: Stem, stem2: Stem, kappa: float = 10.0
-    ) -> Tuple[Optional[float], Optional[float], Optional[vonmises]]:
+    ) -> Optional[Dict[str, Union[str, float]]]:
         """
         Calculates geometric parameters between two stems based on closest endpoints
-        and creates a von Mises distribution based on the expected twist.
+        and the probability of the observed torsion angle based on an expected
+        A-RNA twist using a von Mises distribution.
 
         Args:
             stem1: The first Stem object.
@@ -792,12 +793,14 @@ class Mapping2D3D:
             kappa: Concentration parameter for the von Mises distribution (default: 10.0).
 
         Returns:
-            A tuple containing:
-            - The calculated torsion angle in radians.
-            - The minimum distance between the endpoints of the two stems.
-            - An instance of scipy.stats.vonmises representing the expected twist distribution.
-            Returns (None, None, None) if either stem has fewer than 2 base pairs or
-            centroids cannot be calculated.
+            A dictionary containing:
+            - 'type': The type of closest endpoint pair ('cs55', 'cs53', 'cs35', 'cs33').
+            - 'torsion_angle': The calculated torsion angle in degrees.
+            - 'min_endpoint_distance': The minimum distance between the endpoints.
+            - 'torsion_angle_probability': The probability density of the torsion angle
+              under the von Mises distribution.
+            Returns None if either stem has fewer than 2 base pairs or centroids
+            cannot be calculated.
         """
         stem1_centroids = self.get_stem_coordinates(stem1)
         stem2_centroids = self.get_stem_coordinates(stem2)
@@ -808,7 +811,7 @@ class Mapping2D3D:
                 f"Cannot calculate inter-stem parameters for stems {stem1} and {stem2}: "
                 f"Insufficient base pairs ({len(stem1_centroids)} and {len(stem2_centroids)} respectively)."
             )
-            return None, None, None
+            return None
 
         # Define the endpoints for each stem
         s1_first, s1_last = stem1_centroids[0], stem1_centroids[-1]
@@ -860,16 +863,24 @@ class Mapping2D3D:
             logging.error(
                 f"Unexpected closest pair key: {closest_pair_key}. Cannot calculate parameters."
             )
-            return None, None, None
+            return None
 
-        # Calculate torsion angle
-        torsion = calculate_torsion_angle_coords(s1p1, s1p2, s2p1, s2p2)
+        # Calculate torsion angle (in radians)
+        torsion_radians = calculate_torsion_angle_coords(s1p1, s1p2, s2p1, s2p2)
 
         # Create von Mises distribution instance
         mu_radians = math.radians(mu_degrees)
         vm_dist = vonmises(kappa=kappa, loc=mu_radians)
 
-        return torsion, min_endpoint_distance, vm_dist
+        # Calculate the probability density function (PDF) value for the torsion angle
+        torsion_probability = vm_dist.pdf(torsion_radians)
+
+        return {
+            "type": closest_pair_key,
+            "torsion_angle": math.degrees(torsion_radians),
+            "min_endpoint_distance": min_endpoint_distance,
+            "torsion_angle_probability": torsion_probability,
+        }
 
     def __generate_dot_bracket_per_strand(self, dbn_structure: str) -> List[str]:
         dbn = dbn_structure
