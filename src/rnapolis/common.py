@@ -1061,8 +1061,10 @@ class BaseInteractions:
 class InterStemParameters:
     stem1_idx: int
     stem2_idx: int
+    type: Optional[str]  # Type of closest endpoint pair ('cs55', 'cs53', etc.)
     torsion: Optional[float]  # Torsion angle between stem segments (degrees)
     min_endpoint_distance: Optional[float]  # Minimum distance between stem endpoints
+    torsion_angle_probability: Optional[float]  # Probability density of the torsion angle
 
 
 @dataclass(frozen=True, order=True)

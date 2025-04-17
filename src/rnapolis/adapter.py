@@ -397,10 +397,10 @@ def extract_secondary_structure_from_external(
                     InterStemParameters(
                         stem1_idx=i,
                         stem2_idx=j,
+                        type=params["type"],
                         torsion=params["torsion_angle"],
                         min_endpoint_distance=params["min_endpoint_distance"],
-                        # You might want to add 'type' and 'torsion_angle_probability'
-                        # to InterStemParameters dataclass if needed later
+                        torsion_angle_probability=params["torsion_angle_probability"],
                     )
                 )
 
