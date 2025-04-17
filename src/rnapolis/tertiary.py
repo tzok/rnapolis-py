@@ -1029,9 +1029,7 @@ def calculate_all_inter_stem_parameters(
                         torsion=params["torsion_angle"],
                         min_endpoint_distance=params["min_endpoint_distance"],
                         torsion_angle_pdf=params["torsion_angle_pdf"],
-                        min_endpoint_distance_pdf=params[
-                            "min_endpoint_distance_pdf"
-                        ],
+                        min_endpoint_distance_pdf=params["min_endpoint_distance_pdf"],
                         coaxial_probability=params["coaxial_probability"],
                     )
                 )
