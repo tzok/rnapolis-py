@@ -882,7 +882,9 @@ class Mapping2D3D:
         torsion_probability = vm_dist.pdf(torsion_radians)
 
         # Calculate the probability density for the minimum endpoint distance
-        distance_probability = distance_pdf(min_endpoint_distance) # Use the new function
+        distance_probability = distance_pdf(
+            min_endpoint_distance
+        )  # Use the new function
 
         # Calculate the coaxial probability
         # Max torsion probability occurs at mu (location of the distribution)
