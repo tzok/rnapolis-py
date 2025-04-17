@@ -1070,6 +1070,7 @@ class InterStemParameters:
     min_endpoint_distance_probability: Optional[
         float
     ]  # Probability density of the min endpoint distance
+    coaxial_probability: Optional[float]  # Probability of stems being coaxial (0-1)
 
 
 @dataclass(frozen=True, order=True)

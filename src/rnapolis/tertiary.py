@@ -803,6 +803,8 @@ class Mapping2D3D:
               under the von Mises distribution.
             - 'min_endpoint_distance_probability': The probability density based on the
               minimum endpoint distance using a Lennard-Jones-like function.
+            - 'coaxial_probability': The normalized product of torsion angle and
+              distance probabilities, indicating the likelihood of coaxial stacking.
             Returns None if either stem has fewer than 2 base pairs or centroids
             cannot be calculated.
         """
@@ -882,12 +884,28 @@ class Mapping2D3D:
         # Calculate the probability density for the minimum endpoint distance
         distance_probability = lennard_jones_like_pdf(min_endpoint_distance)
 
+        # Calculate the coaxial probability
+        # Max torsion probability occurs at mu (location of the distribution)
+        max_torsion_probability = vm_dist.pdf(mu_radians)
+        # Max distance probability is 1.0 by design of lennard_jones_like_pdf
+        max_distance_probability = 1.0
+        # Normalization factor is the product of maximum possible probabilities
+        normalization_factor = max_torsion_probability * max_distance_probability
+
+        coaxial_probability = 0.0
+        if normalization_factor > 1e-9:  # Avoid division by zero
+            probability_product = torsion_probability * distance_probability
+            coaxial_probability = probability_product / normalization_factor
+            # Clamp between 0 and 1
+            coaxial_probability = max(0.0, min(1.0, coaxial_probability))
+
         return {
             "type": closest_pair_key,
             "torsion_angle": math.degrees(torsion_radians),
             "min_endpoint_distance": min_endpoint_distance,
             "torsion_angle_probability": torsion_probability,
             "min_endpoint_distance_probability": distance_probability,
+            "coaxial_probability": coaxial_probability,
         }
 
     def __generate_dot_bracket_per_strand(self, dbn_structure: str) -> List[str]:
@@ -1014,6 +1032,7 @@ def calculate_all_inter_stem_parameters(
                         min_endpoint_distance_probability=params[
                             "min_endpoint_distance_probability"
                         ],
+                        coaxial_probability=params["coaxial_probability"],
                     )
                 )
     return inter_stem_params
