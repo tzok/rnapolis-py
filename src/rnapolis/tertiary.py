@@ -7,6 +7,7 @@ from typing import Dict, List, Optional, Set, Tuple, Union
 
 import numpy
 import numpy.typing
+from scipy.stats import vonmises
 
 from rnapolis.common import (
     BasePair,
@@ -779,21 +780,24 @@ class Mapping2D3D:
         return all_pair_centroids
 
     def calculate_inter_stem_parameters(
-        self, stem1: Stem, stem2: Stem
-    ) -> Tuple[Optional[float], Optional[float], Optional[float]]:
+        self, stem1: Stem, stem2: Stem, kappa: float = 10.0
+    ) -> Tuple[Optional[float], Optional[float], Optional[vonmises]]:
         """
-        Calculates geometric parameters between two stems based on closest endpoints.
+        Calculates geometric parameters between two stems based on closest endpoints
+        and creates a von Mises distribution based on the expected twist.
 
         Args:
             stem1: The first Stem object.
             stem2: The second Stem object.
+            kappa: Concentration parameter for the von Mises distribution (default: 10.0).
 
         Returns:
             A tuple containing:
-            - The torsion angle between segments defined by the two centroids closest to the minimum endpoint distance.
-            - The shortest distance between these line segments.
+            - The calculated torsion angle in radians.
             - The minimum distance between the endpoints of the two stems.
-            Returns (None, None, None) if either stem has fewer than 2 base pairs or centroids cannot be calculated.
+            - An instance of scipy.stats.vonmises representing the expected twist distribution.
+            Returns (None, None, None) if either stem has fewer than 2 base pairs or
+            centroids cannot be calculated.
         """
         stem1_centroids = self.get_stem_coordinates(stem1)
         stem2_centroids = self.get_stem_coordinates(stem2)
@@ -822,38 +826,50 @@ class Mapping2D3D:
         min_endpoint_distance = min(endpoint_distances.values())
         closest_pair_key = min(endpoint_distances, key=endpoint_distances.get)
 
-        # Select the points for torsion and line distance based on the closest pair.
+        # Select the points for torsion and determine mu based on the closest pair.
         # s1p2 and s2p1 must be the endpoints involved in the minimum distance.
+        a_rna_twist = 32.7
+        mu_degrees = 0.0
+
         if closest_pair_key == "cs55":
             # Closest: s1_first and s2_first
             # Torsion points: s1_second, s1_first, s2_first, s2_second
             s1p1, s1p2 = stem1_centroids[1], stem1_centroids[0]
             s2p1, s2p2 = stem2_centroids[0], stem2_centroids[1]
+            mu_degrees = 180.0 - a_rna_twist
         elif closest_pair_key == "cs53":
             # Closest: s1_first and s2_last
             # Torsion points: s1_second, s1_first, s2_last, s2_second_last
             s1p1, s1p2 = stem1_centroids[1], stem1_centroids[0]
             s2p1, s2p2 = stem2_centroids[-1], stem2_centroids[-2]
+            mu_degrees = 0.0 + a_rna_twist
         elif closest_pair_key == "cs35":
             # Closest: s1_last and s2_first
             # Torsion points: s1_second_last, s1_last, s2_first, s2_second
             s1p1, s1p2 = stem1_centroids[-2], stem1_centroids[-1]
             s2p1, s2p2 = stem2_centroids[0], stem2_centroids[1]
+            mu_degrees = 0.0 - a_rna_twist
         elif closest_pair_key == "cs33":
             # Closest: s1_last and s2_last
             # Torsion points: s1_second_last, s1_last, s2_last, s2_second_last
             s1p1, s1p2 = stem1_centroids[-2], stem1_centroids[-1]
             s2p1, s2p2 = stem2_centroids[-1], stem2_centroids[-2]
+            mu_degrees = 180.0 + a_rna_twist
         else:
+            # This case should ideally not be reached if endpoint_distances is not empty
             logging.error(
-                f"Unexpected closest pair key: {closest_pair_key}. Cannot calculate torsion angle."
+                f"Unexpected closest pair key: {closest_pair_key}. Cannot calculate parameters."
             )
             return None, None, None
 
         # Calculate torsion angle
         torsion = calculate_torsion_angle_coords(s1p1, s1p2, s2p1, s2p2)
 
-        return torsion, min_endpoint_distance
+        # Create von Mises distribution instance
+        mu_radians = math.radians(mu_degrees)
+        vm_dist = vonmises(kappa=kappa, loc=mu_radians)
+
+        return torsion, min_endpoint_distance, vm_dist
 
     def __generate_dot_bracket_per_strand(self, dbn_structure: str) -> List[str]:
         dbn = dbn_structure
