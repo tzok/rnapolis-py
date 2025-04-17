@@ -604,9 +604,9 @@ def generate_pymol_script(mapping: Mapping2D3D, stems: List[Stem]) -> str:
         if len(centroids) >= 4:
             for i in range(len(centroids) - 3):
                 pa1 = f"stem{stem_idx}_centroid{i}"
-                pa2 = f"stem{stem_idx}_centroid{i+1}"
-                pa3 = f"stem{stem_idx}_centroid{i+2}"
-                pa4 = f"stem{stem_idx}_centroid{i+3}"
+                pa2 = f"stem{stem_idx}_centroid{i + 1}"
+                pa3 = f"stem{stem_idx}_centroid{i + 2}"
+                pa4 = f"stem{stem_idx}_centroid{i + 3}"
                 dihedral_name = f"stem{stem_idx}_dihedral{i}"
                 pymol_commands.append(
                     f"dihedral {dihedral_name}, {pa1}, {pa2}, {pa3}, {pa4}"
