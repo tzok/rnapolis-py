@@ -572,9 +572,7 @@ def generate_pymol_script(mapping: Mapping2D3D, stems: List[Stem]) -> str:
 
         # Need at least 2 centroids to draw a segment
         if len(centroids) < 2:
-            logging.warning(
-                f"Skipping stem {stem_idx + 1} in PML script: less than 2 base pairs."
-            )
+            # Removed warning log for stems with < 2 base pairs
             continue
 
         # Create pseudoatoms for each centroid
