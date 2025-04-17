@@ -799,12 +799,12 @@ class Mapping2D3D:
             - 'type': The type of closest endpoint pair ('cs55', 'cs53', 'cs35', 'cs33').
             - 'torsion_angle': The calculated torsion angle in degrees.
             - 'min_endpoint_distance': The minimum distance between the endpoints.
-            - 'torsion_angle_probability': The probability density of the torsion angle
-              under the von Mises distribution.
-            - 'min_endpoint_distance_probability': The probability density based on the
-              minimum endpoint distance using a Lennard-Jones-like function.
-            - 'coaxial_probability': The normalized product of torsion angle and
-              distance probabilities, indicating the likelihood of coaxial stacking.
+            - 'torsion_angle_pdf': The probability density function (PDF) value of the
+              torsion angle under the von Mises distribution.
+            - 'min_endpoint_distance_pdf': The probability density function (PDF) value
+              based on the minimum endpoint distance using a Lennard-Jones-like function.
+            - 'coaxial_probability': The normalized product of the torsion angle PDF and
+              distance PDF, indicating the likelihood of coaxial stacking (0-1).
             Returns None if either stem has fewer than 2 base pairs or centroids
             cannot be calculated.
         """
@@ -903,8 +903,8 @@ class Mapping2D3D:
             "type": closest_pair_key,
             "torsion_angle": math.degrees(torsion_radians),
             "min_endpoint_distance": min_endpoint_distance,
-            "torsion_angle_probability": torsion_probability,
-            "min_endpoint_distance_probability": distance_probability,
+            "torsion_angle_pdf": torsion_probability,
+            "min_endpoint_distance_pdf": distance_probability,
             "coaxial_probability": coaxial_probability,
         }
 
@@ -1028,9 +1028,9 @@ def calculate_all_inter_stem_parameters(
                         type=params["type"],
                         torsion=params["torsion_angle"],
                         min_endpoint_distance=params["min_endpoint_distance"],
-                        torsion_angle_probability=params["torsion_angle_probability"],
-                        min_endpoint_distance_probability=params[
-                            "min_endpoint_distance_probability"
+                        torsion_angle_pdf=params["torsion_angle_pdf"],
+                        min_endpoint_distance_pdf=params[
+                            "min_endpoint_distance_pdf"
                         ],
                         coaxial_probability=params["coaxial_probability"],
                     )

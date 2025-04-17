@@ -764,8 +764,8 @@ def handle_output_arguments(
                     "type": p.type,
                     "torsion": p.torsion,
                     "min_endpoint_distance": p.min_endpoint_distance,
-                    "torsion_angle_probability": p.torsion_angle_probability,
-                    "min_endpoint_distance_probability": p.min_endpoint_distance_probability,
+                    "torsion_angle_pdf": p.torsion_angle_pdf,
+                    "min_endpoint_distance_pdf": p.min_endpoint_distance_pdf,
                     "coaxial_probability": p.coaxial_probability,
                 }
                 for p in structure2d.interStemParameters

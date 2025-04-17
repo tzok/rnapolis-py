@@ -1064,12 +1064,10 @@ class InterStemParameters:
     type: Optional[str]  # Type of closest endpoint pair ('cs55', 'cs53', etc.)
     torsion: Optional[float]  # Torsion angle between stem segments (degrees)
     min_endpoint_distance: Optional[float]  # Minimum distance between stem endpoints
-    torsion_angle_probability: Optional[
+    torsion_angle_pdf: Optional[float]  # PDF value of the torsion angle
+    min_endpoint_distance_pdf: Optional[
         float
-    ]  # Probability density of the torsion angle
-    min_endpoint_distance_probability: Optional[
-        float
-    ]  # Probability density of the min endpoint distance
+    ]  # PDF value of the min endpoint distance
     coaxial_probability: Optional[float]  # Probability of stems being coaxial (0-1)
 
 
