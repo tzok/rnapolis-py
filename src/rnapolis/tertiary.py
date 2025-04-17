@@ -976,7 +976,7 @@ def lennard_jones_like_pdf(
     # Gaussian-like decay centered at best_dist
     exponent = -(((x - best_dist) / steepness) ** 2)
     # Clamp exponent to avoid potential underflow/overflow with extreme inputs
-    exponent = max(exponent, -700.0) # Corresponds to exp(-700) approx 1e-304
+    exponent = max(exponent, -700.0)  # Corresponds to exp(-700) approx 1e-304
     return math.exp(exponent)
 
 
