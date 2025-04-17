@@ -583,7 +583,7 @@ def generate_pymol_script(mapping: Mapping2D3D, stems: List[Stem]) -> str:
             x, y, z = centroid
             pseudoatom_name = f"stem{stem_idx}_centroid{centroid_idx}"
             pymol_commands.append(
-                f'pseudoatom {pseudoatom_name}, pos=[{x:.3f}, {y:.3f}, {z:.3f}]'
+                f"pseudoatom {pseudoatom_name}, pos=[{x:.3f}, {y:.3f}, {z:.3f}]"
             )
 
         # Draw cylinders between consecutive centroids
