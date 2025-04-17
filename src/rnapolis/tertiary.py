@@ -946,7 +946,9 @@ class Mapping2D3D:
         return "\n".join(["\n".join(r) for r in result])
 
 
-def calculate_all_inter_stem_parameters(mapping: Mapping2D3D) -> List[InterStemParameters]:
+def calculate_all_inter_stem_parameters(
+    mapping: Mapping2D3D,
+) -> List[InterStemParameters]:
     """
     Calculates InterStemParameters for all valid pairs of stems found in the mapping.
 
