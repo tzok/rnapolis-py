@@ -1,6 +1,5 @@
 #! /usr/bin/env python
 import argparse
-import csv
 import logging
 import os
 from enum import Enum
@@ -8,6 +7,10 @@ from typing import Dict, List, Optional, Tuple
 
 import orjson
 
+from rnapolis.annotator import (
+    add_common_output_arguments,
+    handle_output_arguments,
+)
 from rnapolis.common import (
     BR,
     BaseInteractions,
@@ -15,7 +18,6 @@ from rnapolis.common import (
     BasePhosphate,
     BaseRibose,
     BPh,
-    BpSeq,
     LeontisWesthof,
     OtherInteraction,
     Residue,
@@ -25,7 +27,11 @@ from rnapolis.common import (
     Structure2D,
 )
 from rnapolis.parser import read_3d_structure
-from rnapolis.tertiary import Mapping2D3D, Structure3D
+from rnapolis.tertiary import (
+    Mapping2D3D,
+    Structure3D,
+    calculate_all_inter_stem_parameters,  # Import the new helper function
+)
 from rnapolis.util import handle_input_file
 
 
@@ -317,7 +323,7 @@ def process_external_tool_output(
     model: Optional[int] = None,
     find_gaps: bool = False,
     all_dot_brackets: bool = False,
-) -> Tuple[Structure2D, List[str]]:
+) -> Tuple[Structure2D, List[str], Mapping2D3D]:  # Added Mapping2D3D to return tuple
     """
     Process external tool output and create a secondary structure representation.
 
@@ -333,7 +339,8 @@ def process_external_tool_output(
         all_dot_brackets: Whether to return all possible dot-bracket notations
 
     Returns:
-        A tuple containing the Structure2D object and a list of dot-bracket notations
+        A tuple containing the Structure2D object, a list of dot-bracket notations,
+        and the Mapping2D3D object.
     """
     # Parse external tool output
     base_interactions = parse_external_output(external_file_path, tool, structure3d)
@@ -350,7 +357,7 @@ def extract_secondary_structure_from_external(
     model: Optional[int] = None,
     find_gaps: bool = False,
     all_dot_brackets: bool = False,
-) -> Tuple[Structure2D, List[str]]:
+) -> Tuple[Structure2D, List[str], Mapping2D3D]:  # Added Mapping2D3D to return tuple
     """
     Create a secondary structure representation using interactions from an external tool.
 
@@ -362,7 +369,8 @@ def extract_secondary_structure_from_external(
         all_dot_brackets: Whether to return all possible dot-bracket notations
 
     Returns:
-        A tuple containing the Structure2D object and a list of dot-bracket notations
+        A tuple containing the Structure2D object, a list of dot-bracket notations,
+        and the Mapping2D3D object.
     """
     mapping = Mapping2D3D(
         tertiary_structure,
@@ -371,6 +379,10 @@ def extract_secondary_structure_from_external(
         find_gaps,
     )
     stems, single_strands, hairpins, loops = mapping.bpseq.elements
+
+    # Calculate inter-stem parameters using the helper function
+    inter_stem_params = calculate_all_inter_stem_parameters(mapping)
+
     structure2d = Structure2D(
         base_interactions,
         str(mapping.bpseq),
@@ -380,81 +392,15 @@ def extract_secondary_structure_from_external(
         single_strands,
         hairpins,
         loops,
+        inter_stem_params,  # Added inter-stem parameters
     )
     if all_dot_brackets:
-        return structure2d, mapping.all_dot_brackets
+        return structure2d, mapping.all_dot_brackets, mapping  # Return mapping
     else:
-        return structure2d, [structure2d.dotBracket]
+        return structure2d, [structure2d.dotBracket], mapping  # Return mapping
 
 
-def write_json(path: str, structure2d: BaseInteractions):
-    with open(path, "wb") as f:
-        f.write(orjson.dumps(structure2d))
-
-
-def write_csv(path: str, structure2d: Structure2D):
-    with open(path, "w") as f:
-        writer = csv.writer(f)
-        writer.writerow(["nt1", "nt2", "type", "classification-1", "classification-2"])
-        for base_pair in structure2d.baseInteractions.basePairs:
-            writer.writerow(
-                [
-                    base_pair.nt1.full_name,
-                    base_pair.nt2.full_name,
-                    "base pair",
-                    base_pair.lw.value,
-                    (
-                        base_pair.saenger.value or ""
-                        if base_pair.saenger is not None
-                        else ""
-                    ),
-                ]
-            )
-        for stacking in structure2d.baseInteractions.stackings:
-            writer.writerow(
-                [
-                    stacking.nt1.full_name,
-                    stacking.nt2.full_name,
-                    "stacking",
-                    stacking.topology.value if stacking.topology is not None else "",
-                    "",
-                ]
-            )
-        for base_phosphate in structure2d.baseInteractions.basePhosphateInteractions:
-            writer.writerow(
-                [
-                    base_phosphate.nt1.full_name,
-                    base_phosphate.nt2.full_name,
-                    "base-phosphate interaction",
-                    base_phosphate.bph.value if base_phosphate.bph is not None else "",
-                    "",
-                ]
-            )
-        for base_ribose in structure2d.baseInteractions.baseRiboseInteractions:
-            writer.writerow(
-                [
-                    base_ribose.nt1.full_name,
-                    base_ribose.nt2.full_name,
-                    "base-ribose interaction",
-                    base_ribose.br.value if base_ribose.br is not None else "",
-                    "",
-                ]
-            )
-        for other in structure2d.baseInteractions.otherInteractions:
-            writer.writerow(
-                [
-                    other.nt1.full_name,
-                    other.nt2.full_name,
-                    "other interaction",
-                    "",
-                    "",
-                ]
-            )
-
-
-def write_bpseq(path: str, bpseq: BpSeq):
-    with open(path, "w") as f:
-        f.write(str(bpseq))
+# Removed duplicate functions - now imported from annotator
 
 
 def main():
@@ -472,38 +418,20 @@ def main():
         help="External tool that generated the output file",
     )
     parser.add_argument(
-        "-a",
-        "--all-dot-brackets",
-        action="store_true",
-        help="(optional) print all dot-brackets, not only optimal one (exclusive with -e/--extended)",
-    )
-    parser.add_argument("-b", "--bpseq", help="(optional) path to output BPSEQ file")
-    parser.add_argument("-c", "--csv", help="(optional) path to output CSV file")
-    parser.add_argument(
-        "-j",
-        "--json",
-        help="(optional) path to output JSON file",
-    )
-    parser.add_argument(
-        "-e",
-        "--extended",
-        action="store_true",
-        help="(optional) if set, the program will print extended secondary structure to the standard output",
-    )
-    parser.add_argument(
         "-f",
         "--find-gaps",
         action="store_true",
         help="(optional) if set, the program will detect gaps and break the PDB chain into two or more strands",
     )
-    parser.add_argument("-d", "--dot", help="(optional) path to output DOT file")
+    add_common_output_arguments(parser)
+    # The --inter-stem-csv and --stems-csv arguments are now added by add_common_output_arguments
     args = parser.parse_args()
 
     file = handle_input_file(args.input)
     structure3d = read_3d_structure(file, None)
 
     # Process external tool output and get secondary structure
-    structure2d, dot_brackets = process_external_tool_output(
+    structure2d, dot_brackets, mapping = process_external_tool_output(
         structure3d,
         args.external,
         ExternalTool(args.tool),
@@ -512,25 +440,7 @@ def main():
         args.all_dot_brackets,
     )
 
-    if args.csv:
-        write_csv(args.csv, structure2d)
-
-    if args.json:
-        write_json(args.json, structure2d)
-
-    if args.bpseq:
-        write_bpseq(args.bpseq, structure2d.bpseq)
-
-    if args.extended:
-        print(structure2d.extendedDotBracket)
-    elif args.all_dot_brackets:
-        for dot_bracket in dot_brackets:
-            print(dot_bracket)
-    else:
-        print(structure2d.dotBracket)
-
-    if args.dot:
-        print(BpSeq.from_string(structure2d.bpseq).graphviz)
+    handle_output_arguments(args, structure2d, dot_brackets, mapping, args.input)
 
 
 if __name__ == "__main__":

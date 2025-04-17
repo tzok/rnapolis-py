@@ -1058,6 +1058,18 @@ class BaseInteractions:
 
 
 @dataclass(frozen=True, order=True)
+class InterStemParameters:
+    stem1_idx: int
+    stem2_idx: int
+    type: Optional[str]  # Type of closest endpoint pair ('cs55', 'cs53', etc.)
+    torsion: Optional[float]  # Torsion angle between stem segments (degrees)
+    min_endpoint_distance: Optional[float]  # Minimum distance between stem endpoints
+    torsion_angle_pdf: Optional[float]  # PDF value of the torsion angle
+    min_endpoint_distance_pdf: Optional[float]  # PDF value of the min endpoint distance
+    coaxial_probability: Optional[float]  # Probability of stems being coaxial (0-1)
+
+
+@dataclass(frozen=True, order=True)
 class Structure2D:
     baseInteractions: BaseInteractions
     bpseq: str
@@ -1067,3 +1079,4 @@ class Structure2D:
     singleStrands: List[SingleStrand]
     hairpins: List[Hairpin]
     loops: List[Loop]
+    interStemParameters: List[InterStemParameters]

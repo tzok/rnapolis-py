@@ -10,6 +10,7 @@ from typing import Dict, List, Optional, Set, Tuple
 import numpy
 import numpy.typing
 import orjson
+import pandas as pd
 from ordered_set import OrderedSet
 from scipy.spatial import KDTree
 
@@ -26,6 +27,7 @@ from rnapolis.common import (
     Saenger,
     Stacking,
     StackingTopology,
+    Stem,
     Structure2D,
 )
 from rnapolis.parser import read_3d_structure
@@ -38,9 +40,10 @@ from rnapolis.tertiary import (
     PHOSPHATE_ACCEPTORS,
     RIBOSE_ACCEPTORS,
     Atom,
-    Mapping2D3D,
+    Mapping2D3D,  # Added import
     Residue3D,
     Structure3D,
+    calculate_all_inter_stem_parameters,  # Import the new helper function
     torsion_angle,
 )
 from rnapolis.util import handle_input_file
@@ -496,6 +499,10 @@ def extract_secondary_structure(
         find_gaps,
     )
     stems, single_strands, hairpins, loops = mapping.bpseq.elements
+
+    # Calculate inter-stem parameters using the helper function
+    inter_stem_params = calculate_all_inter_stem_parameters(mapping)
+
     structure2d = Structure2D(
         base_interactions,
         str(mapping.bpseq),
@@ -505,6 +512,7 @@ def extract_secondary_structure(
         single_strands,
         hairpins,
         loops,
+        inter_stem_params,  # Added inter-stem parameters
     )
     if all_dot_brackets:
         return structure2d, mapping.all_dot_brackets
@@ -512,9 +520,102 @@ def extract_secondary_structure(
         return structure2d, [structure2d.dotBracket]
 
 
-def write_json(path: str, structure2d: BaseInteractions):
+def generate_pymol_script(mapping: Mapping2D3D, stems: List[Stem]) -> str:
+    """Generates a PyMOL script to draw stems as cylinders."""
+    pymol_commands = []
+    radius = 0.5
+    r, g, b = 1.0, 0.0, 0.0  # Red color
+
+    for stem_idx, stem in enumerate(stems):
+        # Get residues for selection string
+        try:
+            res5p_first = mapping.bpseq_index_to_residue_map[stem.strand5p.first]
+            res5p_last = mapping.bpseq_index_to_residue_map[stem.strand5p.last]
+            res3p_first = mapping.bpseq_index_to_residue_map[stem.strand3p.first]
+            res3p_last = mapping.bpseq_index_to_residue_map[stem.strand3p.last]
+
+            # Prefer auth chain/number if available
+            chain5p = (
+                res5p_first.auth.chain if res5p_first.auth else res5p_first.label.chain
+            )
+            num5p_first = (
+                res5p_first.auth.number
+                if res5p_first.auth
+                else res5p_first.label.number
+            )
+            num5p_last = (
+                res5p_last.auth.number if res5p_last.auth else res5p_last.label.number
+            )
+
+            chain3p = (
+                res3p_first.auth.chain if res3p_first.auth else res3p_first.label.chain
+            )
+            num3p_first = (
+                res3p_first.auth.number
+                if res3p_first.auth
+                else res3p_first.label.number
+            )
+            num3p_last = (
+                res3p_last.auth.number if res3p_last.auth else res3p_last.label.number
+            )
+
+            # Format selection string: select stem0, A/1-5/ or A/10-15/
+            selection_str = f"{chain5p}/{num5p_first}-{num5p_last}/ or {chain3p}/{num3p_first}-{num3p_last}/"
+            pymol_commands.append(f"select stem{stem_idx}, {selection_str}")
+
+        except (KeyError, AttributeError) as e:
+            logging.warning(
+                f"Could not generate selection string for stem {stem_idx}: Missing residue data ({e})"
+            )
+
+        centroids = mapping.get_stem_coordinates(stem)
+
+        # Need at least 2 centroids to draw a segment
+        if len(centroids) < 2:
+            # Removed warning log for stems with < 2 base pairs
+            continue
+
+        # Create pseudoatoms for each centroid
+        for centroid_idx, centroid in enumerate(centroids):
+            x, y, z = centroid
+            pseudoatom_name = f"stem{stem_idx}_centroid{centroid_idx}"
+            pymol_commands.append(
+                f"pseudoatom {pseudoatom_name}, pos=[{x:.3f}, {y:.3f}, {z:.3f}]"
+            )
+
+        # Draw cylinders between consecutive centroids
+        for seg_idx in range(len(centroids) - 1):
+            p1 = centroids[seg_idx]
+            p2 = centroids[seg_idx + 1]
+            x1, y1, z1 = p1
+            x2, y2, z2 = p2
+            # Format: [CYLINDER, x1, y1, z1, x2, y2, z2, radius, r1, g1, b1, r2, g2, b2]
+            # Use 9.0 for CYLINDER code
+            # Use same color for both ends
+            cgo_object = f"[ 9.0, {x1:.3f}, {y1:.3f}, {z1:.3f}, {x2:.3f}, {y2:.3f}, {z2:.3f}, {radius}, {r}, {g}, {b}, {r}, {g}, {b} ]"
+            pymol_commands.append(
+                f'cmd.load_cgo({cgo_object}, "stem_{stem_idx}_seg_{seg_idx}")'
+            )
+
+        # Calculate and display dihedral angles between consecutive centroids
+        if len(centroids) >= 4:
+            for i in range(len(centroids) - 3):
+                pa1 = f"stem{stem_idx}_centroid{i}"
+                pa2 = f"stem{stem_idx}_centroid{i + 1}"
+                pa3 = f"stem{stem_idx}_centroid{i + 2}"
+                pa4 = f"stem{stem_idx}_centroid{i + 3}"
+                dihedral_name = f"stem{stem_idx}_dihedral{i}"
+                pymol_commands.append(
+                    f"dihedral {dihedral_name}, {pa1}, {pa2}, {pa3}, {pa4}"
+                )
+
+    return "\n".join(pymol_commands)
+
+
+def write_json(path: str, structure2d: Structure2D):
     with open(path, "wb") as f:
-        f.write(orjson.dumps(structure2d))
+        # Add OPT_SERIALIZE_NUMPY to handle numpy types like float64
+        f.write(orjson.dumps(structure2d, option=orjson.OPT_SERIALIZE_NUMPY))
 
 
 def write_csv(path: str, structure2d: Structure2D):
@@ -555,13 +656,13 @@ def write_csv(path: str, structure2d: Structure2D):
                     "",
                 ]
             )
-        for base_ribose in structure2d.baseInteractions.basePhosphateInteractions:
+        for base_ribose in structure2d.baseInteractions.baseRiboseInteractions:
             writer.writerow(
                 [
                     base_ribose.nt1.full_name,
                     base_ribose.nt2.full_name,
                     "base-ribose interaction",
-                    base_ribose.bph.value if base_ribose.bph is not None else "",
+                    base_ribose.br.value if base_ribose.br is not None else "",
                     "",
                 ]
             )
@@ -582,9 +683,8 @@ def write_bpseq(path: str, bpseq: BpSeq):
         f.write(str(bpseq))
 
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("input", help="Path to PDB or mmCIF file")
+def add_common_output_arguments(parser: argparse.ArgumentParser):
+    """Adds common output and processing arguments to the parser."""
     parser.add_argument(
         "-a",
         "--all-dot-brackets",
@@ -604,22 +704,29 @@ def main():
         action="store_true",
         help="(optional) if set, the program will print extended secondary structure to the standard output",
     )
-    parser.add_argument(
-        "-f",
-        "--find-gaps",
-        action="store_true",
-        help="(optional) if set, the program will detect gaps and break the PDB chain into two or more strands; "
-        f"the gap is defined as O3'-P distance greater then {1.5 * AVERAGE_OXYGEN_PHOSPHORUS_DISTANCE_COVALENT}",
-    )
     parser.add_argument("-d", "--dot", help="(optional) path to output DOT file")
-    args = parser.parse_args()
-
-    file = handle_input_file(args.input)
-    structure3d = read_3d_structure(file, None)
-    structure2d, dot_brackets = extract_secondary_structure(
-        structure3d, None, args.find_gaps, args.all_dot_brackets
+    parser.add_argument(
+        "-p", "--pml", help="(optional) path to output PyMOL PML script for stems"
+    )
+    parser.add_argument(
+        "--inter-stem-csv",
+        help="(optional) path to output CSV file for inter-stem parameters",
+    )
+    parser.add_argument(
+        "--stems-csv",
+        help="(optional) path to output CSV file for stem details",
     )
 
+
+def handle_output_arguments(
+    args: argparse.Namespace,
+    structure2d: Structure2D,
+    dot_brackets: List[str],
+    mapping: Mapping2D3D,
+    input_filename: str,
+):
+    """Handles writing output based on provided arguments."""
+    input_basename = os.path.basename(input_filename)
     if args.csv:
         write_csv(args.csv, structure2d)
 
@@ -639,6 +746,135 @@ def main():
 
     if args.dot:
         print(BpSeq.from_string(structure2d.bpseq).graphviz)
+
+    if args.pml:
+        pml_script = generate_pymol_script(mapping, structure2d.stems)
+        with open(args.pml, "w") as f:
+            f.write(pml_script)
+
+    if args.inter_stem_csv:
+        if structure2d.interStemParameters:
+            # Convert list of dataclasses to list of dicts
+            params_list = [
+                {
+                    "stem1_idx": p.stem1_idx,
+                    "stem2_idx": p.stem2_idx,
+                    "type": p.type,
+                    "torsion": p.torsion,
+                    "min_endpoint_distance": p.min_endpoint_distance,
+                    "torsion_angle_pdf": p.torsion_angle_pdf,
+                    "min_endpoint_distance_pdf": p.min_endpoint_distance_pdf,
+                    "coaxial_probability": p.coaxial_probability,
+                }
+                for p in structure2d.interStemParameters
+            ]
+            df = pd.DataFrame(params_list)
+            df["input_basename"] = input_basename
+            # Reorder columns to put input_basename first
+            cols = ["input_basename"] + [
+                col for col in df.columns if col != "input_basename"
+            ]
+            df = df[cols]
+            df.to_csv(args.inter_stem_csv, index=False)
+        else:
+            logging.warning(
+                f"No inter-stem parameters calculated for {input_basename}, CSV file '{args.inter_stem_csv}' will be empty or not created."
+            )
+            # Optionally create an empty file with headers
+            # pd.DataFrame(columns=['input_basename', 'stem1_idx', ...]).to_csv(args.inter_stem_csv, index=False)
+
+    if args.stems_csv:
+        if structure2d.stems:
+            stems_data = []
+            for i, stem in enumerate(structure2d.stems):
+                try:
+                    res5p_first = mapping.bpseq_index_to_residue_map.get(
+                        stem.strand5p.first
+                    )
+                    res5p_last = mapping.bpseq_index_to_residue_map.get(
+                        stem.strand5p.last
+                    )
+                    res3p_first = mapping.bpseq_index_to_residue_map.get(
+                        stem.strand3p.first
+                    )
+                    res3p_last = mapping.bpseq_index_to_residue_map.get(
+                        stem.strand3p.last
+                    )
+
+                    stems_data.append(
+                        {
+                            "stem_idx": i,
+                            "strand5p_first_nt_id": res5p_first.full_name
+                            if res5p_first
+                            else None,
+                            "strand5p_last_nt_id": res5p_last.full_name
+                            if res5p_last
+                            else None,
+                            "strand3p_first_nt_id": res3p_first.full_name
+                            if res3p_first
+                            else None,
+                            "strand3p_last_nt_id": res3p_last.full_name
+                            if res3p_last
+                            else None,
+                            "strand5p_sequence": stem.strand5p.sequence,
+                            "strand3p_sequence": stem.strand3p.sequence,
+                        }
+                    )
+                except KeyError as e:
+                    logging.warning(
+                        f"Could not find residue for stem {i} (index {e}), skipping stem details."
+                    )
+                    continue
+
+            if stems_data:
+                df_stems = pd.DataFrame(stems_data)
+                df_stems["input_basename"] = input_basename
+                # Reorder columns
+                stem_cols = ["input_basename", "stem_idx"] + [
+                    col
+                    for col in df_stems.columns
+                    if col not in ["input_basename", "stem_idx"]
+                ]
+                df_stems = df_stems[stem_cols]
+                df_stems.to_csv(args.stems_csv, index=False)
+            else:
+                logging.warning(
+                    f"No valid stem data generated for {input_basename}, CSV file '{args.stems_csv}' will be empty or not created."
+                )
+        else:
+            logging.warning(
+                f"No stems found for {input_basename}, CSV file '{args.stems_csv}' will be empty or not created."
+            )
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("input", help="Path to PDB or mmCIF file")
+    parser.add_argument(
+        "-f",
+        "--find-gaps",
+        action="store_true",
+        help="(optional) if set, the program will detect gaps and break the PDB chain into two or more strands; "
+        f"the gap is defined as O3'-P distance greater then {1.5 * AVERAGE_OXYGEN_PHOSPHORUS_DISTANCE_COVALENT}",
+    )
+    add_common_output_arguments(parser)
+    args = parser.parse_args()
+
+    file = handle_input_file(args.input)
+    structure3d = read_3d_structure(file, None)
+    structure2d, dot_brackets = extract_secondary_structure(
+        structure3d, None, args.find_gaps, args.all_dot_brackets
+    )
+
+    # Need the mapping object for PML generation
+    mapping = Mapping2D3D(
+        structure3d,
+        structure2d.baseInteractions.basePairs,
+        structure2d.baseInteractions.stackings,
+        args.find_gaps,
+    )
+
+    handle_output_arguments(args, structure2d, dot_brackets, mapping, args.input)
 
 
 if __name__ == "__main__":

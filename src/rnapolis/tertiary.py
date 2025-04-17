@@ -1,3 +1,4 @@
+import itertools
 import logging
 import math
 from collections import defaultdict
@@ -7,18 +8,22 @@ from typing import Dict, List, Optional, Set, Tuple, Union
 
 import numpy
 import numpy.typing
+from scipy.stats import vonmises
 
 from rnapolis.common import (
     BasePair,
     BpSeq,
     Entry,
     GlycosidicBond,
+    InterStemParameters,
     LeontisWesthof,
     Residue,
     ResidueAuth,
     ResidueLabel,
     Saenger,
     Stacking,
+    Stem,
+    Strand,
 )
 
 BASE_ATOMS = {
@@ -594,12 +599,65 @@ class Mapping2D3D:
             else:
                 break
 
+        return self._generated_bpseq_data[0]
+
+    @cached_property
+    def bpseq_index_to_residue_map(self) -> Dict[int, Residue3D]:
+        """Mapping from BpSeq entry index to the corresponding Residue3D object."""
+        return self._generated_bpseq_data[1]
+
+    @cached_property
+    def _generated_bpseq_data(self) -> Tuple[BpSeq, Dict[int, Residue3D]]:
+        """Helper property to compute BpSeq and index map simultaneously."""
+
+        def pair_scoring_function(pair: BasePair3D) -> int:
+            if pair.saenger is not None:
+                if pair.saenger in (Saenger.XIX, Saenger.XX):
+                    return 0, pair.nt1, pair.nt2
+                else:
+                    return 1, pair.nt1, pair.nt2
+
+            sequence = "".join(
+                sorted(
+                    [
+                        pair.nt1_3d.one_letter_name.upper(),
+                        pair.nt2_3d.one_letter_name.upper(),
+                    ]
+                )
+            )
+            if sequence in ("AU", "AT", "CG"):
+                return 0, pair.nt1, pair.nt2
+            return 1, pair.nt1, pair.nt2
+
+        canonical = [
+            base_pair
+            for base_pair in self.base_pairs
+            if base_pair.is_canonical and base_pair.nt1 < base_pair.nt2
+        ]
+
+        while True:
+            matches = defaultdict(set)
+
+            for base_pair in canonical:
+                matches[base_pair.nt1_3d].add(base_pair)
+                matches[base_pair.nt2_3d].add(base_pair)
+
+            for pairs in matches.values():
+                if len(pairs) > 1:
+                    pairs = sorted(pairs, key=pair_scoring_function)
+                    canonical.remove(pairs[-1])
+                    break
+            else:
+                break
+
         return self.__generate_bpseq(canonical)
 
-    def __generate_bpseq(self, base_pairs):
+    def __generate_bpseq(self, base_pairs) -> Tuple[BpSeq, Dict[int, Residue3D]]:
+        """Generates BpSeq entries and a map from index to Residue3D."""
         nucleotides = list(filter(lambda r: r.is_nucleotide, self.structure3d.residues))
         result: Dict[int, List] = {}
         residue_map: Dict[Residue3D, int] = {}
+        index_to_residue_map: Dict[int, Residue3D] = {}
         i = 1
 
         for j, residue in enumerate(nucleotides):
@@ -616,6 +674,7 @@ class Mapping2D3D:
 
             result[i] = [i, residue.one_letter_name, 0]
             residue_map[residue] = i
+            index_to_residue_map[i] = residue
             i += 1
 
         for base_pair in base_pairs:
@@ -631,7 +690,21 @@ class Mapping2D3D:
                 Entry(index_, sequence, pair)
                 for index_, sequence, pair in result.values()
             ]
-        )
+        ), index_to_residue_map
+
+    def find_residue_for_entry(self, entry: Entry) -> Optional[Residue3D]:
+        """Finds the Residue3D object corresponding to a BpSeq Entry."""
+        return self.bpseq_index_to_residue_map.get(entry.index_)
+
+    def get_residues_for_strand(self, strand: Strand) -> List[Residue3D]:
+        """Retrieves the list of Residue3D objects corresponding to a Strand."""
+        residues = []
+        # Strand indices are 1-based and inclusive
+        for index_ in range(strand.first, strand.last + 1):
+            residue = self.bpseq_index_to_residue_map.get(index_)
+            if residue:
+                residues.append(residue)
+        return residues
 
     @cached_property
     def dot_bracket(self) -> str:
@@ -646,6 +719,196 @@ class Mapping2D3D:
             result.append(dbns[i])
             i += len(sequence)
         return "\n".join(result)
+
+    def _calculate_pair_centroid(
+        self, residue1: Residue3D, residue2: Residue3D
+    ) -> Optional[numpy.typing.NDArray[numpy.floating]]:
+        """Calculates the geometric mean of base atoms for a pair of residues."""
+        base_atoms = []
+        for residue in [residue1, residue2]:
+            base_atom_names = Residue3D.nucleobase_heavy_atoms.get(
+                residue.one_letter_name.upper(), set()
+            )
+            if not base_atom_names:
+                logging.warning(
+                    f"Could not find base atom definition for residue {residue.full_name}"
+                )
+                continue
+            for atom in residue.atoms:
+                if atom.name in base_atom_names:
+                    base_atoms.append(atom)
+
+        if not base_atoms:
+            logging.warning(
+                f"No base atoms found for pair {residue1.full_name} - {residue2.full_name}"
+            )
+            return None
+
+        coordinates = [atom.coordinates for atom in base_atoms]
+        return numpy.mean(coordinates, axis=0)
+
+    def get_stem_coordinates(
+        self, stem: Stem
+    ) -> List[numpy.typing.NDArray[numpy.floating]]:
+        """
+        Calculates the geometric centroid for each base pair in the stem.
+
+        Args:
+            stem: The Stem object.
+
+        Returns:
+            A list of numpy arrays, where each array is the centroid of a
+            base pair in the stem. Returns an empty list if no centroids
+            can be calculated.
+        """
+        all_pair_centroids = []
+        stem_len = stem.strand5p.last - stem.strand5p.first + 1
+
+        for i in range(stem_len):
+            idx5p = stem.strand5p.first + i
+            idx3p = stem.strand3p.last - i
+            try:
+                res5p = self.bpseq_index_to_residue_map[idx5p]
+                res3p = self.bpseq_index_to_residue_map[idx3p]
+                centroid = self._calculate_pair_centroid(res5p, res3p)
+                if centroid is not None:
+                    all_pair_centroids.append(centroid)
+            except KeyError:
+                logging.warning(
+                    f"Could not find residues for pair {idx5p}-{idx3p} in stem {stem}"
+                )
+                continue  # Continue calculating other centroids
+
+        return all_pair_centroids
+
+    def calculate_inter_stem_parameters(
+        self, stem1: Stem, stem2: Stem, kappa: float = 10.0
+    ) -> Optional[Dict[str, Union[str, float]]]:
+        """
+        Calculates geometric parameters between two stems based on closest endpoints
+        and the probability of the observed torsion angle based on an expected
+        A-RNA twist using a von Mises distribution.
+
+        Args:
+            stem1: The first Stem object.
+            stem2: The second Stem object.
+            kappa: Concentration parameter for the von Mises distribution (default: 10.0).
+
+        Returns:
+            A dictionary containing:
+            - 'type': The type of closest endpoint pair ('cs55', 'cs53', 'cs35', 'cs33').
+            - 'torsion_angle': The calculated torsion angle in degrees.
+            - 'min_endpoint_distance': The minimum distance between the endpoints.
+            - 'torsion_angle_pdf': The probability density function (PDF) value of the
+              torsion angle under the von Mises distribution.
+            - 'min_endpoint_distance_pdf': The probability density function (PDF) value
+              based on the minimum endpoint distance using a Lennard-Jones-like function.
+            - 'coaxial_probability': The normalized product of the torsion angle PDF and
+              distance PDF, indicating the likelihood of coaxial stacking (0-1).
+            Returns None if either stem has fewer than 2 base pairs or centroids
+            cannot be calculated.
+        """
+        stem1_centroids = self.get_stem_coordinates(stem1)
+        stem2_centroids = self.get_stem_coordinates(stem2)
+
+        # Need at least 2 centroids (base pairs) per stem
+        if len(stem1_centroids) < 2 or len(stem2_centroids) < 2:
+            logging.warning(
+                f"Cannot calculate inter-stem parameters for stems {stem1} and {stem2}: "
+                f"Insufficient base pairs ({len(stem1_centroids)} and {len(stem2_centroids)} respectively)."
+            )
+            return None
+
+        # Define the endpoints for each stem
+        s1_first, s1_last = stem1_centroids[0], stem1_centroids[-1]
+        s2_first, s2_last = stem2_centroids[0], stem2_centroids[-1]
+
+        # Calculate distances between the four endpoint pairs
+        endpoint_distances = {
+            "cs55": numpy.linalg.norm(s1_first - s2_first),
+            "cs53": numpy.linalg.norm(s1_first - s2_last),
+            "cs35": numpy.linalg.norm(s1_last - s2_first),
+            "cs33": numpy.linalg.norm(s1_last - s2_last),
+        }
+
+        # Find the minimum endpoint distance and the corresponding pair
+        min_endpoint_distance = min(endpoint_distances.values())
+        closest_pair_key = min(endpoint_distances, key=endpoint_distances.get)
+
+        # Select the points for torsion and determine mu based on the closest pair.
+        # s1p2 and s2p1 must be the endpoints involved in the minimum distance.
+        a_rna_twist = 32.7
+        mu_degrees = 0.0
+
+        if closest_pair_key == "cs55":
+            # Closest: s1_first and s2_first
+            # Torsion points: s1_second, s1_first, s2_first, s2_second
+            s1p1, s1p2 = stem1_centroids[1], stem1_centroids[0]
+            s2p1, s2p2 = stem2_centroids[0], stem2_centroids[1]
+            mu_degrees = 180.0 - a_rna_twist
+        elif closest_pair_key == "cs53":
+            # Closest: s1_first and s2_last
+            # Torsion points: s1_second, s1_first, s2_last, s2_second_last
+            s1p1, s1p2 = stem1_centroids[1], stem1_centroids[0]
+            s2p1, s2p2 = stem2_centroids[-1], stem2_centroids[-2]
+            mu_degrees = 0.0 - a_rna_twist
+        elif closest_pair_key == "cs35":
+            # Closest: s1_last and s2_first
+            # Torsion points: s1_second_last, s1_last, s2_first, s2_second
+            s1p1, s1p2 = stem1_centroids[-2], stem1_centroids[-1]
+            s2p1, s2p2 = stem2_centroids[0], stem2_centroids[1]
+            mu_degrees = 0.0 + a_rna_twist
+        elif closest_pair_key == "cs33":
+            # Closest: s1_last and s2_last
+            # Torsion points: s1_second_last, s1_last, s2_last, s2_second_last
+            s1p1, s1p2 = stem1_centroids[-2], stem1_centroids[-1]
+            s2p1, s2p2 = stem2_centroids[-1], stem2_centroids[-2]
+            mu_degrees = 180.0 + a_rna_twist
+        else:
+            # This case should ideally not be reached if endpoint_distances is not empty
+            logging.error(
+                f"Unexpected closest pair key: {closest_pair_key}. Cannot calculate parameters."
+            )
+            return None
+
+        # Calculate torsion angle (in radians)
+        torsion_radians = calculate_torsion_angle_coords(s1p1, s1p2, s2p1, s2p2)
+
+        # Create von Mises distribution instance
+        mu_radians = math.radians(mu_degrees)
+        vm_dist = vonmises(kappa=kappa, loc=mu_radians)
+
+        # Calculate the probability density function (PDF) value for the torsion angle
+        torsion_probability = vm_dist.pdf(torsion_radians)
+
+        # Calculate the probability density for the minimum endpoint distance
+        distance_probability = distance_pdf(
+            min_endpoint_distance
+        )  # Use the new function
+
+        # Calculate the coaxial probability
+        # Max torsion probability occurs at mu (location of the distribution)
+        max_torsion_probability = vm_dist.pdf(mu_radians)
+        # Max distance probability is 1.0 by design of lennard_jones_like_pdf
+        max_distance_probability = 1.0
+        # Normalization factor is the product of maximum possible probabilities
+        normalization_factor = max_torsion_probability * max_distance_probability
+
+        coaxial_probability = 0.0
+        if normalization_factor > 1e-9:  # Avoid division by zero
+            probability_product = torsion_probability * distance_probability
+            coaxial_probability = probability_product / normalization_factor
+            # Clamp between 0 and 1
+            coaxial_probability = max(0.0, min(1.0, coaxial_probability))
+
+        return {
+            "type": closest_pair_key,
+            "torsion_angle": math.degrees(torsion_radians),
+            "min_endpoint_distance": min_endpoint_distance,
+            "torsion_angle_pdf": torsion_probability,
+            "min_endpoint_distance_pdf": distance_probability,
+            "coaxial_probability": coaxial_probability,
+        }
 
     def __generate_dot_bracket_per_strand(self, dbn_structure: str) -> List[str]:
         dbn = dbn_structure
@@ -698,7 +961,7 @@ class Mapping2D3D:
 
             for row in [row1, row2]:
                 if row:
-                    bpseq = self.__generate_bpseq(row)
+                    bpseq, _ = self.__generate_bpseq(row)  # Unpack the tuple
                     dbns = self.__generate_dot_bracket_per_strand(
                         bpseq.dot_bracket.structure
                     )
@@ -709,11 +972,121 @@ class Mapping2D3D:
         return "\n".join(["\n".join(r) for r in result])
 
 
+def distance_pdf(
+    x: float, lower_bound: float = 3.0, upper_bound: float = 7.0, steepness: float = 5.0
+) -> float:
+    """
+    Calculates a probability density based on distance using a plateau function.
+
+    The function uses the product of two sigmoid functions to create a distribution
+    that is close to 1.0 between lower_bound and upper_bound, and drops off
+    rapidly outside this range.
+
+    Args:
+        x: The distance value.
+        lower_bound: The start of the high-probability plateau (default: 3.0).
+        upper_bound: The end of the high-probability plateau (default: 7.0).
+        steepness: Controls how quickly the probability drops outside the plateau
+                   (default: 5.0). Higher values mean steeper drops.
+
+    Returns:
+        The calculated probability density (between 0.0 and 1.0).
+    """
+    # Define a maximum exponent value to prevent overflow
+    max_exponent = 700.0
+
+    # Calculate exponent for the first sigmoid (increasing)
+    exponent1 = -steepness * (x - lower_bound)
+    # Clamp the exponent if it's excessively large (which happens when x << lower_bound)
+    exponent1 = min(exponent1, max_exponent)
+    sigmoid1 = 1.0 / (1.0 + math.exp(exponent1))
+
+    # Calculate exponent for the second sigmoid (decreasing)
+    exponent2 = steepness * (x - upper_bound)
+    # Clamp the exponent if it's excessively large (which happens when x >> upper_bound)
+    exponent2 = min(exponent2, max_exponent)
+    sigmoid2 = 1.0 / (1.0 + math.exp(exponent2))
+
+    # The product creates the plateau effect
+    probability = sigmoid1 * sigmoid2
+    # Clamp to handle potential floating point inaccuracies near 0 and 1
+    return max(0.0, min(1.0, probability))
+
+
+def calculate_all_inter_stem_parameters(
+    mapping: Mapping2D3D,
+) -> List[InterStemParameters]:
+    """
+    Calculates InterStemParameters for all valid pairs of stems found in the mapping.
+
+    Args:
+        mapping: The Mapping2D3D object containing structure, 2D info, and mapping.
+
+    """
+    stems = mapping.bpseq.elements[0]  # Get stems from mapping
+    inter_stem_params = []
+    for i, j in itertools.combinations(range(len(stems)), 2):
+        stem1 = stems[i]
+        stem2 = stems[j]
+
+        # Ensure both stems have at least 2 base pairs for parameter calculation
+        if (stem1.strand5p.last - stem1.strand5p.first + 1) > 1 and (
+            stem2.strand5p.last - stem2.strand5p.first + 1
+        ) > 1:
+            params = mapping.calculate_inter_stem_parameters(stem1, stem2)
+            # Only add if calculation returned valid values
+            if params is not None:
+                inter_stem_params.append(
+                    InterStemParameters(
+                        stem1_idx=i,
+                        stem2_idx=j,
+                        type=params["type"],
+                        torsion=params["torsion_angle"],
+                        min_endpoint_distance=params["min_endpoint_distance"],
+                        torsion_angle_pdf=params["torsion_angle_pdf"],
+                        min_endpoint_distance_pdf=params["min_endpoint_distance_pdf"],
+                        coaxial_probability=params["coaxial_probability"],
+                    )
+                )
+    return inter_stem_params
+
+
 def torsion_angle(a1: Atom, a2: Atom, a3: Atom, a4: Atom) -> float:
-    v1 = a2.coordinates - a1.coordinates
-    v2 = a3.coordinates - a2.coordinates
-    v3 = a4.coordinates - a3.coordinates
-    t1: numpy.typing.NDArray[numpy.floating] = numpy.cross(v1, v2)
-    t2: numpy.typing.NDArray[numpy.floating] = numpy.cross(v2, v3)
-    t3: numpy.typing.NDArray[numpy.floating] = v1 * numpy.linalg.norm(v2)
-    return math.atan2(numpy.dot(t2, t3), numpy.dot(t1, t2))
+    """Calculates the torsion angle between four atoms."""
+    return calculate_torsion_angle_coords(
+        a1.coordinates, a2.coordinates, a3.coordinates, a4.coordinates
+    )
+
+
+def calculate_torsion_angle_coords(
+    p1: numpy.typing.NDArray[numpy.floating],
+    p2: numpy.typing.NDArray[numpy.floating],
+    p3: numpy.typing.NDArray[numpy.floating],
+    p4: numpy.typing.NDArray[numpy.floating],
+) -> float:
+    """Calculates the torsion angle between four points defined by their coordinates."""
+    v1 = p2 - p1
+    v2 = p3 - p2
+    v3 = p4 - p3
+
+    # Normalize vectors to avoid issues with very short vectors
+    v1_norm = v1 / numpy.linalg.norm(v1) if numpy.linalg.norm(v1) > 1e-6 else v1
+    v2_norm = v2 / numpy.linalg.norm(v2) if numpy.linalg.norm(v2) > 1e-6 else v2
+    v3_norm = v3 / numpy.linalg.norm(v3) if numpy.linalg.norm(v3) > 1e-6 else v3
+
+    t1 = numpy.cross(v1_norm, v2_norm)
+    t2 = numpy.cross(v2_norm, v3_norm)
+    t3 = v1_norm * numpy.linalg.norm(v2_norm)
+
+    # Ensure t1 and t2 are not zero vectors before calculating dot products
+    if numpy.linalg.norm(t1) < 1e-6 or numpy.linalg.norm(t2) < 1e-6:
+        return 0.0  # Or handle as undefined/error
+
+    dot_t1_t2 = numpy.dot(t1, t2)
+    dot_t2_t3 = numpy.dot(t2, t3)
+
+    # Clamp dot product arguments for acos/atan2 to avoid domain errors
+    dot_t1_t2 = numpy.clip(dot_t1_t2, -1.0, 1.0)
+
+    angle = math.atan2(dot_t2_t3, dot_t1_t2)
+    return angle if not math.isnan(angle) else 0.0
