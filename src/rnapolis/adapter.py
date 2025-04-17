@@ -430,6 +430,10 @@ def main():
         "--inter-stem-csv",
         help="(optional) path to output CSV file for inter-stem parameters",
     )
+    parser.add_argument(
+        "--stems-csv",
+        help="(optional) path to output CSV file for stem details",
+    )
     args = parser.parse_args()
 
     file = handle_input_file(args.input)

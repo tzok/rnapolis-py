@@ -716,6 +716,10 @@ def add_common_output_arguments(parser: argparse.ArgumentParser):
         "--inter-stem-csv",
         help="(optional) path to output CSV file for inter-stem parameters",
     )
+    parser.add_argument(
+        "--stems-csv",
+        help="(optional) path to output CSV file for stem details",
+    )
 
 
 def handle_output_arguments(
@@ -782,6 +786,69 @@ def handle_output_arguments(
             )
             # Optionally create an empty file with headers
             # pd.DataFrame(columns=['input_basename', 'stem1_idx', ...]).to_csv(args.inter_stem_csv, index=False)
+
+    if args.stems_csv:
+        if structure2d.stems:
+            stems_data = []
+            for i, stem in enumerate(structure2d.stems):
+                try:
+                    res5p_first = mapping.bpseq_index_to_residue_map.get(
+                        stem.strand5p.first
+                    )
+                    res5p_last = mapping.bpseq_index_to_residue_map.get(
+                        stem.strand5p.last
+                    )
+                    res3p_first = mapping.bpseq_index_to_residue_map.get(
+                        stem.strand3p.first
+                    )
+                    res3p_last = mapping.bpseq_index_to_residue_map.get(
+                        stem.strand3p.last
+                    )
+
+                    stems_data.append(
+                        {
+                            "stem_idx": i,
+                            "strand5p_first_nt_id": res5p_first.full_name
+                            if res5p_first
+                            else None,
+                            "strand5p_last_nt_id": res5p_last.full_name
+                            if res5p_last
+                            else None,
+                            "strand3p_first_nt_id": res3p_first.full_name
+                            if res3p_first
+                            else None,
+                            "strand3p_last_nt_id": res3p_last.full_name
+                            if res3p_last
+                            else None,
+                            "strand5p_sequence": stem.strand5p.sequence,
+                            "strand3p_sequence": stem.strand3p.sequence,
+                        }
+                    )
+                except KeyError as e:
+                    logging.warning(
+                        f"Could not find residue for stem {i} (index {e}), skipping stem details."
+                    )
+                    continue
+
+            if stems_data:
+                df_stems = pd.DataFrame(stems_data)
+                df_stems["input_basename"] = input_basename
+                # Reorder columns
+                stem_cols = ["input_basename", "stem_idx"] + [
+                    col
+                    for col in df_stems.columns
+                    if col not in ["input_basename", "stem_idx"]
+                ]
+                df_stems = df_stems[stem_cols]
+                df_stems.to_csv(args.stems_csv, index=False)
+            else:
+                logging.warning(
+                    f"No valid stem data generated for {input_basename}, CSV file '{args.stems_csv}' will be empty or not created."
+                )
+        else:
+            logging.warning(
+                f"No stems found for {input_basename}, CSV file '{args.stems_csv}' will be empty or not created."
+            )
 
 
 def main():
