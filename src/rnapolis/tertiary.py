@@ -992,10 +992,20 @@ def distance_pdf(
     Returns:
         The calculated probability density (between 0.0 and 1.0).
     """
-    # Sigmoid function increasing around lower_bound
-    sigmoid1 = 1.0 / (1.0 + math.exp(-steepness * (x - lower_bound)))
-    # Sigmoid function decreasing around upper_bound
-    sigmoid2 = 1.0 / (1.0 + math.exp(steepness * (x - upper_bound)))
+    # Define a maximum exponent value to prevent overflow
+    max_exponent = 700.0
+
+    # Calculate exponent for the first sigmoid (increasing)
+    exponent1 = -steepness * (x - lower_bound)
+    # Clamp the exponent if it's excessively large (which happens when x << lower_bound)
+    exponent1 = min(exponent1, max_exponent)
+    sigmoid1 = 1.0 / (1.0 + math.exp(exponent1))
+
+    # Calculate exponent for the second sigmoid (decreasing)
+    exponent2 = steepness * (x - upper_bound)
+    # Clamp the exponent if it's excessively large (which happens when x >> upper_bound)
+    exponent2 = min(exponent2, max_exponent)
+    sigmoid2 = 1.0 / (1.0 + math.exp(exponent2))
 
     # The product creates the plateau effect
     probability = sigmoid1 * sigmoid2
