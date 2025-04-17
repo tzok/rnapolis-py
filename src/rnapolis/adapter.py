@@ -6,7 +6,6 @@ from enum import Enum
 from typing import Dict, List, Optional, Tuple
 
 import orjson
-import pandas as pd
 
 from rnapolis.annotator import (
     add_common_output_arguments,

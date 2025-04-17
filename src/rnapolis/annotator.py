@@ -1,7 +1,6 @@
 #! /usr/bin/env python
 import argparse
 import csv
-import itertools
 import logging
 import math
 import os
@@ -23,7 +22,6 @@ from rnapolis.common import (
     BaseRibose,
     BPh,
     BpSeq,
-    InterStemParameters,  # Added import
     LeontisWesthof,
     Residue,
     Saenger,
@@ -45,8 +43,8 @@ from rnapolis.tertiary import (
     Mapping2D3D,  # Added import
     Residue3D,
     Structure3D,
-    torsion_angle,
     calculate_all_inter_stem_parameters,  # Import the new helper function
+    torsion_angle,
 )
 from rnapolis.util import handle_input_file
 
