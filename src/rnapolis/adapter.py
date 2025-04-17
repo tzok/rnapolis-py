@@ -424,14 +424,8 @@ def main():
         help="(optional) if set, the program will detect gaps and break the PDB chain into two or more strands",
     )
     add_common_output_arguments(parser)
-    # Add the inter-stem CSV argument specifically for adapter, as it doesn't use the common function fully
-    parser.add_argument(
-        "--inter-stem-csv",
-        help="(optional) path to output CSV file for inter-stem parameters",
-    )
-    parser.add_argument(
-        "--stems-csv",
-        help="(optional) path to output CSV file for stem details",
+    # The --inter-stem-csv and --stems-csv arguments are now added by add_common_output_arguments
+    args = parser.parse_args()
     )
     args = parser.parse_args()
 
