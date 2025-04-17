@@ -6,6 +6,7 @@ from enum import Enum
 from typing import Dict, List, Optional, Tuple
 
 import orjson
+import pandas as pd
 
 from rnapolis.annotator import (
     add_common_output_arguments,
@@ -424,6 +425,11 @@ def main():
         help="(optional) if set, the program will detect gaps and break the PDB chain into two or more strands",
     )
     add_common_output_arguments(parser)
+    # Add the inter-stem CSV argument specifically for adapter, as it doesn't use the common function fully
+    parser.add_argument(
+        "--inter-stem-csv",
+        help="(optional) path to output CSV file for inter-stem parameters",
+    )
     args = parser.parse_args()
 
     file = handle_input_file(args.input)
@@ -439,7 +445,7 @@ def main():
         args.all_dot_brackets,
     )
 
-    handle_output_arguments(args, structure2d, dot_brackets, mapping)
+    handle_output_arguments(args, structure2d, dot_brackets, mapping, args.input)
 
 
 if __name__ == "__main__":

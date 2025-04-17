@@ -11,6 +11,7 @@ from typing import Dict, List, Optional, Set, Tuple
 import numpy
 import numpy.typing
 import orjson
+import pandas as pd
 from ordered_set import OrderedSet
 from scipy.spatial import KDTree
 
@@ -711,6 +712,10 @@ def add_common_output_arguments(parser: argparse.ArgumentParser):
     parser.add_argument(
         "-p", "--pml", help="(optional) path to output PyMOL PML script for stems"
     )
+    parser.add_argument(
+        "--inter-stem-csv",
+        help="(optional) path to output CSV file for inter-stem parameters",
+    )
 
 
 def handle_output_arguments(
@@ -718,8 +723,10 @@ def handle_output_arguments(
     structure2d: Structure2D,
     dot_brackets: List[str],
     mapping: Mapping2D3D,
+    input_filename: str,
 ):
     """Handles writing output based on provided arguments."""
+    input_basename = os.path.basename(input_filename)
     if args.csv:
         write_csv(args.csv, structure2d)
 
@@ -744,6 +751,37 @@ def handle_output_arguments(
         pml_script = generate_pymol_script(mapping, structure2d.stems)
         with open(args.pml, "w") as f:
             f.write(pml_script)
+
+    if args.inter_stem_csv:
+        if structure2d.interStemParameters:
+            # Convert list of dataclasses to list of dicts
+            params_list = [
+                {
+                    "stem1_idx": p.stem1_idx,
+                    "stem2_idx": p.stem2_idx,
+                    "type": p.type,
+                    "torsion": p.torsion,
+                    "min_endpoint_distance": p.min_endpoint_distance,
+                    "torsion_angle_probability": p.torsion_angle_probability,
+                    "min_endpoint_distance_probability": p.min_endpoint_distance_probability,
+                    "coaxial_probability": p.coaxial_probability,
+                }
+                for p in structure2d.interStemParameters
+            ]
+            df = pd.DataFrame(params_list)
+            df["input_basename"] = input_basename
+            # Reorder columns to put input_basename first
+            cols = ["input_basename"] + [
+                col for col in df.columns if col != "input_basename"
+            ]
+            df = df[cols]
+            df.to_csv(args.inter_stem_csv, index=False, float_format="%.3f")
+        else:
+            logging.warning(
+                f"No inter-stem parameters calculated for {input_basename}, CSV file '{args.inter_stem_csv}' will be empty or not created."
+            )
+            # Optionally create an empty file with headers
+            # pd.DataFrame(columns=['input_basename', 'stem1_idx', ...]).to_csv(args.inter_stem_csv, index=False)
 
 
 def main():
@@ -773,7 +811,7 @@ def main():
         args.find_gaps,
     )
 
-    handle_output_arguments(args, structure2d, dot_brackets, mapping)
+    handle_output_arguments(args, structure2d, dot_brackets, mapping, args.input)
 
 
 if __name__ == "__main__":
