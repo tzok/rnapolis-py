@@ -801,6 +801,8 @@ class Mapping2D3D:
             - 'min_endpoint_distance': The minimum distance between the endpoints.
             - 'torsion_angle_probability': The probability density of the torsion angle
               under the von Mises distribution.
+            - 'min_endpoint_distance_probability': The probability density based on the
+              minimum endpoint distance using a Lennard-Jones-like function.
             Returns None if either stem has fewer than 2 base pairs or centroids
             cannot be calculated.
         """
@@ -877,11 +879,15 @@ class Mapping2D3D:
         # Calculate the probability density function (PDF) value for the torsion angle
         torsion_probability = vm_dist.pdf(torsion_radians)
 
+        # Calculate the probability density for the minimum endpoint distance
+        distance_probability = lennard_jones_like_pdf(min_endpoint_distance)
+
         return {
             "type": closest_pair_key,
             "torsion_angle": math.degrees(torsion_radians),
             "min_endpoint_distance": min_endpoint_distance,
             "torsion_angle_probability": torsion_probability,
+            "min_endpoint_distance_probability": distance_probability,
         }
 
     def __generate_dot_bracket_per_strand(self, dbn_structure: str) -> List[str]:
@@ -946,6 +952,34 @@ class Mapping2D3D:
         return "\n".join(["\n".join(r) for r in result])
 
 
+def lennard_jones_like_pdf(
+    x: float, min_dist: float = 2.0, best_dist: float = 4.5, steepness: float = 1.0
+) -> float:
+    """
+    Calculates a probability density based on distance, similar to Lennard-Jones potential.
+
+    The function returns 0 for distances less than min_dist, peaks at 1.0 for
+    best_dist, and decays for distances greater than best_dist, controlled by steepness.
+
+    Args:
+        x: The distance value.
+        min_dist: The minimum distance threshold (default: 2.0). Probability is 0 below this.
+        best_dist: The distance at which probability is maximum (1.0) (default: 4.5).
+        steepness: Controls the decay rate after best_dist (default: 1.0). Smaller values
+                   mean faster decay. With default values, probability is near zero at x=7.
+
+    Returns:
+        The calculated probability density (between 0.0 and 1.0).
+    """
+    if x < min_dist:
+        return 0.0
+    # Gaussian-like decay centered at best_dist
+    exponent = -(((x - best_dist) / steepness) ** 2)
+    # Clamp exponent to avoid potential underflow/overflow with extreme inputs
+    exponent = max(exponent, -700.0) # Corresponds to exp(-700) approx 1e-304
+    return math.exp(exponent)
+
+
 def calculate_all_inter_stem_parameters(
     mapping: Mapping2D3D,
 ) -> List[InterStemParameters]:
@@ -977,6 +1011,9 @@ def calculate_all_inter_stem_parameters(
                         torsion=params["torsion_angle"],
                         min_endpoint_distance=params["min_endpoint_distance"],
                         torsion_angle_probability=params["torsion_angle_probability"],
+                        min_endpoint_distance_probability=params[
+                            "min_endpoint_distance_probability"
+                        ],
                     )
                 )
     return inter_stem_params

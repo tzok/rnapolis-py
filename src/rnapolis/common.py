@@ -1067,6 +1067,9 @@ class InterStemParameters:
     torsion_angle_probability: Optional[
         float
     ]  # Probability density of the torsion angle
+    min_endpoint_distance_probability: Optional[
+        float
+    ]  # Probability density of the min endpoint distance
 
 
 @dataclass(frozen=True, order=True)
