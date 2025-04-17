@@ -779,7 +779,7 @@ def handle_output_arguments(
                 col for col in df.columns if col != "input_basename"
             ]
             df = df[cols]
-            df.to_csv(args.inter_stem_csv, index=False, float_format="%.3f")
+            df.to_csv(args.inter_stem_csv, index=False)
         else:
             logging.warning(
                 f"No inter-stem parameters calculated for {input_basename}, CSV file '{args.inter_stem_csv}' will be empty or not created."
