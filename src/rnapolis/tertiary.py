@@ -1,3 +1,4 @@
+import itertools
 import logging
 import math
 from collections import defaultdict
@@ -14,6 +15,7 @@ from rnapolis.common import (
     BpSeq,
     Entry,
     GlycosidicBond,
+    InterStemParameters,
     LeontisWesthof,
     Residue,
     ResidueAuth,

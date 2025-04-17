@@ -1,8 +1,6 @@
 #! /usr/bin/env python
 import argparse
-import itertools  # Added for combinations
 import logging
-import math
 import os
 from enum import Enum
 from typing import Dict, List, Optional, Tuple
@@ -20,7 +18,6 @@ from rnapolis.common import (
     BasePhosphate,
     BaseRibose,
     BPh,
-    InterStemParameters,  # Added import
     LeontisWesthof,
     OtherInteraction,
     Residue,
