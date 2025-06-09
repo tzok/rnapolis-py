@@ -432,3 +432,17 @@ def test_groupby_order(data_dir):
     residues = structure.residues  # Access residues to trigger any necessary processing
     assert str(residues[0]) == "A.G1"
     assert str(residues[1]) == "A.C2"
+
+
+def test_is_nucleotide(data_dir):
+    cif_path = os.path.join(data_dir, "1ehz-assembly-1.cif")
+    if not os.path.exists(cif_path):
+        pytest.skip(f"Test file not found: {cif_path}")
+
+    with open(cif_path, "r") as f:
+        df_atoms = parse_cif_atoms(f)
+    assert not df_atoms.empty, "Original CIF parsing failed"
+
+    structure = Structure(df_atoms)
+    residues = [residue for residue in structure.residues if residue.is_nucleotide]
+    assert len(residues) == 76
