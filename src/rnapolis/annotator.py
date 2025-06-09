@@ -579,7 +579,8 @@ def generate_pymol_script(mapping: Mapping2D3D, stems: List[Stem]) -> str:
 def write_json(path: str, structure2d: Structure2D):
     with open(path, "wb") as f:
         # Add OPT_SERIALIZE_NUMPY to handle numpy types like float64
-        f.write(orjson.dumps(structure2d, option=orjson.OPT_SERIALIZE_NUMPY))
+        # Add OPT_NON_STR_KEYS to preserve integer keys in dictionaries
+        f.write(orjson.dumps(structure2d, option=orjson.OPT_SERIALIZE_NUMPY | orjson.OPT_NON_STR_KEYS))
 
 
 def write_csv(path: str, structure2d: Structure2D):
