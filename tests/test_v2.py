@@ -415,3 +415,20 @@ def test_cif_pdb_cif_roundtrip(data_dir):
     # is preserved through the PDB intermediate representation, assuming
     # the PDB format could represent the original structure or its fitted version.
     compare_structures(df_to_write_pdb, df_final_cif)
+
+
+def test_groupby_order(data_dir):
+    cif_path = os.path.join(data_dir, "1ehz-assembly-1.cif")
+    if not os.path.exists(cif_path):
+        pytest.skip(f"Test file not found: {cif_path}")
+
+    # 1. Parse Original CIF
+    with open(cif_path, "r") as f:
+        df_atoms = parse_cif_atoms(f)
+    assert not df_atoms.empty, "Original CIF parsing failed"
+
+    # 2. Group by chain_id and residue_number
+    structure = Structure(df_atoms)  # Ensure Structure can be created
+    residues = structure.residues  # Access residues to trigger any necessary processing
+    assert str(residues[0]) == "A.G1"
+    assert str(residues[1]) == "A.C2"
