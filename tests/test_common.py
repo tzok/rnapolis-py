@@ -90,11 +90,11 @@ def test_rnapdbee_adapters_api_compliance_other(obj):
 @settings(max_examples=10)
 def test_rnapdbee_adapters_api_compliance_structure2d(obj):
     assert obj.__dict__.keys() >= {
-        "basePairs",
+        "base_pairs",
         "stackings",
-        "baseRiboseInteractions",
-        "basePhosphateInteractions",
-        "otherInteractions",
+        "base_ribose_interactions",
+        "base_phosphate_interactions",
+        "other_interactions",
     }
 
 
@@ -134,7 +134,7 @@ def test_pseudoknot_order_assignment():
 
 def test_multi_strand_dot_bracket():
     input = ">strand_A\nAGCGCCUGGACUUAAAGCCAU\n..((((.((((((((((((..\n>strand_B\nGGCUUUAAGUUGACGAGGGCAGGGUUUAUCGAGACAUCGGCGGGUGCCCUGCGGUCUUCCUGCGACCGUUAGAGGACUGGUAAAACCACAGGCGACUGUGGCAUAGAGCAGUCCGGGCAGGAA\n)))))))))))..(((...[[[[[[...)))......)))))...]]]]]][[[[[.((((((]]]]].....((((((......((((((....)))))).......))))))..))))))."
-    dot_bracket = MultiStrandDotBracket.from_string(input)
+    dot_bracket = MultiStrandDotBracket.from_multiline_string(input)
     assert len(dot_bracket.strands) == 2
     assert dot_bracket.strands[0].sequence == "AGCGCCUGGACUUAAAGCCAU"
     assert dot_bracket.strands[1].sequence == (
@@ -152,7 +152,7 @@ def test_conflicted_base_pairs():
 
     base_pairs = []
 
-    for obj in data.get("basePairs", []):
+    for obj in data.get("base_pairs", []):
         nt1 = Residue(
             None,
             ResidueAuth(

@@ -1,5 +1,6 @@
 #! /usr/bin/env python
 import argparse
+import copy
 import csv
 import logging
 import math
@@ -43,7 +44,6 @@ from rnapolis.tertiary import (
     Mapping2D3D,  # Added import
     Residue3D,
     Structure3D,
-    calculate_all_inter_stem_parameters,  # Import the new helper function
     torsion_angle,
 )
 from rnapolis.util import handle_input_file
@@ -485,41 +485,6 @@ def extract_base_interactions(
     return BaseInteractions(base_pairs, stackings, base_ribose, base_phosphate, [])
 
 
-def extract_secondary_structure(
-    tertiary_structure: Structure3D,
-    model: Optional[int] = None,
-    find_gaps: bool = False,
-    all_dot_brackets: bool = False,
-) -> Tuple[Structure2D, List[str]]:
-    base_interactions = extract_base_interactions(tertiary_structure, model)
-    mapping = Mapping2D3D(
-        tertiary_structure,
-        base_interactions.basePairs,
-        base_interactions.stackings,
-        find_gaps,
-    )
-    stems, single_strands, hairpins, loops = mapping.bpseq.elements
-
-    # Calculate inter-stem parameters using the helper function
-    inter_stem_params = calculate_all_inter_stem_parameters(mapping)
-
-    structure2d = Structure2D(
-        base_interactions,
-        str(mapping.bpseq),
-        mapping.dot_bracket,
-        mapping.extended_dot_bracket,
-        stems,
-        single_strands,
-        hairpins,
-        loops,
-        inter_stem_params,  # Added inter-stem parameters
-    )
-    if all_dot_brackets:
-        return structure2d, mapping.all_dot_brackets
-    else:
-        return structure2d, [structure2d.dotBracket]
-
-
 def generate_pymol_script(mapping: Mapping2D3D, stems: List[Stem]) -> str:
     """Generates a PyMOL script to draw stems as cylinders."""
     pymol_commands = []
@@ -613,16 +578,26 @@ def generate_pymol_script(mapping: Mapping2D3D, stems: List[Stem]) -> str:
 
 
 def write_json(path: str, structure2d: Structure2D):
+    processed = copy.deepcopy(structure2d)
+    processed.bpseq_index = {
+        k: Residue(v.label, v.auth) for k, v in structure2d.bpseq_index.items()
+    }
+
     with open(path, "wb") as f:
         # Add OPT_SERIALIZE_NUMPY to handle numpy types like float64
-        f.write(orjson.dumps(structure2d, option=orjson.OPT_SERIALIZE_NUMPY))
+        # Add OPT_NON_STR_KEYS to preserve integer keys in dictionaries
+        f.write(
+            orjson.dumps(
+                processed, option=orjson.OPT_SERIALIZE_NUMPY | orjson.OPT_NON_STR_KEYS
+            )
+        )
 
 
 def write_csv(path: str, structure2d: Structure2D):
     with open(path, "w") as f:
         writer = csv.writer(f)
         writer.writerow(["nt1", "nt2", "type", "classification-1", "classification-2"])
-        for base_pair in structure2d.baseInteractions.basePairs:
+        for base_pair in structure2d.base_pairs:
             writer.writerow(
                 [
                     base_pair.nt1.full_name,
@@ -636,7 +611,7 @@ def write_csv(path: str, structure2d: Structure2D):
                     ),
                 ]
             )
-        for stacking in structure2d.baseInteractions.stackings:
+        for stacking in structure2d.stackings:
             writer.writerow(
                 [
                     stacking.nt1.full_name,
@@ -646,7 +621,7 @@ def write_csv(path: str, structure2d: Structure2D):
                     "",
                 ]
             )
-        for base_phosphate in structure2d.baseInteractions.basePhosphateInteractions:
+        for base_phosphate in structure2d.base_phosphate_interactions:
             writer.writerow(
                 [
                     base_phosphate.nt1.full_name,
@@ -656,7 +631,7 @@ def write_csv(path: str, structure2d: Structure2D):
                     "",
                 ]
             )
-        for base_ribose in structure2d.baseInteractions.baseRiboseInteractions:
+        for base_ribose in structure2d.base_ribose_interactions:
             writer.writerow(
                 [
                     base_ribose.nt1.full_name,
@@ -666,7 +641,7 @@ def write_csv(path: str, structure2d: Structure2D):
                     "",
                 ]
             )
-        for other in structure2d.baseInteractions.otherInteractions:
+        for other in structure2d.other_interactions:
             writer.writerow(
                 [
                     other.nt1.full_name,
@@ -737,12 +712,12 @@ def handle_output_arguments(
         write_bpseq(args.bpseq, structure2d.bpseq)
 
     if args.extended:
-        print(structure2d.extendedDotBracket)
+        print(structure2d.extended_dot_bracket)
     elif args.all_dot_brackets:
         for dot_bracket in dot_brackets:
             print(dot_bracket)
     else:
-        print(structure2d.dotBracket)
+        print(structure2d.dot_bracket)
 
     if args.dot:
         print(BpSeq.from_string(structure2d.bpseq).graphviz)
@@ -753,7 +728,7 @@ def handle_output_arguments(
             f.write(pml_script)
 
     if args.inter_stem_csv:
-        if structure2d.interStemParameters:
+        if structure2d.inter_stem_parameters:
             # Convert list of dataclasses to list of dicts
             params_list = [
                 {
@@ -862,16 +837,9 @@ def main():
 
     file = handle_input_file(args.input)
     structure3d = read_3d_structure(file, None)
-    structure2d, dot_brackets = extract_secondary_structure(
-        structure3d, None, args.find_gaps, args.all_dot_brackets
-    )
-
-    # Need the mapping object for PML generation
-    mapping = Mapping2D3D(
-        structure3d,
-        structure2d.baseInteractions.basePairs,
-        structure2d.baseInteractions.stackings,
-        args.find_gaps,
+    base_interactions = extract_base_interactions(structure3d)
+    structure2d, dot_brackets, mapping = structure3d.extract_secondary_structure(
+        base_interactions, args.find_gaps, args.all_dot_brackets
     )
 
     handle_output_arguments(args, structure2d, dot_brackets, mapping, args.input)

@@ -1021,7 +1021,13 @@ class MultiStrandDotBracket(DotBracket):
     strands: List[Strand]
 
     @staticmethod
-    def from_string(input: str):
+    def from_string(sequence: str, structure: str):
+        # Provide compatibility with DotBracket.from_string
+        strand = Strand(1, len(sequence), sequence, structure)
+        return MultiStrandDotBracket(sequence, structure, [strand])
+
+    @staticmethod
+    def from_multiline_string(input: str):
         strands = []
         first = 1
 
@@ -1045,16 +1051,16 @@ class MultiStrandDotBracket(DotBracket):
     @staticmethod
     def from_file(path: str):
         with open(path) as f:
-            return MultiStrandDotBracket.from_string(f.read())
+            return MultiStrandDotBracket.from_multiline_string(f.read())
 
 
 @dataclass(frozen=True, order=True)
 class BaseInteractions:
-    basePairs: List[BasePair]
+    base_pairs: List[BasePair]
     stackings: List[Stacking]
-    baseRiboseInteractions: List[BaseRibose]
-    basePhosphateInteractions: List[BasePhosphate]
-    otherInteractions: List[OtherInteraction]
+    base_ribose_interactions: List[BaseRibose]
+    base_phosphate_interactions: List[BasePhosphate]
+    other_interactions: List[OtherInteraction]
 
 
 @dataclass(frozen=True, order=True)
@@ -1069,14 +1075,19 @@ class InterStemParameters:
     coaxial_probability: Optional[float]  # Probability of stems being coaxial (0-1)
 
 
-@dataclass(frozen=True, order=True)
+@dataclass
 class Structure2D:
-    baseInteractions: BaseInteractions
-    bpseq: str
-    dotBracket: str
-    extendedDotBracket: str
+    base_pairs: List[BasePair]
+    stackings: List[Stacking]
+    base_ribose_interactions: List[BaseRibose]
+    base_phosphate_interactions: List[BasePhosphate]
+    other_interactions: List[OtherInteraction]
+    bpseq: BpSeq
+    bpseq_index: Dict[int, Residue]
+    dot_bracket: MultiStrandDotBracket
+    extended_dot_bracket: str
     stems: List[Stem]
-    singleStrands: List[SingleStrand]
+    single_strands: List[SingleStrand]
     hairpins: List[Hairpin]
     loops: List[Loop]
-    interStemParameters: List[InterStemParameters]
+    inter_stem_parameters: List[InterStemParameters]

@@ -1,6 +1,6 @@
 from collections import Counter
 
-from rnapolis.annotator import extract_base_interactions, extract_secondary_structure
+from rnapolis.annotator import extract_base_interactions
 from rnapolis.parser import read_3d_structure
 
 
@@ -13,11 +13,11 @@ def test_1ehz():
     base_interactions = extract_base_interactions(structure3d, 1)
 
     interactions = [
-        base_interactions.basePairs,
+        base_interactions.base_pairs,
         base_interactions.stackings,
-        base_interactions.baseRiboseInteractions,
-        base_interactions.basePhosphateInteractions,
-        base_interactions.otherInteractions,
+        base_interactions.base_ribose_interactions,
+        base_interactions.base_phosphate_interactions,
+        base_interactions.other_interactions,
     ]
     labels = ["base pairs", "stackings", "base-ribose", "base-phosphate", "other"]
     for i in range(len(interactions)):
@@ -44,7 +44,8 @@ def test_1ehz():
 def test_8btk():
     with open("tests/8btk_B7.cif") as f:
         structure3d = read_3d_structure(f, 1)
-    assert extract_secondary_structure(structure3d, 1) is not None
+    base_interactions = extract_base_interactions(structure3d, 1)
+    assert structure3d.extract_secondary_structure(base_interactions) is not None
 
 
 def test_488d():

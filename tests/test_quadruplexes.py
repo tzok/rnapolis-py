@@ -10,7 +10,7 @@ def test_2HY9():
         structure3d = read_3d_structure(f, 1)
     base_interactions = extract_base_interactions(structure3d)
     mapping = Mapping2D3D(
-        structure3d, base_interactions.basePairs, base_interactions.stackings, True
+        structure3d, base_interactions.base_pairs, base_interactions.stackings, True
     )
 
     # tract 1
@@ -63,7 +63,7 @@ def test_6RS3():
         structure3d = read_3d_structure(f, 1)
     base_interactions = extract_base_interactions(structure3d)
     mapping = Mapping2D3D(
-        structure3d, base_interactions.basePairs, base_interactions.stackings, True
+        structure3d, base_interactions.base_pairs, base_interactions.stackings, True
     )
 
     g1 = structure3d.find_residue(ResidueLabel("A", 1, "DG"), None)
@@ -108,7 +108,7 @@ def test_1JJP():
         structure3d = read_3d_structure(f, 1)
     base_interactions = extract_base_interactions(structure3d)
     mapping = Mapping2D3D(
-        structure3d, base_interactions.basePairs, base_interactions.stackings, True
+        structure3d, base_interactions.base_pairs, base_interactions.stackings, True
     )
 
     ag1 = structure3d.find_residue(ResidueLabel("A", 1, "DG"), None)
@@ -182,7 +182,7 @@ def test_6FC9():
         structure3d = read_3d_structure(f, 1)
     base_interactions = extract_base_interactions(structure3d)
     mapping = Mapping2D3D(
-        structure3d, base_interactions.basePairs, base_interactions.stackings, True
+        structure3d, base_interactions.base_pairs, base_interactions.stackings, True
     )
 
     g1 = structure3d.find_residue(ResidueLabel("A", 1, "DG"), None)
@@ -258,7 +258,7 @@ def test_UGG_md():
         structure3d = read_3d_structure(f, 1)
     base_interactions = extract_base_interactions(structure3d)
     mapping = Mapping2D3D(
-        structure3d, base_interactions.basePairs, base_interactions.stackings, True
+        structure3d, base_interactions.base_pairs, base_interactions.stackings, True
     )
 
     u1 = structure3d.find_residue(None, ResidueAuth(" ", 1, None, "U5"))

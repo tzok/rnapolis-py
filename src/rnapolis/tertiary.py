@@ -11,6 +11,7 @@ import numpy.typing
 from scipy.stats import vonmises
 
 from rnapolis.common import (
+    BaseInteractions,
     BasePair,
     BpSeq,
     Entry,
@@ -24,6 +25,7 @@ from rnapolis.common import (
     Stacking,
     Stem,
     Strand,
+    Structure2D,
 )
 
 BASE_ATOMS = {
@@ -456,6 +458,50 @@ class Structure3D:
             return self.residue_map.get(auth)
         return None
 
+    def extract_secondary_structure(
+        self, base_interactions: BaseInteractions, find_gaps: bool = False
+    ) -> Tuple[Structure2D, "Mapping2D3D"]:
+        """
+        Create a secondary structure representation.
+
+        Args:
+            base_interactions: Interactions
+            find_gaps: Whether to detect gaps in the structure
+            all_dot_brackets: Whether to return all possible dot-bracket notations
+
+        Returns:
+            A tuple containing the Structure2D object, a list of dot-bracket notations,
+            and the Mapping2D3D object.
+        """
+        mapping = Mapping2D3D(
+            self,
+            base_interactions.base_pairs,
+            base_interactions.stackings,
+            find_gaps,
+        )
+        stems, single_strands, hairpins, loops = mapping.bpseq.elements
+
+        # Calculate inter-stem parameters using the helper function
+        inter_stem_params = calculate_all_inter_stem_parameters(mapping)
+
+        structure2d = Structure2D(
+            base_interactions.base_pairs,
+            base_interactions.stackings,
+            base_interactions.base_ribose_interactions,
+            base_interactions.base_phosphate_interactions,
+            base_interactions.other_interactions,
+            mapping.bpseq,
+            mapping.bpseq_index_to_residue_map,
+            mapping.dot_bracket,
+            mapping.extended_dot_bracket,
+            stems,
+            single_strands,
+            hairpins,
+            loops,
+            inter_stem_params,
+        )
+        return structure2d, mapping
+
 
 @dataclass
 class Mapping2D3D:
@@ -559,46 +605,6 @@ class Mapping2D3D:
 
     @cached_property
     def bpseq(self) -> BpSeq:
-        def pair_scoring_function(pair: BasePair3D) -> int:
-            if pair.saenger is not None:
-                if pair.saenger in (Saenger.XIX, Saenger.XX):
-                    return 0, pair.nt1, pair.nt2
-                else:
-                    return 1, pair.nt1, pair.nt2
-
-            sequence = "".join(
-                sorted(
-                    [
-                        pair.nt1_3d.one_letter_name.upper(),
-                        pair.nt2_3d.one_letter_name.upper(),
-                    ]
-                )
-            )
-            if sequence in ("AU", "AT", "CG"):
-                return 0, pair.nt1, pair.nt2
-            return 1, pair.nt1, pair.nt2
-
-        canonical = [
-            base_pair
-            for base_pair in self.base_pairs
-            if base_pair.is_canonical and base_pair.nt1 < base_pair.nt2
-        ]
-
-        while True:
-            matches = defaultdict(set)
-
-            for base_pair in canonical:
-                matches[base_pair.nt1_3d].add(base_pair)
-                matches[base_pair.nt2_3d].add(base_pair)
-
-            for pairs in matches.values():
-                if len(pairs) > 1:
-                    pairs = sorted(pairs, key=pair_scoring_function)
-                    canonical.remove(pairs[-1])
-                    break
-            else:
-                break
-
         return self._generated_bpseq_data[0]
 
     @cached_property
@@ -613,9 +619,9 @@ class Mapping2D3D:
         def pair_scoring_function(pair: BasePair3D) -> int:
             if pair.saenger is not None:
                 if pair.saenger in (Saenger.XIX, Saenger.XX):
-                    return 0, pair.nt1, pair.nt2
+                    return 0
                 else:
-                    return 1, pair.nt1, pair.nt2
+                    return 1
 
             sequence = "".join(
                 sorted(
@@ -626,8 +632,8 @@ class Mapping2D3D:
                 )
             )
             if sequence in ("AU", "AT", "CG"):
-                return 0, pair.nt1, pair.nt2
-            return 1, pair.nt1, pair.nt2
+                return 0
+            return 1
 
         canonical = [
             base_pair
@@ -636,11 +642,11 @@ class Mapping2D3D:
         ]
 
         while True:
-            matches = defaultdict(set)
+            matches = defaultdict(list)
 
             for base_pair in canonical:
-                matches[base_pair.nt1_3d].add(base_pair)
-                matches[base_pair.nt2_3d].add(base_pair)
+                matches[base_pair.nt1_3d].append(base_pair)
+                matches[base_pair.nt2_3d].append(base_pair)
 
             for pairs in matches.values():
                 if len(pairs) > 1:

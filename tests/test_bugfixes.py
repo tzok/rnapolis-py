@@ -10,7 +10,7 @@ def test_1E7K():
         structure3d = read_3d_structure(f, 1)
     base_interaction = extract_base_interactions(structure3d)
     mapping = Mapping2D3D(
-        structure3d, base_interaction.basePairs, base_interaction.stackings, True
+        structure3d, base_interaction.base_pairs, base_interaction.stackings, True
     )
     assert len(mapping.strands_sequences) == 1
 
@@ -28,7 +28,7 @@ def test_1DFU():
 
     base_interactions = extract_base_interactions(structure3d)
     mapping = Mapping2D3D(
-        structure3d, base_interactions.basePairs, base_interactions.stackings, True
+        structure3d, base_interactions.base_pairs, base_interactions.stackings, True
     )
     assert b2g not in mapping.base_pair_graph[b1u]
     assert b1u not in mapping.base_pair_graph[b2g]
@@ -40,7 +40,7 @@ def test_4WTI():
         structure3d = read_3d_structure(f, 1)
     base_interactions = extract_base_interactions(structure3d)
     mapping = Mapping2D3D(
-        structure3d, base_interactions.basePairs, base_interactions.stackings, True
+        structure3d, base_interactions.base_pairs, base_interactions.stackings, True
     )
     assert mapping.dot_bracket == ">strand_T\nCGG\n.((\n>strand_P\nCC\n))"
 
@@ -51,7 +51,7 @@ def test_1HMH():
         structure3d = read_3d_structure(f, 1)
     base_interactions = extract_base_interactions(structure3d)
     mapping = Mapping2D3D(
-        structure3d, base_interactions.basePairs, base_interactions.stackings, True
+        structure3d, base_interactions.base_pairs, base_interactions.stackings, True
     )
     assert mapping.dot_bracket == ">strand_E\nUG\n.."
 
@@ -80,7 +80,7 @@ def test_6g90():
 
     # without gaps
     mapping = Mapping2D3D(
-        structure3d, base_interactions.basePairs, base_interactions.stackings, False
+        structure3d, base_interactions.base_pairs, base_interactions.stackings, False
     )
     assert (
         mapping.bpseq.sequence
@@ -90,7 +90,7 @@ def test_6g90():
 
     # with gaps
     mapping = Mapping2D3D(
-        structure3d, base_interactions.basePairs, base_interactions.stackings, True
+        structure3d, base_interactions.base_pairs, base_interactions.stackings, True
     )
     assert (
         mapping.bpseq.sequence
