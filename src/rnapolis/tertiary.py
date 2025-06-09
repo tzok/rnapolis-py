@@ -559,46 +559,6 @@ class Mapping2D3D:
 
     @cached_property
     def bpseq(self) -> BpSeq:
-        def pair_scoring_function(pair: BasePair3D) -> int:
-            if pair.saenger is not None:
-                if pair.saenger in (Saenger.XIX, Saenger.XX):
-                    return 0, pair.nt1, pair.nt2
-                else:
-                    return 1, pair.nt1, pair.nt2
-
-            sequence = "".join(
-                sorted(
-                    [
-                        pair.nt1_3d.one_letter_name.upper(),
-                        pair.nt2_3d.one_letter_name.upper(),
-                    ]
-                )
-            )
-            if sequence in ("AU", "AT", "CG"):
-                return 0, pair.nt1, pair.nt2
-            return 1, pair.nt1, pair.nt2
-
-        canonical = [
-            base_pair
-            for base_pair in self.base_pairs
-            if base_pair.is_canonical and base_pair.nt1 < base_pair.nt2
-        ]
-
-        while True:
-            matches = defaultdict(set)
-
-            for base_pair in canonical:
-                matches[base_pair.nt1_3d].add(base_pair)
-                matches[base_pair.nt2_3d].add(base_pair)
-
-            for pairs in matches.values():
-                if len(pairs) > 1:
-                    pairs = sorted(pairs, key=pair_scoring_function)
-                    canonical.remove(pairs[-1])
-                    break
-            else:
-                break
-
         return self._generated_bpseq_data[0]
 
     @cached_property
