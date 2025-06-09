@@ -1075,9 +1075,8 @@ class InterStemParameters:
     coaxial_probability: Optional[float]  # Probability of stems being coaxial (0-1)
 
 
-@dataclass(frozen=True, order=True)
+@dataclass
 class Structure2D:
-    nucleotides: List[Residue]
     base_pairs: List[BasePair]
     stackings: List[Stacking]
     base_ribose_interactions: List[BaseRibose]

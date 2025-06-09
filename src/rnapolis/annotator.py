@@ -1,5 +1,6 @@
 #! /usr/bin/env python
 import argparse
+import copy
 import csv
 import logging
 import math
@@ -577,12 +578,17 @@ def generate_pymol_script(mapping: Mapping2D3D, stems: List[Stem]) -> str:
 
 
 def write_json(path: str, structure2d: Structure2D):
+    processed = copy.deepcopy(structure2d)
+    processed.bpseq_index = {
+        k: Residue(v.label, v.auth) for k, v in structure2d.bpseq_index.items()
+    }
+
     with open(path, "wb") as f:
         # Add OPT_SERIALIZE_NUMPY to handle numpy types like float64
         # Add OPT_NON_STR_KEYS to preserve integer keys in dictionaries
         f.write(
             orjson.dumps(
-                structure2d, option=orjson.OPT_SERIALIZE_NUMPY | orjson.OPT_NON_STR_KEYS
+                processed, option=orjson.OPT_SERIALIZE_NUMPY | orjson.OPT_NON_STR_KEYS
             )
         )
 

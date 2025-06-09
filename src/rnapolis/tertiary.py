@@ -484,10 +484,7 @@ class Structure3D:
         # Calculate inter-stem parameters using the helper function
         inter_stem_params = calculate_all_inter_stem_parameters(mapping)
 
-        nucleotides = list(filter(lambda r: r.is_nucleotide, self.residues))
-
         structure2d = Structure2D(
-            nucleotides,
             base_interactions.base_pairs,
             base_interactions.stackings,
             base_interactions.base_ribose_interactions,
