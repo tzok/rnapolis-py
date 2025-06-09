@@ -862,16 +862,9 @@ def main():
 
     file = handle_input_file(args.input)
     structure3d = read_3d_structure(file, None)
-    structure2d, dot_brackets = extract_secondary_structure(
-        structure3d, None, args.find_gaps, args.all_dot_brackets
-    )
-
-    # Need the mapping object for PML generation
-    mapping = Mapping2D3D(
-        structure3d,
-        structure2d.baseInteractions.basePairs,
-        structure2d.baseInteractions.stackings,
-        args.find_gaps,
+    base_interactions = extract_base_interactions(structure3d)
+    structure2d, dot_brackets, mapping = structure3d.extract_secondary_structure(
+        base_interactions, args.find_gaps, args.all_dot_brackets
     )
 
     handle_output_arguments(args, structure2d, dot_brackets, mapping, args.input)

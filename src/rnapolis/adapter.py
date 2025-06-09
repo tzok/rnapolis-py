@@ -29,8 +29,7 @@ from rnapolis.common import (
 from rnapolis.parser import read_3d_structure
 from rnapolis.tertiary import (
     Mapping2D3D,
-    Structure3D,
-    calculate_all_inter_stem_parameters,  # Import the new helper function
+    Structure3D,  # Import the new helper function
 )
 from rnapolis.util import handle_input_file
 
@@ -288,7 +287,7 @@ def parse_fr3d_output(file_path: str) -> BaseInteractions:
         BaseInteractions object containing the interactions found by FR3D
     """
     # Initialize the interaction data dictionary
-    interactions_data = {
+    interactions_data: Dict[str, list] = {
         "base_pairs": [],
         "stackings": [],
         "base_ribose_interactions": [],
@@ -320,7 +319,6 @@ def process_external_tool_output(
     structure3d: Structure3D,
     external_file_path: str,
     tool: ExternalTool,
-    model: Optional[int] = None,
     find_gaps: bool = False,
     all_dot_brackets: bool = False,
 ) -> Tuple[Structure2D, List[str], Mapping2D3D]:  # Added Mapping2D3D to return tuple
@@ -346,61 +344,9 @@ def process_external_tool_output(
     base_interactions = parse_external_output(external_file_path, tool, structure3d)
 
     # Extract secondary structure using the external tool's interactions
-    return extract_secondary_structure_from_external(
-        structure3d, base_interactions, model, find_gaps, all_dot_brackets
+    return structure3d.extract_secondary_structure(
+        base_interactions, find_gaps, all_dot_brackets
     )
-
-
-def extract_secondary_structure_from_external(
-    tertiary_structure: Structure3D,
-    base_interactions: BaseInteractions,
-    model: Optional[int] = None,
-    find_gaps: bool = False,
-    all_dot_brackets: bool = False,
-) -> Tuple[Structure2D, List[str], Mapping2D3D]:  # Added Mapping2D3D to return tuple
-    """
-    Create a secondary structure representation using interactions from an external tool.
-
-    Args:
-        tertiary_structure: The 3D structure parsed from PDB/mmCIF
-        base_interactions: Interactions parsed from external tool output
-        model: Model number to use (if None, use all models)
-        find_gaps: Whether to detect gaps in the structure
-        all_dot_brackets: Whether to return all possible dot-bracket notations
-
-    Returns:
-        A tuple containing the Structure2D object, a list of dot-bracket notations,
-        and the Mapping2D3D object.
-    """
-    mapping = Mapping2D3D(
-        tertiary_structure,
-        base_interactions.basePairs,
-        base_interactions.stackings,
-        find_gaps,
-    )
-    stems, single_strands, hairpins, loops = mapping.bpseq.elements
-
-    # Calculate inter-stem parameters using the helper function
-    inter_stem_params = calculate_all_inter_stem_parameters(mapping)
-
-    structure2d = Structure2D(
-        base_interactions,
-        str(mapping.bpseq),
-        mapping.dot_bracket,
-        mapping.extended_dot_bracket,
-        stems,
-        single_strands,
-        hairpins,
-        loops,
-        inter_stem_params,  # Added inter-stem parameters
-    )
-    if all_dot_brackets:
-        return structure2d, mapping.all_dot_brackets, mapping  # Return mapping
-    else:
-        return structure2d, [structure2d.dotBracket], mapping  # Return mapping
-
-
-# Removed duplicate functions - now imported from annotator
 
 
 def main():
@@ -435,7 +381,6 @@ def main():
         structure3d,
         args.external,
         ExternalTool(args.tool),
-        None,
         args.find_gaps,
         args.all_dot_brackets,
     )

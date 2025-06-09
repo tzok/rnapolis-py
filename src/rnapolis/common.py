@@ -1021,7 +1021,13 @@ class MultiStrandDotBracket(DotBracket):
     strands: List[Strand]
 
     @staticmethod
-    def from_string(input: str):
+    def from_string(sequence: str, structure: str):
+        # Provide compatibility with DotBracket.from_string
+        strand = Strand(1, len(sequence), sequence, structure)
+        return MultiStrandDotBracket(sequence, structure, [strand])
+
+    @staticmethod
+    def from_multiline_string(input: str):
         strands = []
         first = 1
 
@@ -1045,7 +1051,7 @@ class MultiStrandDotBracket(DotBracket):
     @staticmethod
     def from_file(path: str):
         with open(path) as f:
-            return MultiStrandDotBracket.from_string(f.read())
+            return MultiStrandDotBracket.from_multiline_string(f.read())
 
 
 @dataclass(frozen=True, order=True)

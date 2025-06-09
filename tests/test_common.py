@@ -134,7 +134,7 @@ def test_pseudoknot_order_assignment():
 
 def test_multi_strand_dot_bracket():
     input = ">strand_A\nAGCGCCUGGACUUAAAGCCAU\n..((((.((((((((((((..\n>strand_B\nGGCUUUAAGUUGACGAGGGCAGGGUUUAUCGAGACAUCGGCGGGUGCCCUGCGGUCUUCCUGCGACCGUUAGAGGACUGGUAAAACCACAGGCGACUGUGGCAUAGAGCAGUCCGGGCAGGAA\n)))))))))))..(((...[[[[[[...)))......)))))...]]]]]][[[[[.((((((]]]]].....((((((......((((((....)))))).......))))))..))))))."
-    dot_bracket = MultiStrandDotBracket.from_string(input)
+    dot_bracket = MultiStrandDotBracket.from_multiline_string(input)
     assert len(dot_bracket.strands) == 2
     assert dot_bracket.strands[0].sequence == "AGCGCCUGGACUUAAAGCCAU"
     assert dot_bracket.strands[1].sequence == (

@@ -11,12 +11,14 @@ import numpy.typing
 from scipy.stats import vonmises
 
 from rnapolis.common import (
+    BaseInteractions,
     BasePair,
     BpSeq,
     Entry,
     GlycosidicBond,
     InterStemParameters,
     LeontisWesthof,
+    MultiStrandDotBracket,
     Residue,
     ResidueAuth,
     ResidueLabel,
@@ -24,6 +26,7 @@ from rnapolis.common import (
     Stacking,
     Stem,
     Strand,
+    Structure2D,
 )
 
 BASE_ATOMS = {
@@ -456,6 +459,51 @@ class Structure3D:
             return self.residue_map.get(auth)
         return None
 
+    def extract_secondary_structure(
+        self,
+        base_interactions: BaseInteractions,
+        find_gaps: bool = False,
+        all_dot_brackets: bool = False,
+    ) -> Tuple[Structure2D, List[MultiStrandDotBracket], "Mapping2D3D"]:
+        """
+        Create a secondary structure representation.
+
+        Args:
+            base_interactions: Interactions
+            find_gaps: Whether to detect gaps in the structure
+            all_dot_brackets: Whether to return all possible dot-bracket notations
+
+        Returns:
+            A tuple containing the Structure2D object, a list of dot-bracket notations,
+            and the Mapping2D3D object.
+        """
+        mapping = Mapping2D3D(
+            self,
+            base_interactions.basePairs,
+            base_interactions.stackings,
+            find_gaps,
+        )
+        stems, single_strands, hairpins, loops = mapping.bpseq.elements
+
+        # Calculate inter-stem parameters using the helper function
+        inter_stem_params = calculate_all_inter_stem_parameters(mapping)
+
+        structure2d = Structure2D(
+            base_interactions,
+            str(mapping.bpseq),
+            mapping.dot_bracket,
+            mapping.extended_dot_bracket,
+            stems,
+            single_strands,
+            hairpins,
+            loops,
+            inter_stem_params,  # Added inter-stem parameters
+        )
+        if all_dot_brackets:
+            return structure2d, mapping.all_dot_brackets, mapping  # Return mapping
+        else:
+            return structure2d, [structure2d.dotBracket], mapping  # Return mapping
+
 
 @dataclass
 class Mapping2D3D:
@@ -596,11 +644,11 @@ class Mapping2D3D:
         ]
 
         while True:
-            matches = defaultdict(set)
+            matches = defaultdict(list)
 
             for base_pair in canonical:
-                matches[base_pair.nt1_3d].add(base_pair)
-                matches[base_pair.nt2_3d].add(base_pair)
+                matches[base_pair.nt1_3d].append(base_pair)
+                matches[base_pair.nt2_3d].append(base_pair)
 
             for pairs in matches.values():
                 if len(pairs) > 1:
