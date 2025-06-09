@@ -838,9 +838,14 @@ def main():
     file = handle_input_file(args.input)
     structure3d = read_3d_structure(file, None)
     base_interactions = extract_base_interactions(structure3d)
-    structure2d, dot_brackets, mapping = structure3d.extract_secondary_structure(
-        base_interactions, args.find_gaps, args.all_dot_brackets
+    structure2d, mapping = structure3d.extract_secondary_structure(
+        base_interactions, args.find_gaps
     )
+
+    if args.all_dot_brackets:
+        dot_brackets = mapping.all_dot_brackets
+    else:
+        dot_brackets = [mapping.dot_bracket]
 
     handle_output_arguments(args, structure2d, dot_brackets, mapping, args.input)
 
