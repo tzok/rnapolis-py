@@ -12,7 +12,7 @@ from rnapolis.parser_v2 import (
     write_cif,
     write_pdb,
 )
-from rnapolis.tertiary_v2 import Atom, Residue, Structure, calculate_torsion_angle
+from rnapolis.tertiary_v2 import Structure, calculate_torsion_angle
 
 
 def compare_structures(df1: pd.DataFrame, df2: pd.DataFrame, rtol=1e-5, atol=1e-8):
@@ -42,11 +42,13 @@ def compare_structures(df1: pd.DataFrame, df2: pd.DataFrame, rtol=1e-5, atol=1e-
     )
 
     # Sort residues for consistent comparison order
-    key_func = lambda r: (
-        r.chain_id,
-        r.residue_number,
-        r.insertion_code or "",
-    )
+    def key_func(r):
+        return (
+            r.chain_id,
+            r.residue_number,
+            r.insertion_code or "",
+        )
+
     residues1.sort(key=key_func)
     residues2.sort(key=key_func)
 
@@ -265,7 +267,6 @@ def test_torsion_angle_calculation():
     a4 = np.array([0.0, 1.0, 1.0])
 
     # Calculate the torsion angle
-    from rnapolis.tertiary_v2 import calculate_torsion_angle
 
     angle = calculate_torsion_angle(a1, a2, a3, a4)
 
