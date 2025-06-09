@@ -90,11 +90,11 @@ def test_rnapdbee_adapters_api_compliance_other(obj):
 @settings(max_examples=10)
 def test_rnapdbee_adapters_api_compliance_structure2d(obj):
     assert obj.__dict__.keys() >= {
-        "basePairs",
+        "base_pairs",
         "stackings",
-        "baseRiboseInteractions",
-        "basePhosphateInteractions",
-        "otherInteractions",
+        "base_ribose_interactions",
+        "base_phosphate_interactions",
+        "other_interactions",
     }
 
 
@@ -152,7 +152,7 @@ def test_conflicted_base_pairs():
 
     base_pairs = []
 
-    for obj in data.get("basePairs", []):
+    for obj in data.get("base_pairs", []):
         nt1 = Residue(
             None,
             ResidueAuth(

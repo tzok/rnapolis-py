@@ -1056,11 +1056,11 @@ class MultiStrandDotBracket(DotBracket):
 
 @dataclass(frozen=True, order=True)
 class BaseInteractions:
-    basePairs: List[BasePair]
+    base_pairs: List[BasePair]
     stackings: List[Stacking]
-    baseRiboseInteractions: List[BaseRibose]
-    basePhosphateInteractions: List[BasePhosphate]
-    otherInteractions: List[OtherInteraction]
+    base_ribose_interactions: List[BaseRibose]
+    base_phosphate_interactions: List[BasePhosphate]
+    other_interactions: List[OtherInteraction]
 
 
 @dataclass(frozen=True, order=True)
@@ -1077,12 +1077,18 @@ class InterStemParameters:
 
 @dataclass(frozen=True, order=True)
 class Structure2D:
-    baseInteractions: BaseInteractions
-    bpseq: str
-    dotBracket: str
-    extendedDotBracket: str
+    nucleotides: List[Residue]
+    base_pairs: List[BasePair]
+    stackings: List[Stacking]
+    base_ribose_interactions: List[BaseRibose]
+    base_phosphate_interactions: List[BasePhosphate]
+    other_interactions: List[OtherInteraction]
+    bpseq: BpSeq
+    bpseq_index: Dict[int, Residue]
+    dot_bracket: MultiStrandDotBracket
+    extended_dot_bracket: str
     stems: List[Stem]
-    singleStrands: List[SingleStrand]
+    single_strands: List[SingleStrand]
     hairpins: List[Hairpin]
     loops: List[Loop]
-    interStemParameters: List[InterStemParameters]
+    inter_stem_parameters: List[InterStemParameters]

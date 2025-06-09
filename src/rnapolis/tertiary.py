@@ -18,7 +18,6 @@ from rnapolis.common import (
     GlycosidicBond,
     InterStemParameters,
     LeontisWesthof,
-    MultiStrandDotBracket,
     Residue,
     ResidueAuth,
     ResidueLabel,
@@ -460,11 +459,8 @@ class Structure3D:
         return None
 
     def extract_secondary_structure(
-        self,
-        base_interactions: BaseInteractions,
-        find_gaps: bool = False,
-        all_dot_brackets: bool = False,
-    ) -> Tuple[Structure2D, List[MultiStrandDotBracket], "Mapping2D3D"]:
+        self, base_interactions: BaseInteractions, find_gaps: bool = False
+    ) -> Tuple[Structure2D, "Mapping2D3D"]:
         """
         Create a secondary structure representation.
 
@@ -479,7 +475,7 @@ class Structure3D:
         """
         mapping = Mapping2D3D(
             self,
-            base_interactions.basePairs,
+            base_interactions.base_pairs,
             base_interactions.stackings,
             find_gaps,
         )
@@ -488,21 +484,26 @@ class Structure3D:
         # Calculate inter-stem parameters using the helper function
         inter_stem_params = calculate_all_inter_stem_parameters(mapping)
 
+        nucleotides = list(filter(lambda r: r.is_nucleotide, self.residues))
+
         structure2d = Structure2D(
-            base_interactions,
-            str(mapping.bpseq),
+            nucleotides,
+            base_interactions.base_pairs,
+            base_interactions.stackings,
+            base_interactions.base_ribose_interactions,
+            base_interactions.base_phosphate_interactions,
+            base_interactions.other_interactions,
+            mapping.bpseq,
+            mapping.bpseq_index_to_residue_map,
             mapping.dot_bracket,
             mapping.extended_dot_bracket,
             stems,
             single_strands,
             hairpins,
             loops,
-            inter_stem_params,  # Added inter-stem parameters
+            inter_stem_params,
         )
-        if all_dot_brackets:
-            return structure2d, mapping.all_dot_brackets, mapping  # Return mapping
-        else:
-            return structure2d, [structure2d.dotBracket], mapping  # Return mapping
+        return structure2d, mapping
 
 
 @dataclass

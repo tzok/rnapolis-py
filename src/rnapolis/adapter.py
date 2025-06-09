@@ -320,8 +320,7 @@ def process_external_tool_output(
     external_file_path: str,
     tool: ExternalTool,
     find_gaps: bool = False,
-    all_dot_brackets: bool = False,
-) -> Tuple[Structure2D, List[str], Mapping2D3D]:  # Added Mapping2D3D to return tuple
+) -> Tuple[Structure2D, Mapping2D3D]:  # Added Mapping2D3D to return tuple
     """
     Process external tool output and create a secondary structure representation.
 
@@ -334,19 +333,15 @@ def process_external_tool_output(
         tool: The external tool that generated the output (FR3D, DSSR, etc.)
         model: Model number to use (if None, use first model)
         find_gaps: Whether to detect gaps in the structure
-        all_dot_brackets: Whether to return all possible dot-bracket notations
 
     Returns:
-        A tuple containing the Structure2D object, a list of dot-bracket notations,
-        and the Mapping2D3D object.
+        A tuple containing the Structure2D object and the Mapping2D3D object.
     """
     # Parse external tool output
     base_interactions = parse_external_output(external_file_path, tool, structure3d)
 
     # Extract secondary structure using the external tool's interactions
-    return structure3d.extract_secondary_structure(
-        base_interactions, find_gaps, all_dot_brackets
-    )
+    return structure3d.extract_secondary_structure(base_interactions, find_gaps)
 
 
 def main():
@@ -377,13 +372,17 @@ def main():
     structure3d = read_3d_structure(file, None)
 
     # Process external tool output and get secondary structure
-    structure2d, dot_brackets, mapping = process_external_tool_output(
+    structure2d, mapping = process_external_tool_output(
         structure3d,
         args.external,
         ExternalTool(args.tool),
         args.find_gaps,
-        args.all_dot_brackets,
     )
+
+    if args.all_dot_brackets:
+        dot_brackets = mapping.all_dot_brackets
+    else:
+        dot_brackets = [mapping.dot_bracket]
 
     handle_output_arguments(args, structure2d, dot_brackets, mapping, args.input)
 
