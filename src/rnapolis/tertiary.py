@@ -573,9 +573,9 @@ class Mapping2D3D:
         def pair_scoring_function(pair: BasePair3D) -> int:
             if pair.saenger is not None:
                 if pair.saenger in (Saenger.XIX, Saenger.XX):
-                    return 0, pair.nt1, pair.nt2
+                    return 0
                 else:
-                    return 1, pair.nt1, pair.nt2
+                    return 1
 
             sequence = "".join(
                 sorted(
@@ -586,8 +586,8 @@ class Mapping2D3D:
                 )
             )
             if sequence in ("AU", "AT", "CG"):
-                return 0, pair.nt1, pair.nt2
-            return 1, pair.nt1, pair.nt2
+                return 0
+            return 1
 
         canonical = [
             base_pair
