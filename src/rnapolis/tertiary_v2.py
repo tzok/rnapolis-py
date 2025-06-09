@@ -517,7 +517,7 @@ class Residue:
 
         # Required sugar atoms
         sugar_atoms = ["C1'", "C2'", "C3'", "C4'", "O4'"]
-        
+
         # Required base atoms
         base_atoms = ["N1", "C2", "N3", "C4", "C5", "C6"]
 
