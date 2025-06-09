@@ -12,7 +12,7 @@ from rnapolis.parser_v2 import (
     write_cif,
     write_pdb,
 )
-from rnapolis.tertiary_v2 import Atom, Residue, Structure, calculate_torsion_angle
+from rnapolis.tertiary_v2 import Structure, calculate_torsion_angle
 
 
 def compare_structures(df1: pd.DataFrame, df2: pd.DataFrame, rtol=1e-5, atol=1e-8):
@@ -42,11 +42,13 @@ def compare_structures(df1: pd.DataFrame, df2: pd.DataFrame, rtol=1e-5, atol=1e-
     )
 
     # Sort residues for consistent comparison order
-    key_func = lambda r: (
-        r.chain_id,
-        r.residue_number,
-        r.insertion_code or "",
-    )
+    def key_func(r):
+        return (
+            r.chain_id,
+            r.residue_number,
+            r.insertion_code or "",
+        )
+
     residues1.sort(key=key_func)
     residues2.sort(key=key_func)
 
@@ -265,7 +267,6 @@ def test_torsion_angle_calculation():
     a4 = np.array([0.0, 1.0, 1.0])
 
     # Calculate the torsion angle
-    from rnapolis.tertiary_v2 import calculate_torsion_angle
 
     angle = calculate_torsion_angle(a1, a2, a3, a4)
 
@@ -414,3 +415,34 @@ def test_cif_pdb_cif_roundtrip(data_dir):
     # is preserved through the PDB intermediate representation, assuming
     # the PDB format could represent the original structure or its fitted version.
     compare_structures(df_to_write_pdb, df_final_cif)
+
+
+def test_groupby_order(data_dir):
+    cif_path = os.path.join(data_dir, "1ehz-assembly-1.cif")
+    if not os.path.exists(cif_path):
+        pytest.skip(f"Test file not found: {cif_path}")
+
+    # 1. Parse Original CIF
+    with open(cif_path, "r") as f:
+        df_atoms = parse_cif_atoms(f)
+    assert not df_atoms.empty, "Original CIF parsing failed"
+
+    # 2. Group by chain_id and residue_number
+    structure = Structure(df_atoms)  # Ensure Structure can be created
+    residues = structure.residues  # Access residues to trigger any necessary processing
+    assert str(residues[0]) == "A.G1"
+    assert str(residues[1]) == "A.C2"
+
+
+def test_is_nucleotide(data_dir):
+    cif_path = os.path.join(data_dir, "1ehz-assembly-1.cif")
+    if not os.path.exists(cif_path):
+        pytest.skip(f"Test file not found: {cif_path}")
+
+    with open(cif_path, "r") as f:
+        df_atoms = parse_cif_atoms(f)
+    assert not df_atoms.empty, "Original CIF parsing failed"
+
+    structure = Structure(df_atoms)
+    residues = [residue for residue in structure.residues if residue.is_nucleotide]
+    assert len(residues) == 76

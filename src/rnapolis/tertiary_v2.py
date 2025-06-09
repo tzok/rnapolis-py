@@ -121,7 +121,9 @@ class Structure:
                     groupby_cols.append("pdbx_PDB_ins_code")
 
             # Group atoms by residue
-            grouped = self.atoms.groupby(groupby_cols, dropna=False, observed=False)
+            grouped = self.atoms.groupby(
+                groupby_cols, dropna=False, observed=False, sort=False
+            )
 
         else:
             # For unknown formats, return an empty list
@@ -494,6 +496,37 @@ class Residue:
                 if len(atoms_df) > 0:
                     return Atom(atoms_df.iloc[0], self.format)
         return None
+
+    @cached_property
+    def is_nucleotide(self) -> bool:
+        """
+        Check if this residue is a nucleotide.
+
+        A nucleotide is identified by the presence of specific atoms:
+        - Sugar atoms: C1', C2', C3', C4', O4'
+        - Base atoms: N1, C2, N3, C4, C5, C6
+
+        Returns:
+        --------
+        bool
+            True if the residue is a nucleotide, False otherwise
+        """
+        # Early check: if less than 11 atoms, can't be a nucleotide
+        if len(self.atoms) < 11:
+            return False
+
+        # Required sugar atoms
+        sugar_atoms = ["C1'", "C2'", "C3'", "C4'", "O4'"]
+
+        # Required base atoms
+        base_atoms = ["N1", "C2", "N3", "C4", "C5", "C6"]
+
+        # Check for all required atoms
+        for atom_name in sugar_atoms + base_atoms:
+            if self.find_atom(atom_name) is None:
+                return False
+
+        return True
 
     def is_connected(self, next_residue_candidate: "Residue") -> bool:
         """
