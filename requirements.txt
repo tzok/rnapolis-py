@@ -4,7 +4,7 @@ mmcif==0.92.0
 numpy==2.2.3
 ordered-set==4.1.0
 orjson==3.10.18
-pandas==2.2.3
+pandas==2.3.0
 pulp==3.2.1
 requests==2.32.3
 scipy==1.15.2
