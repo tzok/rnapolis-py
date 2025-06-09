@@ -121,7 +121,9 @@ class Structure:
                     groupby_cols.append("pdbx_PDB_ins_code")
 
             # Group atoms by residue
-            grouped = self.atoms.groupby(groupby_cols, dropna=False, observed=False)
+            grouped = self.atoms.groupby(
+                groupby_cols, dropna=False, observed=False, sort=False
+            )
 
         else:
             # For unknown formats, return an empty list
