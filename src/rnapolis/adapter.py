@@ -648,6 +648,156 @@ def parse_bpnet_output(file_paths: List[str]) -> BaseInteractions:
     )
 
 
+def parse_rnaview_output(file_paths: List[str]) -> BaseInteractions:
+    """
+    Parse RNAView output files and convert to BaseInteractions.
+
+    Args:
+        file_paths: List of paths to RNAView output files (.out files)
+
+    Returns:
+        BaseInteractions object containing the interactions found by RNAView
+    """
+    import re
+    from rnapolis.common import Saenger
+
+    # RNAView regex pattern from the reference implementation
+    RNAVIEW_REGEX = re.compile(
+        r"\s*(\d+)_(\d+),\s+(\w):\s+(-?\d+)\s+(\w+)-(\w+)\s+(-?\d+)\s+(\w):\s+(syn|\s+)*((./.)\s+(cis|tran)(syn|\s+)*([IVX,]+|n/a|![^.]+)|stacked)\.?"
+    )
+
+    # RNAView tokens
+    BEGIN_BASE_PAIR = "BEGIN_base-pair"
+    END_BASE_PAIR = "END_base-pair"
+    STACKING = "stacked"
+    BASE_RIBOSE = "!(b_s)"
+    BASE_PHOSPHATE = "!b_(O1P,O2P)"
+    OTHER_INTERACTION = "!(s_s)"
+    SAENGER_UNKNOWN = "n/a"
+    PLUS_INTERACTION = "+/+"  # For us - cWW
+    MINUS_INTERACTION = "-/-"  # For us - cWW
+    X_INTERACTION = "X/X"  # For us - cWW
+    ONE_HBOND = "!1H(b_b)"  # For us - OtherInteraction
+    DOUBLE_SAENGER = ("XIV,XV", "XII,XIII")
+    UNKNOWN_LW_CHARS = (".", "?")
+    ROMAN_NUMERALS = ("I", "V", "X")
+
+    def get_leontis_westhof(lw_info: str, trans_cis_info: str) -> Optional[LeontisWesthof]:
+        """Convert RNAView LW notation to LeontisWesthof enum."""
+        trans_cis = trans_cis_info[0]
+        if any(char in lw_info for char in UNKNOWN_LW_CHARS):
+            return None
+        if lw_info in (PLUS_INTERACTION, MINUS_INTERACTION, X_INTERACTION):
+            return LeontisWesthof[f"{trans_cis}WW"]
+        return LeontisWesthof[f"{trans_cis}{lw_info[0].upper()}{lw_info[2].upper()}"]
+
+    # Find the first .out file in the list
+    out_file = None
+    for file_path in file_paths:
+        if file_path.endswith('.out'):
+            out_file = file_path
+            break
+    
+    if out_file is None:
+        logging.warning("No .out file found in RNAView file list")
+        return BaseInteractions([], [], [], [], [])
+    
+    # Log unused files
+    unused_files = [f for f in file_paths if f != out_file]
+    if unused_files:
+        logging.info(f"RNAView: Using {out_file}, ignoring unused files: {unused_files}")
+
+    base_pairs = []
+    stackings = []
+    base_ribose_interactions = []
+    base_phosphate_interactions = []
+    other_interactions = []
+
+    # Process the RNAView output file
+    logging.info(f"Processing RNAView file: {out_file}")
+
+    try:
+        with open(out_file, 'r', encoding='utf-8') as f:
+            rnaview_result = f.read()
+
+        base_pair_section = False
+        for line in rnaview_result.splitlines():
+            if line.startswith(BEGIN_BASE_PAIR):
+                base_pair_section = True
+            elif line.startswith(END_BASE_PAIR):
+                base_pair_section = False
+            elif base_pair_section:
+                rnaview_regex_result = re.search(RNAVIEW_REGEX, line)
+                if rnaview_regex_result is None:
+                    logging.warning(f"RNAView regex failed for line: {line}")
+                    continue
+                
+                rnaview_regex_groups = rnaview_regex_result.groups()
+
+                # Extract residue information
+                chain_left = rnaview_regex_groups[2]
+                number_left = int(rnaview_regex_groups[3])
+                name_left = rnaview_regex_groups[4]
+                
+                chain_right = rnaview_regex_groups[7]
+                number_right = int(rnaview_regex_groups[6])
+                name_right = rnaview_regex_groups[5]
+
+                residue_left = Residue(None, ResidueAuth(chain_left, number_left, None, name_left))
+                residue_right = Residue(None, ResidueAuth(chain_right, number_right, None, name_right))
+
+                # Interaction OR Saenger OR n/a OR empty string
+                token = rnaview_regex_groups[13]
+
+                if rnaview_regex_groups[9] == STACKING:
+                    stackings.append(Stacking(residue_left, residue_right, None))
+
+                elif token == BASE_RIBOSE:
+                    base_ribose_interactions.append(BaseRibose(residue_left, residue_right, None))
+
+                elif token == BASE_PHOSPHATE:
+                    base_phosphate_interactions.append(BasePhosphate(residue_left, residue_right, None))
+
+                elif token in (OTHER_INTERACTION, ONE_HBOND):
+                    other_interactions.append(OtherInteraction(residue_left, residue_right))
+
+                elif token == SAENGER_UNKNOWN:
+                    leontis_westhof = get_leontis_westhof(rnaview_regex_groups[10], rnaview_regex_groups[11])
+                    if leontis_westhof is None:
+                        other_interactions.append(OtherInteraction(residue_left, residue_right))
+                    else:
+                        base_pairs.append(BasePair(residue_left, residue_right, leontis_westhof, None))
+
+                elif (
+                    all(char in ROMAN_NUMERALS for char in token)
+                    or token in DOUBLE_SAENGER
+                ):
+                    leontis_westhof = get_leontis_westhof(rnaview_regex_groups[10], rnaview_regex_groups[11])
+                    if leontis_westhof is None:
+                        other_interactions.append(OtherInteraction(residue_left, residue_right))
+                    else:
+                        saenger = (
+                            Saenger[token.split(",", 1)[0]]
+                            if token in DOUBLE_SAENGER
+                            else Saenger[token]
+                        )
+                        base_pairs.append(BasePair(residue_left, residue_right, leontis_westhof, saenger))
+
+                else:
+                    logging.warning(f"Unknown RNAView interaction: {token}")
+
+    except Exception as e:
+        logging.warning(f"Error processing RNAView file {out_file}: {e}", exc_info=True)
+
+    return BaseInteractions(
+        base_pairs,
+        stackings,
+        base_ribose_interactions,
+        base_phosphate_interactions,
+        other_interactions,
+    )
+
+
 def parse_external_output(
     file_paths: List[str], tool: ExternalTool, structure3d: Structure3D
 ) -> BaseInteractions:
@@ -670,6 +820,8 @@ def parse_external_output(
         return parse_maxit_output(file_paths)
     elif tool == ExternalTool.BPNET:
         return parse_bpnet_output(file_paths)
+    elif tool == ExternalTool.RNAVIEW:
+        return parse_rnaview_output(file_paths)
     else:
         raise ValueError(f"Unsupported external tool: {tool}")
 
