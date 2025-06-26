@@ -3,8 +3,8 @@ import sys
 from pathlib import Path
 from typing import List
 
-from .parser_v2 import parse_pdb_atoms, parse_cif_atoms
-from .tertiary_v2 import Structure
+from rnapolis.parser_v2 import parse_cif_atoms, parse_pdb_atoms
+from rnapolis.tertiary_v2 import Structure
 
 
 def parse_arguments():
