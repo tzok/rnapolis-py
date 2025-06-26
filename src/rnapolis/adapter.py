@@ -309,19 +309,19 @@ def parse_dssr_output(
 def parse_maxit_output(file_paths: List[str]) -> BaseInteractions:
     """
     Parse MAXIT output files and convert to BaseInteractions.
-    
+
     MAXIT analysis is embedded in mmCIF files as ndb_struct_na_base_pair category.
-    
+
     Args:
         file_paths: List of paths to mmCIF files containing MAXIT analysis
-        
+
     Returns:
         BaseInteractions object containing the interactions found by MAXIT
     """
     from tempfile import NamedTemporaryFile
     from rnapolis.metareader import read_metadata
     from rnapolis.common import ResidueLabel, Saenger
-    
+
     def convert_saenger(hbond_type_28: str) -> Optional[Saenger]:
         if hbond_type_28 == "?":
             return None
@@ -368,20 +368,20 @@ def parse_maxit_output(file_paths: List[str]) -> BaseInteractions:
 
     all_base_pairs = []
     all_other_interactions = []
-    
+
     # Process each input file
     for file_path in file_paths:
         logging.info(f"Processing MAXIT file: {file_path}")
-        
+
         try:
-            with open(file_path, 'r') as f:
+            with open(file_path, "r") as f:
                 file_content = f.read()
-                
+
             with NamedTemporaryFile("w+", suffix=".cif") as mmcif:
                 mmcif.write(file_content)
                 mmcif.seek(0)
                 metadata = read_metadata(mmcif, ["ndb_struct_na_base_pair"])
-            
+
             # Parse base pairs from this file
             for entry in metadata.get("ndb_struct_na_base_pair", []):
                 auth_chain_i = entry["i_auth_asym_id"]
@@ -417,12 +417,14 @@ def parse_maxit_output(file_paths: List[str]) -> BaseInteractions:
                 if lw is not None:
                     all_base_pairs.append(BasePair(residue_i, residue_j, lw, saenger))
                 else:
-                    all_other_interactions.append(OtherInteraction(residue_i, residue_j))
-                    
+                    all_other_interactions.append(
+                        OtherInteraction(residue_i, residue_j)
+                    )
+
         except Exception as e:
             logging.warning(f"Error processing MAXIT file {file_path}: {e}")
             continue
-    
+
     return BaseInteractions(all_base_pairs, [], [], [], all_other_interactions)
 
 
