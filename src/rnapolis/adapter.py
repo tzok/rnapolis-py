@@ -532,7 +532,8 @@ def parse_bpnet_output(file_paths: List[str]) -> BaseInteractions:
                 base_pairs.append(BasePair(nt1, nt2, lw, None))
         except Exception as e:
             logging.warning(
-                f"Error processing BPNet basepair file {basepair_json}: {e}", exc_info=True
+                f"Error processing BPNet basepair file {basepair_json}: {e}",
+                exc_info=True,
             )
 
     # Parse overlaps from ROB file
@@ -634,7 +635,9 @@ def parse_bpnet_output(file_paths: List[str]) -> BaseInteractions:
                     else:
                         logging.warning(f"Failed to parse PROX line: {line}")
         except Exception as e:
-            logging.warning(f"Error processing BPNet rob file {rob_file}: {e}", exc_info=True)
+            logging.warning(
+                f"Error processing BPNet rob file {rob_file}: {e}", exc_info=True
+            )
 
     return BaseInteractions(
         base_pairs,
