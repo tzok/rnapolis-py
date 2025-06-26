@@ -64,7 +64,7 @@ def auto_detect_tool(external_files: List[str]) -> ExternalTool:
             return ExternalTool.FR3D
 
         # Check for RNAView pattern
-        if file_path.endswith(".cif.out"):
+        if file_path.endswith(".out"):
             return ExternalTool.RNAVIEW
 
         # Check for BPNet pattern
