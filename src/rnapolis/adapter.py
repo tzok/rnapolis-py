@@ -658,13 +658,57 @@ def parse_rnaview_output(file_paths: List[str]) -> BaseInteractions:
     Returns:
         BaseInteractions object containing the interactions found by RNAView
     """
+    import math
     import re
+    from dataclasses import dataclass
     from rnapolis.common import Saenger
+
+    @dataclass
+    class PotentialResidue:
+        residue: Residue
+        position_c2: Optional[Tuple[float, float, float]]
+        position_c6: Optional[Tuple[float, float, float]]
+        position_n1: Optional[Tuple[float, float, float]]
+
+        def is_correct_according_to_rnaview(self) -> bool:
+            """
+            This is a reimplementation of residue_ident() function from fpair_sub.c from RNAView source code.
+            """
+            if any(
+                (
+                    self.position_c2 is None,
+                    self.position_c6 is None,
+                    self.position_n1 is None,
+                )
+            ):
+                return False
+
+            distance_n1_c2 = math.dist(self.position_n1, self.position_c2)  # type: ignore
+            distance_n1_c6 = math.dist(self.position_n1, self.position_c6)  # type: ignore
+            distance_c2_c6 = math.dist(self.position_c2, self.position_c6)  # type: ignore
+            return all(
+                (distance_n1_c2 <= 2.0, distance_n1_c6 <= 2.0, distance_c2_c6 <= 3.0)
+            )
 
     # RNAView regex pattern from the reference implementation
     RNAVIEW_REGEX = re.compile(
         r"\s*(\d+)_(\d+),\s+(\w):\s+(-?\d+)\s+(\w+)-(\w+)\s+(-?\d+)\s+(\w):\s+(syn|\s+)*((./.)\s+(cis|tran)(syn|\s+)*([IVX,]+|n/a|![^.]+)|stacked)\.?"
     )
+
+    # Positions of residues info in PDB files
+    ATOM_NAME_INDEX = slice(12, 16)
+    CHAIN_INDEX = 21
+    NUMBER_INDEX = slice(22, 26)
+    ICODE_INDEX = 26
+    NAME_INDEX = slice(17, 20)
+    X_INDEX, Y_INDEX, Z_INDEX = slice(30, 38), slice(38, 46), slice(46, 54)
+
+    # Tokens used in PDB files
+    ATOM = "ATOM"
+    HETATM = "HETATM"
+    ATOM_C6 = "C6"
+    ATOM_C2 = "C2"
+    ATOM_N1 = "N1"
 
     # RNAView tokens
     BEGIN_BASE_PAIR = "BEGIN_base-pair"
@@ -693,22 +737,98 @@ def parse_rnaview_output(file_paths: List[str]) -> BaseInteractions:
             return LeontisWesthof[f"{trans_cis}WW"]
         return LeontisWesthof[f"{trans_cis}{lw_info[0].upper()}{lw_info[2].upper()}"]
 
+    def append_residues_from_pdb_using_rnaview_indexing(pdb_content: str) -> Dict[int, Residue]:
+        """Parse PDB content and create RNAView-style residue mapping."""
+        potential_residues: Dict[str, PotentialResidue] = {}
+
+        for line in pdb_content.splitlines():
+            if line.startswith(ATOM) or line.startswith(HETATM):
+                atom_name = line[ATOM_NAME_INDEX].strip()
+
+                number = int(line[NUMBER_INDEX].strip())
+                icode = (
+                    None
+                    if line[ICODE_INDEX].strip() == ""
+                    else line[ICODE_INDEX]
+                )
+                chain = line[CHAIN_INDEX].strip()
+                name = line[NAME_INDEX].strip()
+
+                residue = Residue(None, ResidueAuth(chain, number, icode, name))
+
+                if str(residue) not in potential_residues:
+                    potential_residues[str(residue)] = PotentialResidue(
+                        residue, None, None, None
+                    )
+                potential_residue = potential_residues[str(residue)]
+
+                atom_position = (
+                    float(line[X_INDEX].strip()),
+                    float(line[Y_INDEX].strip()),
+                    float(line[Z_INDEX].strip()),
+                )
+
+                if atom_name == ATOM_C6:
+                    potential_residue.position_c6 = atom_position
+                elif atom_name == ATOM_C2:
+                    potential_residue.position_c2 = atom_position
+                elif atom_name == ATOM_N1:
+                    potential_residue.position_n1 = atom_position
+
+        residues_from_pdb: Dict[int, Residue] = {}
+        counter = 1
+        for potential_residue in potential_residues.values():
+            if potential_residue.is_correct_according_to_rnaview():
+                residues_from_pdb[counter] = potential_residue.residue
+                counter += 1
+
+        logging.debug("RNAView residues mapping:")
+        for idx, residue in sorted(residues_from_pdb.items()):
+            logging.debug(f"  {idx}: {residue}")
+
+        return residues_from_pdb
+
+    def check_indexing_correctness(
+        regex_result: Tuple[str, ...], line: str, residues_from_pdb: Dict[int, Residue]
+    ) -> None:
+        """Check if RNAView internal indexing matches PDB residue information."""
+        residue_left = residues_from_pdb[int(regex_result[0])]
+
+        if residue_left.auth.chain.lower() != regex_result[
+            2
+        ].lower() or residue_left.auth.number != int(regex_result[3]):
+            raise ValueError(
+                f"Wrong internal index for {residue_left}. Fix RNAView internal index mapping. Line: {line}"
+            )
+
+        residue_right = residues_from_pdb[int(regex_result[1])]
+
+        if residue_right.auth.chain.lower() != regex_result[
+            7
+        ].lower() or residue_right.auth.number != int(regex_result[6]):
+            raise ValueError(
+                f"Wrong internal index for {residue_right}. Fix RNAView internal index mapping. Line: {line}"
+            )
+
     # Find the first .out file in the list
     out_file = None
+    pdb_file = None
     for file_path in file_paths:
         if file_path.endswith(".out"):
             out_file = file_path
-            break
+        elif file_path.endswith(".pdb"):
+            pdb_file = file_path
 
     if out_file is None:
         logging.warning("No .out file found in RNAView file list")
         return BaseInteractions([], [], [], [], [])
 
     # Log unused files
-    unused_files = [f for f in file_paths if f != out_file]
+    used_files = [f for f in [out_file, pdb_file] if f is not None]
+    unused_files = [f for f in file_paths if f not in used_files]
     if unused_files:
         logging.info(
-            f"RNAView: Using {out_file}, ignoring unused files: {unused_files}"
+            f"RNAView: Using {used_files}, ignoring unused files: {unused_files}"
         )
 
     base_pairs = []
@@ -716,6 +836,17 @@ def parse_rnaview_output(file_paths: List[str]) -> BaseInteractions:
     base_ribose_interactions = []
     base_phosphate_interactions = []
     other_interactions = []
+
+    # Parse PDB content to build residue mapping if PDB file is available
+    residues_from_pdb: Dict[int, Residue] = {}
+    if pdb_file:
+        logging.info(f"Processing RNAView PDB file: {pdb_file}")
+        try:
+            with open(pdb_file, "r", encoding="utf-8") as f:
+                pdb_content = f.read()
+            residues_from_pdb = append_residues_from_pdb_using_rnaview_indexing(pdb_content)
+        except Exception as e:
+            logging.warning(f"Error processing RNAView PDB file {pdb_file}: {e}", exc_info=True)
 
     # Process the RNAView output file
     logging.info(f"Processing RNAView file: {out_file}")
@@ -738,21 +869,46 @@ def parse_rnaview_output(file_paths: List[str]) -> BaseInteractions:
 
                 rnaview_regex_groups = rnaview_regex_result.groups()
 
-                # Extract residue information
-                chain_left = rnaview_regex_groups[2]
-                number_left = int(rnaview_regex_groups[3])
-                name_left = rnaview_regex_groups[4]
-
-                chain_right = rnaview_regex_groups[7]
-                number_right = int(rnaview_regex_groups[6])
-                name_right = rnaview_regex_groups[5]
-
-                residue_left = Residue(
-                    None, ResidueAuth(chain_left, number_left, None, name_left)
+                # Log parsed groups with their meanings
+                logging.debug("RNAView regex parsed:")
+                logging.debug(
+                    f"  First residue:  idx={rnaview_regex_groups[0]}, chain={rnaview_regex_groups[2]}, num={rnaview_regex_groups[3]}, name={rnaview_regex_groups[4]}"
                 )
-                residue_right = Residue(
-                    None, ResidueAuth(chain_right, number_right, None, name_right)
+                logging.debug(
+                    f"  Second residue: idx={rnaview_regex_groups[1]}, chain={rnaview_regex_groups[7]}, num={rnaview_regex_groups[6]}, name={rnaview_regex_groups[5]}"
                 )
+                if rnaview_regex_groups[9] == "stacked":
+                    logging.debug("  Interaction: stacking")
+                else:
+                    logging.debug(f"  LW edges: {rnaview_regex_groups[10]}")
+                    logging.debug(f"  LW orientation: {rnaview_regex_groups[11]}")
+                    logging.debug(f"  Classification: {rnaview_regex_groups[13]}")
+
+                # Use residue mapping if available, otherwise create residues from regex
+                if residues_from_pdb:
+                    try:
+                        check_indexing_correctness(rnaview_regex_groups, line, residues_from_pdb)
+                        residue_left = residues_from_pdb[int(rnaview_regex_groups[0])]
+                        residue_right = residues_from_pdb[int(rnaview_regex_groups[1])]
+                    except (KeyError, ValueError) as e:
+                        logging.warning(f"RNAView indexing error: {e}")
+                        continue
+                else:
+                    # Fallback: create residues from regex groups
+                    chain_left = rnaview_regex_groups[2]
+                    number_left = int(rnaview_regex_groups[3])
+                    name_left = rnaview_regex_groups[4]
+
+                    chain_right = rnaview_regex_groups[7]
+                    number_right = int(rnaview_regex_groups[6])
+                    name_right = rnaview_regex_groups[5]
+
+                    residue_left = Residue(
+                        None, ResidueAuth(chain_left, number_left, None, name_left)
+                    )
+                    residue_right = Residue(
+                        None, ResidueAuth(chain_right, number_right, None, name_right)
+                    )
 
                 # Interaction OR Saenger OR n/a OR empty string
                 token = rnaview_regex_groups[13]
