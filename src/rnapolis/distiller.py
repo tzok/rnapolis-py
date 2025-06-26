@@ -302,53 +302,57 @@ def validate_nucleotide_counts(
     print(f"All structures have {first_count} nucleotides")
 
 
-def find_optimal_threshold(distance_matrix: np.ndarray, linkage_matrix: np.ndarray) -> float:
+def find_optimal_threshold(
+    distance_matrix: np.ndarray, linkage_matrix: np.ndarray
+) -> float:
     """
     Find optimal clustering threshold using silhouette analysis.
-    
+
     Parameters:
     -----------
     distance_matrix : np.ndarray
         Square distance matrix
     linkage_matrix : np.ndarray
         Linkage matrix from hierarchical clustering
-        
+
     Returns:
     --------
     float
         Optimal threshold value
     """
     print("Finding optimal threshold using silhouette analysis...")
-    
+
     # Candidate distance thresholds
     grid = np.linspace(0.05, 0.30, 60)
     best_score, best_threshold = -1.0, None
-    
+
     for threshold in grid:
-        labels = fcluster(linkage_matrix, threshold, criterion='distance')
-        
+        labels = fcluster(linkage_matrix, threshold, criterion="distance")
+
         # Silhouette analysis needs at least 2 clusters
         if labels.max() < 2:
             continue
-            
+
         # Skip if all points are in one cluster
         if len(np.unique(labels)) < 2:
             continue
-            
+
         try:
-            score = silhouette_score(distance_matrix, labels, metric='precomputed')
+            score = silhouette_score(distance_matrix, labels, metric="precomputed")
             if score > best_score:
                 best_score, best_threshold = score, threshold
         except ValueError:
             # Skip invalid configurations
             continue
-    
+
     if best_threshold is None:
         # Fallback to a reasonable default if silhouette analysis fails
         print("Warning: Silhouette analysis failed, using default threshold 0.1")
         return 0.1
-    
-    print(f"Optimal threshold: {best_threshold:.4f} (silhouette score: {best_score:.4f})")
+
+    print(
+        f"Optimal threshold: {best_threshold:.4f} (silhouette score: {best_score:.4f})"
+    )
     return best_threshold
 
 
@@ -429,7 +433,7 @@ def find_structure_clusters(
 
     # Perform hierarchical clustering with complete linkage
     linkage_matrix = linkage(condensed_distances, method="complete")
-    
+
     # Find optimal threshold if not provided
     if threshold is None:
         threshold = find_optimal_threshold(distance_matrix, linkage_matrix)
