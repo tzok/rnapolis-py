@@ -690,7 +690,6 @@ def add_common_output_arguments(parser: argparse.ArgumentParser):
 def handle_output_arguments(
     args: argparse.Namespace,
     structure2d: Structure2D,
-    dot_bracket: str,
     mapping: Mapping2D3D,
     input_filename: str,
 ):
@@ -833,7 +832,7 @@ def main():
         base_interactions, args.find_gaps
     )
 
-    handle_output_arguments(args, structure2d, mapping.dot_bracket, mapping, args.input)
+    handle_output_arguments(args, structure2d, mapping, args.input)
 
 
 if __name__ == "__main__":
