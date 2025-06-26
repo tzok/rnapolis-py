@@ -363,41 +363,47 @@ def find_optimal_threshold(
     return best_threshold
 
 
-def find_cluster_medoids(clusters: List[List[int]], distance_matrix: np.ndarray) -> List[int]:
+def find_cluster_medoids(
+    clusters: List[List[int]], distance_matrix: np.ndarray
+) -> List[int]:
     """
     Find the medoid (representative) for each cluster.
-    
+
     Parameters:
     -----------
     clusters : List[List[int]]
         List of clusters, where each cluster is a list of structure indices
     distance_matrix : np.ndarray
         Square distance matrix between all structures
-        
+
     Returns:
     --------
     List[int]
         List of medoid indices, one for each cluster
     """
     medoids = []
-    
+
     for cluster in clusters:
         if len(cluster) == 1:
             # Single element cluster - it's its own medoid
             medoids.append(cluster[0])
         else:
             # Find the element with minimum sum of distances to all other elements in cluster
-            min_sum_distance = float('inf')
+            min_sum_distance = float("inf")
             medoid = cluster[0]
-            
+
             for candidate in cluster:
-                sum_distance = sum(distance_matrix[candidate, other] for other in cluster if other != candidate)
+                sum_distance = sum(
+                    distance_matrix[candidate, other]
+                    for other in cluster
+                    if other != candidate
+                )
                 if sum_distance < min_sum_distance:
                     min_sum_distance = sum_distance
                     medoid = candidate
-            
+
             medoids.append(medoid)
-    
+
     return medoids
 
 
@@ -606,21 +612,21 @@ def main():
 
     # Save to JSON if requested
     if args.output_json:
-        json_data = {
-            "clusters": []
-        }
-        
+        json_data = {"clusters": []}
+
         for i, (cluster, medoid_idx) in enumerate(zip(clusters, medoids), 1):
             cluster_data = {
                 "cluster_id": i,
                 "representative": str(valid_files[medoid_idx]),
-                "members": [str(valid_files[idx]) for idx in cluster if idx != medoid_idx]
+                "members": [
+                    str(valid_files[idx]) for idx in cluster if idx != medoid_idx
+                ],
             }
             json_data["clusters"].append(cluster_data)
-        
-        with open(args.output_json, 'w') as f:
+
+        with open(args.output_json, "w") as f:
             json.dump(json_data, f, indent=2)
-        
+
         print(f"\nClustering results saved to {args.output_json}")
 
 
