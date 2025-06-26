@@ -308,6 +308,9 @@ def parse_external_output(
         return parse_fr3d_output(file_path)
     elif tool == ExternalTool.DSSR:
         return parse_dssr_output(file_path, structure3d)
+    elif tool == ExternalTool.MAXIT:
+        # MAXIT case - return empty BaseInteractions
+        return BaseInteractions([], [], [], [], [])
     else:
         raise ValueError(f"Unsupported external tool: {tool}")
 
@@ -354,7 +357,7 @@ def parse_fr3d_output(file_path: str) -> BaseInteractions:
 
 def process_external_tool_output(
     structure3d: Structure3D,
-    external_file_path: str,
+    external_file_path: Optional[str],
     tool: ExternalTool,
     find_gaps: bool = False,
 ) -> Tuple[Structure2D, Mapping2D3D]:  # Added Mapping2D3D to return tuple
@@ -366,7 +369,7 @@ def process_external_tool_output(
 
     Args:
         structure3d: The 3D structure parsed from PDB/mmCIF
-        external_file_path: Path to the external tool output file
+        external_file_path: Path to the external tool output file (None for MAXIT)
         tool: The external tool that generated the output (FR3D, DSSR, etc.)
         model: Model number to use (if None, use first model)
         find_gaps: Whether to detect gaps in the structure
@@ -375,7 +378,11 @@ def process_external_tool_output(
         A tuple containing the Structure2D object and the Mapping2D3D object.
     """
     # Parse external tool output
-    base_interactions = parse_external_output(external_file_path, tool, structure3d)
+    if external_file_path is None:
+        # For MAXIT or when no external file is provided
+        base_interactions = BaseInteractions([], [], [], [], [])
+    else:
+        base_interactions = parse_external_output(external_file_path, tool, structure3d)
 
     # Extract secondary structure using the external tool's interactions
     return structure3d.extract_secondary_structure(base_interactions, find_gaps)
@@ -415,20 +422,14 @@ def main():
         logging.info(f"Auto-detected tool: {tool.value}")
 
     # Process external tool output files and get secondary structure
-    # If no external files provided, create empty BaseInteractions
-    if not args.external_files:
-        base_interactions = BaseInteractions([], [], [], [], [])
-        structure2d, mapping = structure3d.extract_secondary_structure(
-            base_interactions, args.find_gaps
-        )
-    else:
-        # For now, process only the first external file (can be extended later for multiple files)
-        structure2d, mapping = process_external_tool_output(
-            structure3d,
-            args.external_files[0],
-            tool,
-            args.find_gaps,
-        )
+    # Always call process_external_tool_output, even for MAXIT (empty external files)
+    external_file_path = args.external_files[0] if args.external_files else None
+    structure2d, mapping = process_external_tool_output(
+        structure3d,
+        external_file_path,
+        tool,
+        args.find_gaps,
+    )
 
     if args.all_dot_brackets:
         dot_brackets = mapping.all_dot_brackets
