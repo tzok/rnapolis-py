@@ -369,61 +369,75 @@ def parse_maxit_output(file_paths: List[str]) -> BaseInteractions:
     all_base_pairs = []
     all_other_interactions = []
 
-    # Process each input file
+    # Find the first .cif file in the list
+    cif_file = None
     for file_path in file_paths:
-        logging.info(f"Processing MAXIT file: {file_path}")
+        if file_path.endswith('.cif'):
+            cif_file = file_path
+            break
+    
+    if cif_file is None:
+        logging.warning("No .cif file found in MAXIT file list")
+        return BaseInteractions([], [], [], [], [])
+    
+    # Log unused files
+    unused_files = [f for f in file_paths if f != cif_file]
+    if unused_files:
+        logging.info(f"MAXIT: Using {cif_file}, ignoring unused files: {unused_files}")
 
-        try:
-            with open(file_path, "r") as f:
-                file_content = f.read()
+    # Process only the first .cif file
+    logging.info(f"Processing MAXIT file: {cif_file}")
 
-            with NamedTemporaryFile("w+", suffix=".cif") as mmcif:
-                mmcif.write(file_content)
-                mmcif.seek(0)
-                metadata = read_metadata(mmcif, ["ndb_struct_na_base_pair"])
+    try:
+        with open(cif_file, "r") as f:
+            file_content = f.read()
 
-            # Parse base pairs from this file
-            for entry in metadata.get("ndb_struct_na_base_pair", []):
-                auth_chain_i = entry["i_auth_asym_id"]
-                auth_number_i = int(entry["i_auth_seq_id"])
-                auth_icode_i = (
-                    entry["i_PDB_ins_code"] if entry["i_PDB_ins_code"] != "?" else None
+        with NamedTemporaryFile("w+", suffix=".cif") as mmcif:
+            mmcif.write(file_content)
+            mmcif.seek(0)
+            metadata = read_metadata(mmcif, ["ndb_struct_na_base_pair"])
+
+        # Parse base pairs from this file
+        for entry in metadata.get("ndb_struct_na_base_pair", []):
+            auth_chain_i = entry["i_auth_asym_id"]
+            auth_number_i = int(entry["i_auth_seq_id"])
+            auth_icode_i = (
+                entry["i_PDB_ins_code"] if entry["i_PDB_ins_code"] != "?" else None
+            )
+            name_i = entry["i_label_comp_id"]
+            auth_i = ResidueAuth(auth_chain_i, auth_number_i, auth_icode_i, name_i)
+
+            auth_chain_j = entry["j_auth_asym_id"]
+            auth_number_j = int(entry["j_auth_seq_id"])
+            auth_icode_j = (
+                entry["j_PDB_ins_code"] if entry["j_PDB_ins_code"] != "?" else None
+            )
+            name_j = entry["j_label_comp_id"]
+            auth_j = ResidueAuth(auth_chain_j, auth_number_j, auth_icode_j, name_j)
+
+            label_chain_i = entry["i_label_asym_id"]
+            label_number_i = int(entry["i_label_seq_id"])
+            label_i = ResidueLabel(label_chain_i, label_number_i, name_i)
+
+            label_chain_j = entry["j_label_asym_id"]
+            label_number_j = int(entry["j_label_seq_id"])
+            label_j = ResidueLabel(label_chain_j, label_number_j, name_j)
+
+            residue_i = Residue(label_i, auth_i)
+            residue_j = Residue(label_j, auth_j)
+
+            saenger = convert_saenger(entry["hbond_type_28"])
+            lw = convert_lw(entry["hbond_type_12"])
+
+            if lw is not None:
+                all_base_pairs.append(BasePair(residue_i, residue_j, lw, saenger))
+            else:
+                all_other_interactions.append(
+                    OtherInteraction(residue_i, residue_j)
                 )
-                name_i = entry["i_label_comp_id"]
-                auth_i = ResidueAuth(auth_chain_i, auth_number_i, auth_icode_i, name_i)
 
-                auth_chain_j = entry["j_auth_asym_id"]
-                auth_number_j = int(entry["j_auth_seq_id"])
-                auth_icode_j = (
-                    entry["j_PDB_ins_code"] if entry["j_PDB_ins_code"] != "?" else None
-                )
-                name_j = entry["j_label_comp_id"]
-                auth_j = ResidueAuth(auth_chain_j, auth_number_j, auth_icode_j, name_j)
-
-                label_chain_i = entry["i_label_asym_id"]
-                label_number_i = int(entry["i_label_seq_id"])
-                label_i = ResidueLabel(label_chain_i, label_number_i, name_i)
-
-                label_chain_j = entry["j_label_asym_id"]
-                label_number_j = int(entry["j_label_seq_id"])
-                label_j = ResidueLabel(label_chain_j, label_number_j, name_j)
-
-                residue_i = Residue(label_i, auth_i)
-                residue_j = Residue(label_j, auth_j)
-
-                saenger = convert_saenger(entry["hbond_type_28"])
-                lw = convert_lw(entry["hbond_type_12"])
-
-                if lw is not None:
-                    all_base_pairs.append(BasePair(residue_i, residue_j, lw, saenger))
-                else:
-                    all_other_interactions.append(
-                        OtherInteraction(residue_i, residue_j)
-                    )
-
-        except Exception as e:
-            logging.warning(f"Error processing MAXIT file {file_path}: {e}")
-            continue
+    except Exception as e:
+        logging.warning(f"Error processing MAXIT file {cif_file}: {e}")
 
     return BaseInteractions(all_base_pairs, [], [], [], all_other_interactions)
 
@@ -498,6 +512,7 @@ def process_external_tool_output(
     structure3d: Structure3D,
     external_file_paths: List[str],
     tool: ExternalTool,
+    input_file_path: str,
     find_gaps: bool = False,
 ) -> Tuple[Structure2D, Mapping2D3D]:  # Added Mapping2D3D to return tuple
     """
@@ -510,7 +525,7 @@ def process_external_tool_output(
         structure3d: The 3D structure parsed from PDB/mmCIF
         external_file_paths: List of paths to external tool output files (empty for MAXIT)
         tool: The external tool that generated the output (FR3D, DSSR, etc.)
-        model: Model number to use (if None, use first model)
+        input_file_path: Path to the input file (used when external_file_paths is empty)
         find_gaps: Whether to detect gaps in the structure
 
     Returns:
@@ -518,13 +533,15 @@ def process_external_tool_output(
     """
     # Parse external tool output
     if not external_file_paths:
-        # For MAXIT or when no external files are provided
-        base_interactions = BaseInteractions([], [], [], [], [])
+        # For MAXIT or when no external files are provided, use the input file
+        file_paths_to_process = [input_file_path]
     else:
         # Process all external files
-        base_interactions = parse_external_output(
-            external_file_paths, tool, structure3d
-        )
+        file_paths_to_process = external_file_paths
+
+    base_interactions = parse_external_output(
+        file_paths_to_process, tool, structure3d
+    )
 
     # Extract secondary structure using the external tool's interactions
     return structure3d.extract_secondary_structure(base_interactions, find_gaps)
@@ -569,6 +586,7 @@ def main():
         structure3d,
         args.external_files,
         tool,
+        args.input,
         args.find_gaps,
     )
 
