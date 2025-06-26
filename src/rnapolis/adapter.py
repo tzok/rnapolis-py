@@ -433,9 +433,7 @@ def main():
         args.find_gaps,
     )
 
-    dot_brackets = [mapping.dot_bracket]
-
-    handle_output_arguments(args, structure2d, dot_brackets, mapping, args.input)
+    handle_output_arguments(args, structure2d, mapping.dot_bracket, mapping, args.input)
 
 
 if __name__ == "__main__":
