@@ -391,6 +391,7 @@ def find_structure_clusters(
             dendrogram(
                 linkage_matrix,
                 labels=[f"Structure {i}" for i in range(n_structures)],
+                color_threshold=threshold,
                 ax=ax1,
             )
             ax1.set_title("Hierarchical Clustering Dendrogram")
