@@ -4,7 +4,10 @@ from pathlib import Path
 from typing import List, Tuple
 
 import numpy as np
+from scipy.cluster.hierarchy import dendrogram, fcluster, linkage
+from scipy.spatial.distance import squareform
 from scipy.spatial.transform import Rotation
+from sklearn.cluster import AgglomerativeClustering
 
 from rnapolis.parser_v2 import parse_cif_atoms, parse_pdb_atoms
 from rnapolis.tertiary_v2 import Structure, Residue
@@ -25,6 +28,12 @@ def parse_arguments():
         type=float,
         default=0.1,
         help="nRMSD threshold for clustering (default: 0.1)",
+    )
+
+    parser.add_argument(
+        "--visualize",
+        action="store_true",
+        help="Show dendrogram visualization of clustering",
     )
 
     return parser.parse_args()
@@ -285,10 +294,10 @@ def validate_nucleotide_counts(
 
 
 def find_structure_clusters(
-    structures: List[Structure], threshold: float
+    structures: List[Structure], threshold: float, visualize: bool = False
 ) -> List[List[int]]:
     """
-    Find clusters of almost identical structures.
+    Find clusters of almost identical structures using hierarchical clustering.
 
     Parameters:
     -----------
@@ -296,15 +305,70 @@ def find_structure_clusters(
         List of parsed structures to analyze
     threshold : float
         nRMSD threshold for clustering
+    visualize : bool
+        Whether to show dendrogram visualization
 
     Returns:
     --------
     List[List[int]]
         List of clusters, where each cluster is a list of structure indices
     """
-    # TODO: Implement clustering algorithm
-    # For now, return each structure as its own cluster
-    return [[i] for i in range(len(structures))]
+    n_structures = len(structures)
+    
+    if n_structures == 1:
+        return [[0]]
+    
+    # Get nucleotide residues for each structure
+    nucleotide_lists = []
+    for structure in structures:
+        nucleotides = [residue for residue in structure.residues if residue.is_nucleotide]
+        nucleotide_lists.append(nucleotides)
+    
+    # Compute nRMSD distance matrix
+    print("Computing pairwise nRMSD distances...")
+    distance_matrix = np.zeros((n_structures, n_structures))
+    
+    for i in range(n_structures):
+        for j in range(i + 1, n_structures):
+            nrmsd = compute_nrmsd(nucleotide_lists[i], nucleotide_lists[j])
+            distance_matrix[i, j] = nrmsd
+            distance_matrix[j, i] = nrmsd
+            print(f"  Structure {i} vs {j}: nRMSD = {nrmsd:.4f}")
+    
+    # Convert to condensed distance matrix for scipy
+    condensed_distances = squareform(distance_matrix)
+    
+    # Perform hierarchical clustering with complete linkage
+    linkage_matrix = linkage(condensed_distances, method='complete')
+    
+    # Show dendrogram if requested
+    if visualize:
+        try:
+            import matplotlib.pyplot as plt
+            plt.figure(figsize=(10, 6))
+            dendrogram(linkage_matrix, labels=[f"Structure {i}" for i in range(n_structures)])
+            plt.title("Hierarchical Clustering Dendrogram")
+            plt.xlabel("Structure Index")
+            plt.ylabel("nRMSD Distance")
+            plt.axhline(y=threshold, color='r', linestyle='--', label=f'Threshold = {threshold}')
+            plt.legend()
+            plt.tight_layout()
+            plt.show()
+        except ImportError:
+            print("Warning: matplotlib not available, skipping dendrogram visualization", file=sys.stderr)
+    
+    # Get cluster labels using the threshold
+    cluster_labels = fcluster(linkage_matrix, threshold, criterion='distance')
+    
+    # Group structure indices by cluster
+    clusters = {}
+    for i, label in enumerate(cluster_labels):
+        if label not in clusters:
+            clusters[label] = []
+        clusters[label].append(i)
+    
+    # Return as list of lists
+    return list(clusters.values())
 
 
 def main():
@@ -345,7 +409,7 @@ def main():
 
     # Find clusters
     print("\nFinding structure clusters...")
-    clusters = find_structure_clusters(structures, args.threshold)
+    clusters = find_structure_clusters(structures, args.threshold, args.visualize)
 
     # Output results
     print(f"\nFound {len(clusters)} clusters:")
