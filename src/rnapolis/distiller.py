@@ -379,27 +379,40 @@ def find_structure_clusters(
     # Perform hierarchical clustering with complete linkage
     linkage_matrix = linkage(condensed_distances, method="complete")
 
-    # Show dendrogram if requested
+    # Show dendrogram and nRMSD distribution if requested
     if visualize:
         try:
             import matplotlib.pyplot as plt
 
-            plt.figure(figsize=(10, 6))
+            # Create subplots for dendrogram and histogram
+            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
+
+            # Plot dendrogram
             dendrogram(
-                linkage_matrix, labels=[f"Structure {i}" for i in range(n_structures)]
+                linkage_matrix, labels=[f"Structure {i}" for i in range(n_structures)], ax=ax1
             )
-            plt.title("Hierarchical Clustering Dendrogram")
-            plt.xlabel("Structure Index")
-            plt.ylabel("nRMSD Distance")
-            plt.axhline(
+            ax1.set_title("Hierarchical Clustering Dendrogram")
+            ax1.set_xlabel("Structure Index")
+            ax1.set_ylabel("nRMSD Distance")
+            ax1.axhline(
                 y=threshold, color="r", linestyle="--", label=f"Threshold = {threshold}"
             )
-            plt.legend()
+            ax1.legend()
+
+            # Plot nRMSD distribution
+            nrmsd_values = distance_matrix[np.triu_indices_from(distance_matrix, k=1)]
+            ax2.hist(nrmsd_values, bins=20, alpha=0.7, edgecolor='black')
+            ax2.axvline(x=threshold, color="r", linestyle="--", label=f"Threshold = {threshold}")
+            ax2.set_title("Distribution of nRMSD Values")
+            ax2.set_xlabel("nRMSD")
+            ax2.set_ylabel("Frequency")
+            ax2.legend()
+
             plt.tight_layout()
 
             # Always save the plot when --visualize is used
             plt.savefig("dendrogram.png", dpi=300, bbox_inches="tight")
-            print("Dendrogram saved to dendrogram.png")
+            print("Dendrogram and nRMSD distribution saved to dendrogram.png")
 
             # Try to show interactively, but don't fail if it doesn't work
             try:
