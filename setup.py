@@ -30,6 +30,7 @@ setup(
             "adapter=rnapolis.adapter:main",
             "aligner=rnapolis.aligner:main",
             "clashfinder=rnapolis.clashfinder:main",
+            "distiller=rnapolis.distiller:main",
             "metareader=rnapolis.metareader:main",
             "molecule-filter=rnapolis.molecule_filter:main",
             "motif-extractor=rnapolis.motif_extractor:main",
