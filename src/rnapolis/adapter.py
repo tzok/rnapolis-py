@@ -1011,7 +1011,7 @@ def parse_external_output(
     elif tool == ExternalTool.BPNET:
         return parse_bpnet_output(file_paths)
     elif tool == ExternalTool.RNAVIEW:
-        return parse_rnaview_output(file_paths)
+        return parse_rnaview_output(file_paths, structure3d)
     else:
         raise ValueError(f"Unsupported external tool: {tool}")
 
