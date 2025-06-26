@@ -415,7 +415,7 @@ def main():
     structure3d = read_3d_structure(file, None)
 
     # Auto-detect tool if not specified
-    if args.tool:
+    if args.tool is not None:
         tool = ExternalTool(args.tool)
     else:
         tool = auto_detect_tool(args.external_files)
