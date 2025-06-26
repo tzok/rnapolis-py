@@ -383,7 +383,9 @@ def process_external_tool_output(
         base_interactions = BaseInteractions([], [], [], [], [])
     else:
         # For now, process only the first external file (can be extended later for multiple files)
-        base_interactions = parse_external_output(external_file_paths[0], tool, structure3d)
+        base_interactions = parse_external_output(
+            external_file_paths[0], tool, structure3d
+        )
 
     # Extract secondary structure using the external tool's interactions
     return structure3d.extract_secondary_structure(base_interactions, find_gaps)
