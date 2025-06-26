@@ -24,6 +24,7 @@ from rnapolis.common import (
     BPh,
     BpSeq,
     LeontisWesthof,
+    OtherInteraction,
     Residue,
     Saenger,
     Stacking,
@@ -693,84 +694,82 @@ def unify_structure_data(structure2d: Structure2D, mapping: Mapping2D3D) -> Stru
     1. Adding missing Saenger classifications to base pairs
     2. Filling in empty residue labels from Structure3D
     """
-    from rnapolis.annotator import detect_saenger
-    
     # Create a mapping from residue to residue3d for label filling
     residue_to_residue3d = {}
     for residue3d in mapping.structure3d.residues:
         residue_key = Residue(residue3d.label, residue3d.auth)
         residue_to_residue3d[residue_key] = residue3d
-    
+
     def fill_residue_label(residue: Residue) -> Residue:
         """Fill empty label from Structure3D if available."""
         if residue.label is not None:
             return residue
-        
+
         # Try to find matching residue3d by auth
         for residue3d in mapping.structure3d.residues:
             if residue.auth == residue3d.auth:
                 return Residue(residue3d.label, residue.auth)
-        
+
         return residue
-    
+
     # Process base pairs
     unified_base_pairs = []
     for base_pair in structure2d.base_pairs:
         # Fill in missing labels
         nt1 = fill_residue_label(base_pair.nt1)
         nt2 = fill_residue_label(base_pair.nt2)
-        
+
         # Detect missing Saenger classification
         saenger = base_pair.saenger
         if saenger is None:
             # Find corresponding 3D residues for Saenger detection
             residue3d_1 = residue_to_residue3d.get(Residue(nt1.label, nt1.auth))
             residue3d_2 = residue_to_residue3d.get(Residue(nt2.label, nt2.auth))
-            
+
             if residue3d_1 is not None and residue3d_2 is not None:
                 saenger = detect_saenger(residue3d_1, residue3d_2, base_pair.lw)
-        
+
         unified_base_pairs.append(BasePair(nt1, nt2, base_pair.lw, saenger))
-    
+
     # Process other interaction types (fill labels only)
     unified_stackings = []
     for stacking in structure2d.stackings:
         nt1 = fill_residue_label(stacking.nt1)
         nt2 = fill_residue_label(stacking.nt2)
         unified_stackings.append(Stacking(nt1, nt2, stacking.topology))
-    
+
     unified_base_ribose = []
     for base_ribose in structure2d.base_ribose_interactions:
         nt1 = fill_residue_label(base_ribose.nt1)
         nt2 = fill_residue_label(base_ribose.nt2)
         unified_base_ribose.append(BaseRibose(nt1, nt2, base_ribose.br))
-    
+
     unified_base_phosphate = []
     for base_phosphate in structure2d.base_phosphate_interactions:
         nt1 = fill_residue_label(base_phosphate.nt1)
         nt2 = fill_residue_label(base_phosphate.nt2)
         unified_base_phosphate.append(BasePhosphate(nt1, nt2, base_phosphate.bph))
-    
+
     unified_other = []
     for other in structure2d.other_interactions:
         nt1 = fill_residue_label(other.nt1)
         nt2 = fill_residue_label(other.nt2)
         unified_other.append(OtherInteraction(nt1, nt2))
-    
+
     # Create new Structure2D with unified data
     unified_base_interactions = BaseInteractions(
         unified_base_pairs,
         unified_stackings,
         unified_base_ribose,
         unified_base_phosphate,
-        unified_other
+        unified_other,
     )
-    
+
     # Recreate Structure2D with unified interactions
     unified_structure2d, _ = mapping.structure3d.extract_secondary_structure(
         unified_base_interactions, False
     )
-    
+
     return unified_structure2d
 
 
@@ -783,7 +782,7 @@ def handle_output_arguments(
     """Handles writing output based on provided arguments."""
     # Unify the structure data before processing outputs
     unified_structure2d = unify_structure_data(structure2d, mapping)
-    
+
     input_basename = os.path.basename(input_filename)
     if args.csv:
         write_csv(args.csv, unified_structure2d)
