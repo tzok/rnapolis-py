@@ -357,7 +357,7 @@ def parse_fr3d_output(file_path: str) -> BaseInteractions:
 
 def process_external_tool_output(
     structure3d: Structure3D,
-    external_file_path: Optional[str],
+    external_file_paths: List[str],
     tool: ExternalTool,
     find_gaps: bool = False,
 ) -> Tuple[Structure2D, Mapping2D3D]:  # Added Mapping2D3D to return tuple
@@ -369,7 +369,7 @@ def process_external_tool_output(
 
     Args:
         structure3d: The 3D structure parsed from PDB/mmCIF
-        external_file_path: Path to the external tool output file (None for MAXIT)
+        external_file_paths: List of paths to external tool output files (empty for MAXIT)
         tool: The external tool that generated the output (FR3D, DSSR, etc.)
         model: Model number to use (if None, use first model)
         find_gaps: Whether to detect gaps in the structure
@@ -378,11 +378,12 @@ def process_external_tool_output(
         A tuple containing the Structure2D object and the Mapping2D3D object.
     """
     # Parse external tool output
-    if external_file_path is None:
-        # For MAXIT or when no external file is provided
+    if not external_file_paths:
+        # For MAXIT or when no external files are provided
         base_interactions = BaseInteractions([], [], [], [], [])
     else:
-        base_interactions = parse_external_output(external_file_path, tool, structure3d)
+        # For now, process only the first external file (can be extended later for multiple files)
+        base_interactions = parse_external_output(external_file_paths[0], tool, structure3d)
 
     # Extract secondary structure using the external tool's interactions
     return structure3d.extract_secondary_structure(base_interactions, find_gaps)
@@ -423,10 +424,9 @@ def main():
 
     # Process external tool output files and get secondary structure
     # Always call process_external_tool_output, even for MAXIT (empty external files)
-    external_file_path = args.external_files[0] if args.external_files else None
     structure2d, mapping = process_external_tool_output(
         structure3d,
-        external_file_path,
+        args.external_files,
         tool,
         args.find_gaps,
     )
