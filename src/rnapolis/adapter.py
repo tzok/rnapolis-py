@@ -237,13 +237,13 @@ def match_dssr_lw(lw: Optional[str]) -> Optional[LeontisWesthof]:
 
 
 def parse_dssr_output(
-    file_path: str, structure3d: Structure3D, model: Optional[int] = None
+    file_paths: List[str], structure3d: Structure3D, model: Optional[int] = None
 ) -> BaseInteractions:
     """
     Parse DSSR JSON output and convert to BaseInteractions.
 
     Args:
-        file_path: Path to DSSR JSON output file
+        file_paths: List of paths to DSSR output files
         structure3d: The 3D structure parsed from PDB/mmCIF
         model: Model number to use (if None, use first model)
 
@@ -253,7 +253,23 @@ def parse_dssr_output(
     base_pairs: List[BasePair] = []
     stackings: List[Stacking] = []
 
-    with open(file_path) as f:
+    # Find the first .json file in the list
+    json_file = None
+    for file_path in file_paths:
+        if file_path.endswith('.json'):
+            json_file = file_path
+            break
+    
+    if json_file is None:
+        logging.warning("No .json file found in DSSR file list")
+        return BaseInteractions([], [], [], [], [])
+    
+    # Log unused files
+    unused_files = [f for f in file_paths if f != json_file]
+    if unused_files:
+        logging.info(f"DSSR: Using {json_file}, ignoring unused files: {unused_files}")
+
+    with open(json_file) as f:
         dssr = orjson.loads(f.read())
 
     # Handle multi-model files
@@ -291,13 +307,13 @@ def parse_dssr_output(
 
 
 def parse_external_output(
-    file_path: str, tool: ExternalTool, structure3d: Structure3D
+    file_paths: List[str], tool: ExternalTool, structure3d: Structure3D
 ) -> BaseInteractions:
     """
     Parse the output from an external tool (FR3D, DSSR, etc.) and convert it to BaseInteractions.
 
     Args:
-        file_path: Path to the external tool output file
+        file_paths: List of paths to external tool output files
         tool: The external tool that generated the output
         structure3d: The 3D structure parsed from PDB/mmCIF
 
@@ -305,9 +321,9 @@ def parse_external_output(
         BaseInteractions object containing the interactions found by the external tool
     """
     if tool == ExternalTool.FR3D:
-        return parse_fr3d_output(file_path)
+        return parse_fr3d_output(file_paths)
     elif tool == ExternalTool.DSSR:
-        return parse_dssr_output(file_path, structure3d)
+        return parse_dssr_output(file_paths, structure3d)
     elif tool == ExternalTool.MAXIT:
         # MAXIT case - return empty BaseInteractions
         return BaseInteractions([], [], [], [], [])
@@ -315,13 +331,13 @@ def parse_external_output(
         raise ValueError(f"Unsupported external tool: {tool}")
 
 
-def parse_fr3d_output(file_path: str) -> BaseInteractions:
+def parse_fr3d_output(file_paths: List[str]) -> BaseInteractions:
     """
-    Parse FR3D output file and convert to BaseInteractions.
+    Parse FR3D output files and convert to BaseInteractions.
 
     Args:
-        file_path: Path to a concatenated FR3D output file containing basepair, stacking,
-                  and backbone interactions
+        file_paths: List of paths to FR3D output files containing basepair, stacking,
+                   and backbone interactions
 
     Returns:
         BaseInteractions object containing the interactions found by FR3D
@@ -335,15 +351,17 @@ def parse_fr3d_output(file_path: str) -> BaseInteractions:
         "other_interactions": [],
     }
 
-    # Process the concatenated file
-    with open(file_path, "r") as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith("#"):
-                continue
+    # Process each input file
+    for file_path in file_paths:
+        logging.info(f"Processing FR3D file: {file_path}")
+        with open(file_path, "r") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
 
-            # Process every non-empty, non-comment line
-            _process_interaction_line(line, interactions_data)
+                # Process every non-empty, non-comment line
+                _process_interaction_line(line, interactions_data)
 
     # Return a BaseInteractions object with all the processed interactions
     return BaseInteractions(
@@ -382,9 +400,9 @@ def process_external_tool_output(
         # For MAXIT or when no external files are provided
         base_interactions = BaseInteractions([], [], [], [], [])
     else:
-        # For now, process only the first external file (can be extended later for multiple files)
+        # Process all external files
         base_interactions = parse_external_output(
-            external_file_paths[0], tool, structure3d
+            external_file_paths, tool, structure3d
         )
 
     # Extract secondary structure using the external tool's interactions
