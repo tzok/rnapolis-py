@@ -48,33 +48,33 @@ logging.basicConfig(level=os.getenv("LOGLEVEL", "INFO").upper())
 def auto_detect_tool(external_files: List[str]) -> ExternalTool:
     """
     Auto-detect the external tool based on file patterns.
-    
+
     Args:
         external_files: List of external tool output file paths
-        
+
     Returns:
         ExternalTool enum value based on detected patterns
     """
     if not external_files:
         return ExternalTool.MAXIT
-    
+
     for file_path in external_files:
         # Check for FR3D pattern
         if file_path.endswith("basepair_detail.txt"):
             return ExternalTool.FR3D
-        
+
         # Check for RNAView pattern
         if file_path.endswith(".cif.out"):
             return ExternalTool.RNAVIEW
-        
+
         # Check for BPNet pattern
         if file_path.endswith("basepair.json"):
             return ExternalTool.BPNET
-        
+
         # Check for JSON files (DSSR)
         if file_path.endswith(".json"):
             return ExternalTool.DSSR
-    
+
     # Default to MAXIT if no patterns match
     return ExternalTool.MAXIT
 
