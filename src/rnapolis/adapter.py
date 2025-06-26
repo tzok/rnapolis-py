@@ -651,7 +651,9 @@ def parse_bpnet_output(file_paths: List[str]) -> BaseInteractions:
     )
 
 
-def parse_rnaview_output(file_paths: List[str], structure3d: Structure3D) -> BaseInteractions:
+def parse_rnaview_output(
+    file_paths: List[str], structure3d: Structure3D
+) -> BaseInteractions:
     """
     Parse RNAView output files and convert to BaseInteractions.
 
