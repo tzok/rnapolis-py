@@ -269,7 +269,7 @@ def compute_rmsd_with_superposition(coords1: np.ndarray, coords2: np.ndarray) ->
 
 
 def compute_rmsd_batch_gpu(
-    coords1_batch: np.ndarray, coords2_batch: np.ndarray
+    coords1_batch: np.ndarray, coords2_batch: np.ndarray, atom_counts: np.ndarray
 ) -> np.ndarray:
     """
     Compute RMSD for a batch of coordinate pairs using GPU acceleration.
@@ -280,6 +280,8 @@ def compute_rmsd_batch_gpu(
         Batch of first coordinate sets (batch_size, N, 3)
     coords2_batch : np.ndarray
         Batch of second coordinate sets (batch_size, N, 3)
+    atom_counts : np.ndarray
+        Number of actual atoms for each pair (batch_size,)
 
     Returns:
     --------
@@ -292,15 +294,33 @@ def compute_rmsd_batch_gpu(
     # Transfer to GPU
     coords1_gpu = cp.asarray(coords1_batch)
     coords2_gpu = cp.asarray(coords2_batch)
+    atom_counts_gpu = cp.asarray(atom_counts)
 
     batch_size = coords1_gpu.shape[0]
+    max_atoms = coords1_gpu.shape[1]
+
+    # Create masks for actual atoms (not padding)
+    atom_indices = cp.arange(max_atoms)[None, :]  # (1, max_atoms)
+    masks = atom_indices < atom_counts_gpu[:, None]  # (batch_size, max_atoms)
+    masks_3d = masks[:, :, None]  # (batch_size, max_atoms, 1)
+
+    # Apply masks to coordinates (set padded atoms to 0)
+    coords1_masked = coords1_gpu * masks_3d
+    coords2_masked = coords2_gpu * masks_3d
+
+    # Compute centroids using only actual atoms
+    sum_coords1 = cp.sum(coords1_masked, axis=1)  # (batch_size, 3)
+    sum_coords2 = cp.sum(coords2_masked, axis=1)  # (batch_size, 3)
+    centroid1 = sum_coords1 / atom_counts_gpu[:, None]  # (batch_size, 3)
+    centroid2 = sum_coords2 / atom_counts_gpu[:, None]  # (batch_size, 3)
 
     # Center coordinates
-    centroid1 = cp.mean(coords1_gpu, axis=1, keepdims=True)  # (batch_size, 1, 3)
-    centroid2 = cp.mean(coords2_gpu, axis=1, keepdims=True)  # (batch_size, 1, 3)
+    centered1 = coords1_masked - centroid1[:, None, :]  # (batch_size, max_atoms, 3)
+    centered2 = coords2_masked - centroid2[:, None, :]  # (batch_size, max_atoms, 3)
 
-    centered1 = coords1_gpu - centroid1  # (batch_size, N, 3)
-    centered2 = coords2_gpu - centroid2  # (batch_size, N, 3)
+    # Apply masks again after centering (to ensure padded atoms remain 0)
+    centered1 = centered1 * masks_3d
+    centered2 = centered2 * masks_3d
 
     # Compute cross-covariance matrices for all pairs
     H = cp.matmul(centered1.transpose(0, 2, 1), centered2)  # (batch_size, 3, 3)
@@ -323,19 +343,23 @@ def compute_rmsd_batch_gpu(
     # Apply rotation to centered2
     rotated2 = cp.matmul(
         centered2, R_corrected.transpose(0, 2, 1)
-    )  # (batch_size, N, 3)
+    )  # (batch_size, max_atoms, 3)
 
-    # Compute RMSD for each pair
-    diff = centered1 - rotated2  # (batch_size, N, 3)
-    squared_diff = cp.sum(diff**2, axis=2)  # (batch_size, N)
-    rmsd = cp.sqrt(cp.mean(squared_diff, axis=1))  # (batch_size,)
+    # Compute RMSD for each pair using only actual atoms
+    diff = centered1 - rotated2  # (batch_size, max_atoms, 3)
+    squared_diff = cp.sum(diff**2, axis=2)  # (batch_size, max_atoms)
+    
+    # Apply mask to exclude padded atoms from RMSD calculation
+    masked_squared_diff = squared_diff * masks  # (batch_size, max_atoms)
+    sum_squared_diff = cp.sum(masked_squared_diff, axis=1)  # (batch_size,)
+    rmsd = cp.sqrt(sum_squared_diff / atom_counts_gpu)  # (batch_size,)
 
     # Transfer back to CPU
     return cp.asnumpy(rmsd)
 
 
 def compute_rmsd_batch_cpu(
-    coords1_batch: np.ndarray, coords2_batch: np.ndarray
+    coords1_batch: np.ndarray, coords2_batch: np.ndarray, atom_counts: np.ndarray
 ) -> np.ndarray:
     """
     Compute RMSD for a batch of coordinate pairs using CPU.
@@ -346,6 +370,8 @@ def compute_rmsd_batch_cpu(
         Batch of first coordinate sets (batch_size, N, 3)
     coords2_batch : np.ndarray
         Batch of second coordinate sets (batch_size, N, 3)
+    atom_counts : np.ndarray
+        Number of actual atoms for each pair (batch_size,)
 
     Returns:
     --------
@@ -356,9 +382,11 @@ def compute_rmsd_batch_cpu(
     rmsd_values = np.zeros(batch_size)
 
     for i in range(batch_size):
-        rmsd_values[i] = compute_rmsd_with_superposition(
-            coords1_batch[i], coords2_batch[i]
-        )
+        # Extract only the actual atoms (not padding)
+        n_atoms = atom_counts[i]
+        coords1 = coords1_batch[i, :n_atoms]
+        coords2 = coords2_batch[i, :n_atoms]
+        rmsd_values[i] = compute_rmsd_with_superposition(coords1, coords2)
 
     return rmsd_values
 
