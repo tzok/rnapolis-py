@@ -9,6 +9,7 @@ from scipy.cluster.hierarchy import dendrogram, fcluster, linkage
 from scipy.spatial.distance import squareform
 from scipy.spatial.transform import Rotation
 from sklearn.cluster import AgglomerativeClustering
+from sklearn.metrics import silhouette_score
 
 from rnapolis.parser_v2 import parse_cif_atoms, parse_pdb_atoms
 from rnapolis.tertiary_v2 import Structure, Residue
@@ -27,8 +28,8 @@ def parse_arguments():
     parser.add_argument(
         "--threshold",
         type=float,
-        default=0.1,
-        help="nRMSD threshold for clustering (default: 0.1)",
+        default=None,
+        help="nRMSD threshold for clustering (default: auto-select using silhouette analysis)",
     )
 
     parser.add_argument(
@@ -301,6 +302,56 @@ def validate_nucleotide_counts(
     print(f"All structures have {first_count} nucleotides")
 
 
+def find_optimal_threshold(distance_matrix: np.ndarray, linkage_matrix: np.ndarray) -> float:
+    """
+    Find optimal clustering threshold using silhouette analysis.
+    
+    Parameters:
+    -----------
+    distance_matrix : np.ndarray
+        Square distance matrix
+    linkage_matrix : np.ndarray
+        Linkage matrix from hierarchical clustering
+        
+    Returns:
+    --------
+    float
+        Optimal threshold value
+    """
+    print("Finding optimal threshold using silhouette analysis...")
+    
+    # Candidate distance thresholds
+    grid = np.linspace(0.05, 0.30, 60)
+    best_score, best_threshold = -1.0, None
+    
+    for threshold in grid:
+        labels = fcluster(linkage_matrix, threshold, criterion='distance')
+        
+        # Silhouette analysis needs at least 2 clusters
+        if labels.max() < 2:
+            continue
+            
+        # Skip if all points are in one cluster
+        if len(np.unique(labels)) < 2:
+            continue
+            
+        try:
+            score = silhouette_score(distance_matrix, labels, metric='precomputed')
+            if score > best_score:
+                best_score, best_threshold = score, threshold
+        except ValueError:
+            # Skip invalid configurations
+            continue
+    
+    if best_threshold is None:
+        # Fallback to a reasonable default if silhouette analysis fails
+        print("Warning: Silhouette analysis failed, using default threshold 0.1")
+        return 0.1
+    
+    print(f"Optimal threshold: {best_threshold:.4f} (silhouette score: {best_score:.4f})")
+    return best_threshold
+
+
 def compute_nrmsd_pair(args):
     """Helper function for parallel nRMSD computation."""
     i, j, nucleotides_i, nucleotides_j = args
@@ -378,6 +429,10 @@ def find_structure_clusters(
 
     # Perform hierarchical clustering with complete linkage
     linkage_matrix = linkage(condensed_distances, method="complete")
+    
+    # Find optimal threshold if not provided
+    if threshold is None:
+        threshold = find_optimal_threshold(distance_matrix, linkage_matrix)
 
     # Show dendrogram and nRMSD distribution if requested
     if visualize:
@@ -456,7 +511,8 @@ def main():
         print("Error: No valid input files found", file=sys.stderr)
         sys.exit(1)
 
-    print(f"Processing {len(valid_files)} files with nRMSD threshold {args.threshold}")
+    threshold_msg = f"auto-selected" if args.threshold is None else f"{args.threshold}"
+    print(f"Processing {len(valid_files)} files with nRMSD threshold {threshold_msg}")
 
     # Parse all structure files
     print("Parsing structure files...")
