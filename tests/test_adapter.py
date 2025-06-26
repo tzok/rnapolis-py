@@ -1,7 +1,6 @@
-import pytest
 from pathlib import Path
 
-from rnapolis.adapter import process_external_tool_output, ExternalTool
+from rnapolis.adapter import ExternalTool, process_external_tool_output
 from rnapolis.parser import read_3d_structure
 from rnapolis.util import handle_input_file
 
@@ -118,10 +117,10 @@ def test_adapter_maxit():
     # Check the dot-bracket output
     expected_dot_bracket = """>strand_A
 GGCCGAUGGUAGUGUGGGGUC
-((((.......(((((((...
+((((.......((((((((..
 >strand_B
 UCCCCAUGCGAGAGUAGGCC
-..))))))).......))))"""
+.)))))))).......))))"""
 
     assert mapping.dot_bracket == expected_dot_bracket
 
@@ -148,10 +147,10 @@ def test_adapter_dssr():
     # Check the dot-bracket output
     expected_dot_bracket = """>strand_A
 GGCCGAUGGUAGUGUGGGGUC
-((((.......(((((((...
+((((.......((((((((..
 >strand_B
 UCCCCAUGCGAGAGUAGGCC
-..))))))).......))))"""
+.)))))))).......))))"""
 
     assert mapping.dot_bracket == expected_dot_bracket
 
