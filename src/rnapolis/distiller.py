@@ -389,7 +389,9 @@ def find_structure_clusters(
 
             # Plot dendrogram
             dendrogram(
-                linkage_matrix, labels=[f"Structure {i}" for i in range(n_structures)], ax=ax1
+                linkage_matrix,
+                labels=[f"Structure {i}" for i in range(n_structures)],
+                ax=ax1,
             )
             ax1.set_title("Hierarchical Clustering Dendrogram")
             ax1.set_xlabel("Structure Index")
@@ -401,8 +403,10 @@ def find_structure_clusters(
 
             # Plot nRMSD distribution
             nrmsd_values = distance_matrix[np.triu_indices_from(distance_matrix, k=1)]
-            ax2.hist(nrmsd_values, bins=20, alpha=0.7, edgecolor='black')
-            ax2.axvline(x=threshold, color="r", linestyle="--", label=f"Threshold = {threshold}")
+            ax2.hist(nrmsd_values, bins=20, alpha=0.7, edgecolor="black")
+            ax2.axvline(
+                x=threshold, color="r", linestyle="--", label=f"Threshold = {threshold}"
+            )
             ax2.set_title("Distribution of nRMSD Values")
             ax2.set_xlabel("nRMSD")
             ax2.set_ylabel("Frequency")
