@@ -319,8 +319,9 @@ def parse_maxit_output(file_paths: List[str]) -> BaseInteractions:
         BaseInteractions object containing the interactions found by MAXIT
     """
     from tempfile import NamedTemporaryFile
-    from rnapolis.metareader import read_metadata
+
     from rnapolis.common import ResidueLabel, Saenger
+    from rnapolis.metareader import read_metadata
 
     def convert_saenger(hbond_type_28: str) -> Optional[Saenger]:
         if hbond_type_28 == "?":
@@ -435,7 +436,7 @@ def parse_maxit_output(file_paths: List[str]) -> BaseInteractions:
                 all_other_interactions.append(OtherInteraction(residue_i, residue_j))
 
     except Exception as e:
-        logging.warning(f"Error processing MAXIT file {cif_file}: {e}")
+        logging.warning(f"Error processing MAXIT file {cif_file}: {e}", exc_info=True)
 
     return BaseInteractions(all_base_pairs, [], [], [], all_other_interactions)
 
@@ -531,7 +532,7 @@ def parse_bpnet_output(file_paths: List[str]) -> BaseInteractions:
                 base_pairs.append(BasePair(nt1, nt2, lw, None))
         except Exception as e:
             logging.warning(
-                f"Error processing BPNet basepair file {basepair_json}: {e}"
+                f"Error processing BPNet basepair file {basepair_json}: {e}", exc_info=True
             )
 
     # Parse overlaps from ROB file
@@ -633,7 +634,7 @@ def parse_bpnet_output(file_paths: List[str]) -> BaseInteractions:
                     else:
                         logging.warning(f"Failed to parse PROX line: {line}")
         except Exception as e:
-            logging.warning(f"Error processing BPNet rob file {rob_file}: {e}")
+            logging.warning(f"Error processing BPNet rob file {rob_file}: {e}", exc_info=True)
 
     return BaseInteractions(
         base_pairs,
