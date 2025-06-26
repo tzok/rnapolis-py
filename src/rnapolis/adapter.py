@@ -372,14 +372,14 @@ def parse_maxit_output(file_paths: List[str]) -> BaseInteractions:
     # Find the first .cif file in the list
     cif_file = None
     for file_path in file_paths:
-        if file_path.endswith('.cif'):
+        if file_path.endswith(".cif"):
             cif_file = file_path
             break
-    
+
     if cif_file is None:
         logging.warning("No .cif file found in MAXIT file list")
         return BaseInteractions([], [], [], [], [])
-    
+
     # Log unused files
     unused_files = [f for f in file_paths if f != cif_file]
     if unused_files:
@@ -432,9 +432,7 @@ def parse_maxit_output(file_paths: List[str]) -> BaseInteractions:
             if lw is not None:
                 all_base_pairs.append(BasePair(residue_i, residue_j, lw, saenger))
             else:
-                all_other_interactions.append(
-                    OtherInteraction(residue_i, residue_j)
-                )
+                all_other_interactions.append(OtherInteraction(residue_i, residue_j))
 
     except Exception as e:
         logging.warning(f"Error processing MAXIT file {cif_file}: {e}")
@@ -539,9 +537,7 @@ def process_external_tool_output(
         # Process all external files
         file_paths_to_process = external_file_paths
 
-    base_interactions = parse_external_output(
-        file_paths_to_process, tool, structure3d
-    )
+    base_interactions = parse_external_output(file_paths_to_process, tool, structure3d)
 
     # Extract secondary structure using the external tool's interactions
     return structure3d.extract_secondary_structure(base_interactions, find_gaps)
