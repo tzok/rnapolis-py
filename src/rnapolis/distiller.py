@@ -1,4 +1,5 @@
 import argparse
+import json
 import sys
 from multiprocessing import Pool, cpu_count
 from pathlib import Path
@@ -43,6 +44,12 @@ def parse_arguments():
         type=int,
         default=cpu_count(),
         help=f"Number of parallel jobs for nRMSD computation (default: {cpu_count()})",
+    )
+
+    parser.add_argument(
+        "--output-json",
+        type=str,
+        help="Output JSON file to save clustering results",
     )
 
     return parser.parse_args()
@@ -356,6 +363,44 @@ def find_optimal_threshold(
     return best_threshold
 
 
+def find_cluster_medoids(clusters: List[List[int]], distance_matrix: np.ndarray) -> List[int]:
+    """
+    Find the medoid (representative) for each cluster.
+    
+    Parameters:
+    -----------
+    clusters : List[List[int]]
+        List of clusters, where each cluster is a list of structure indices
+    distance_matrix : np.ndarray
+        Square distance matrix between all structures
+        
+    Returns:
+    --------
+    List[int]
+        List of medoid indices, one for each cluster
+    """
+    medoids = []
+    
+    for cluster in clusters:
+        if len(cluster) == 1:
+            # Single element cluster - it's its own medoid
+            medoids.append(cluster[0])
+        else:
+            # Find the element with minimum sum of distances to all other elements in cluster
+            min_sum_distance = float('inf')
+            medoid = cluster[0]
+            
+            for candidate in cluster:
+                sum_distance = sum(distance_matrix[candidate, other] for other in cluster if other != candidate)
+                if sum_distance < min_sum_distance:
+                    min_sum_distance = sum_distance
+                    medoid = candidate
+            
+            medoids.append(medoid)
+    
+    return medoids
+
+
 def compute_nrmsd_pair(args):
     """Helper function for parallel nRMSD computation."""
     i, j, nucleotides_i, nucleotides_j = args
@@ -368,7 +413,7 @@ def find_structure_clusters(
     threshold: float,
     visualize: bool = False,
     n_jobs: int = None,
-) -> List[List[int]]:
+) -> Tuple[List[List[int]], np.ndarray]:
     """
     Find clusters of almost identical structures using hierarchical clustering.
 
@@ -500,8 +545,8 @@ def find_structure_clusters(
             clusters[label] = []
         clusters[label].append(i)
 
-    # Return as list of lists
-    return list(clusters.values())
+    # Return clusters and distance matrix
+    return list(clusters.values()), distance_matrix
 
 
 def main():
@@ -543,16 +588,40 @@ def main():
 
     # Find clusters
     print("\nFinding structure clusters...")
-    clusters = find_structure_clusters(
+    clusters, distance_matrix = find_structure_clusters(
         structures, args.threshold, args.visualize, args.jobs
     )
 
+    # Find medoids for each cluster
+    medoids = find_cluster_medoids(clusters, distance_matrix)
+
     # Output results
     print(f"\nFound {len(clusters)} clusters:")
-    for i, cluster in enumerate(clusters, 1):
+    for i, (cluster, medoid_idx) in enumerate(zip(clusters, medoids), 1):
         print(f"Cluster {i}: {len(cluster)} structures")
+        print(f"  Representative (medoid): {valid_files[medoid_idx]}")
         for structure_idx in cluster:
-            print(f"  - {valid_files[structure_idx]}")
+            if structure_idx != medoid_idx:
+                print(f"  - {valid_files[structure_idx]}")
+
+    # Save to JSON if requested
+    if args.output_json:
+        json_data = {
+            "clusters": []
+        }
+        
+        for i, (cluster, medoid_idx) in enumerate(zip(clusters, medoids), 1):
+            cluster_data = {
+                "cluster_id": i,
+                "representative": str(valid_files[medoid_idx]),
+                "members": [str(valid_files[idx]) for idx in cluster if idx != medoid_idx]
+            }
+            json_data["clusters"].append(cluster_data)
+        
+        with open(args.output_json, 'w') as f:
+            json.dump(json_data, f, indent=2)
+        
+        print(f"\nClustering results saved to {args.output_json}")
 
 
 if __name__ == "__main__":
