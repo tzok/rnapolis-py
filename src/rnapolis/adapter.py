@@ -37,9 +37,46 @@ from rnapolis.util import handle_input_file
 class ExternalTool(Enum):
     FR3D = "fr3d"
     DSSR = "dssr"
+    RNAVIEW = "rnaview"
+    BPNET = "bpnet"
+    MAXIT = "maxit"
 
 
 logging.basicConfig(level=os.getenv("LOGLEVEL", "INFO").upper())
+
+
+def auto_detect_tool(external_files: List[str]) -> ExternalTool:
+    """
+    Auto-detect the external tool based on file patterns.
+    
+    Args:
+        external_files: List of external tool output file paths
+        
+    Returns:
+        ExternalTool enum value based on detected patterns
+    """
+    if not external_files:
+        return ExternalTool.MAXIT
+    
+    for file_path in external_files:
+        # Check for FR3D pattern
+        if file_path.endswith("basepair_detail.txt"):
+            return ExternalTool.FR3D
+        
+        # Check for RNAView pattern
+        if file_path.endswith(".cif.out"):
+            return ExternalTool.RNAVIEW
+        
+        # Check for BPNet pattern
+        if file_path.endswith("basepair.json"):
+            return ExternalTool.BPNET
+        
+        # Check for JSON files (DSSR)
+        if file_path.endswith(".json"):
+            return ExternalTool.DSSR
+    
+    # Default to MAXIT if no patterns match
+    return ExternalTool.MAXIT
 
 
 def parse_unit_id(nt: str) -> Residue:
@@ -355,8 +392,7 @@ def main():
     parser.add_argument(
         "--tool",
         choices=[t.value for t in ExternalTool],
-        required=True,
-        help="External tool that generated the output file",
+        help="External tool that generated the output file (auto-detected if not specified)",
     )
     parser.add_argument(
         "-f",
@@ -371,6 +407,13 @@ def main():
     file = handle_input_file(args.input)
     structure3d = read_3d_structure(file, None)
 
+    # Auto-detect tool if not specified
+    if args.tool:
+        tool = ExternalTool(args.tool)
+    else:
+        tool = auto_detect_tool(args.external_files)
+        logging.info(f"Auto-detected tool: {tool.value}")
+
     # Process external tool output files and get secondary structure
     # If no external files provided, create empty BaseInteractions
     if not args.external_files:
@@ -383,7 +426,7 @@ def main():
         structure2d, mapping = process_external_tool_output(
             structure3d,
             args.external_files[0],
-            ExternalTool(args.tool),
+            tool,
             args.find_gaps,
         )
 
