@@ -60,6 +60,7 @@ setup(
         "pandas",
         "pulp",
         "requests",
+        "scikit-learn",
         "scipy",
         "viennarna",
     ],
