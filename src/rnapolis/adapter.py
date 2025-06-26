@@ -682,7 +682,9 @@ def parse_rnaview_output(file_paths: List[str]) -> BaseInteractions:
     UNKNOWN_LW_CHARS = (".", "?")
     ROMAN_NUMERALS = ("I", "V", "X")
 
-    def get_leontis_westhof(lw_info: str, trans_cis_info: str) -> Optional[LeontisWesthof]:
+    def get_leontis_westhof(
+        lw_info: str, trans_cis_info: str
+    ) -> Optional[LeontisWesthof]:
         """Convert RNAView LW notation to LeontisWesthof enum."""
         trans_cis = trans_cis_info[0]
         if any(char in lw_info for char in UNKNOWN_LW_CHARS):
@@ -694,18 +696,20 @@ def parse_rnaview_output(file_paths: List[str]) -> BaseInteractions:
     # Find the first .out file in the list
     out_file = None
     for file_path in file_paths:
-        if file_path.endswith('.out'):
+        if file_path.endswith(".out"):
             out_file = file_path
             break
-    
+
     if out_file is None:
         logging.warning("No .out file found in RNAView file list")
         return BaseInteractions([], [], [], [], [])
-    
+
     # Log unused files
     unused_files = [f for f in file_paths if f != out_file]
     if unused_files:
-        logging.info(f"RNAView: Using {out_file}, ignoring unused files: {unused_files}")
+        logging.info(
+            f"RNAView: Using {out_file}, ignoring unused files: {unused_files}"
+        )
 
     base_pairs = []
     stackings = []
@@ -717,7 +721,7 @@ def parse_rnaview_output(file_paths: List[str]) -> BaseInteractions:
     logging.info(f"Processing RNAView file: {out_file}")
 
     try:
-        with open(out_file, 'r', encoding='utf-8') as f:
+        with open(out_file, "r", encoding="utf-8") as f:
             rnaview_result = f.read()
 
         base_pair_section = False
@@ -731,20 +735,24 @@ def parse_rnaview_output(file_paths: List[str]) -> BaseInteractions:
                 if rnaview_regex_result is None:
                     logging.warning(f"RNAView regex failed for line: {line}")
                     continue
-                
+
                 rnaview_regex_groups = rnaview_regex_result.groups()
 
                 # Extract residue information
                 chain_left = rnaview_regex_groups[2]
                 number_left = int(rnaview_regex_groups[3])
                 name_left = rnaview_regex_groups[4]
-                
+
                 chain_right = rnaview_regex_groups[7]
                 number_right = int(rnaview_regex_groups[6])
                 name_right = rnaview_regex_groups[5]
 
-                residue_left = Residue(None, ResidueAuth(chain_left, number_left, None, name_left))
-                residue_right = Residue(None, ResidueAuth(chain_right, number_right, None, name_right))
+                residue_left = Residue(
+                    None, ResidueAuth(chain_left, number_left, None, name_left)
+                )
+                residue_right = Residue(
+                    None, ResidueAuth(chain_right, number_right, None, name_right)
+                )
 
                 # Interaction OR Saenger OR n/a OR empty string
                 token = rnaview_regex_groups[13]
@@ -753,35 +761,55 @@ def parse_rnaview_output(file_paths: List[str]) -> BaseInteractions:
                     stackings.append(Stacking(residue_left, residue_right, None))
 
                 elif token == BASE_RIBOSE:
-                    base_ribose_interactions.append(BaseRibose(residue_left, residue_right, None))
+                    base_ribose_interactions.append(
+                        BaseRibose(residue_left, residue_right, None)
+                    )
 
                 elif token == BASE_PHOSPHATE:
-                    base_phosphate_interactions.append(BasePhosphate(residue_left, residue_right, None))
+                    base_phosphate_interactions.append(
+                        BasePhosphate(residue_left, residue_right, None)
+                    )
 
                 elif token in (OTHER_INTERACTION, ONE_HBOND):
-                    other_interactions.append(OtherInteraction(residue_left, residue_right))
+                    other_interactions.append(
+                        OtherInteraction(residue_left, residue_right)
+                    )
 
                 elif token == SAENGER_UNKNOWN:
-                    leontis_westhof = get_leontis_westhof(rnaview_regex_groups[10], rnaview_regex_groups[11])
+                    leontis_westhof = get_leontis_westhof(
+                        rnaview_regex_groups[10], rnaview_regex_groups[11]
+                    )
                     if leontis_westhof is None:
-                        other_interactions.append(OtherInteraction(residue_left, residue_right))
+                        other_interactions.append(
+                            OtherInteraction(residue_left, residue_right)
+                        )
                     else:
-                        base_pairs.append(BasePair(residue_left, residue_right, leontis_westhof, None))
+                        base_pairs.append(
+                            BasePair(residue_left, residue_right, leontis_westhof, None)
+                        )
 
                 elif (
                     all(char in ROMAN_NUMERALS for char in token)
                     or token in DOUBLE_SAENGER
                 ):
-                    leontis_westhof = get_leontis_westhof(rnaview_regex_groups[10], rnaview_regex_groups[11])
+                    leontis_westhof = get_leontis_westhof(
+                        rnaview_regex_groups[10], rnaview_regex_groups[11]
+                    )
                     if leontis_westhof is None:
-                        other_interactions.append(OtherInteraction(residue_left, residue_right))
+                        other_interactions.append(
+                            OtherInteraction(residue_left, residue_right)
+                        )
                     else:
                         saenger = (
                             Saenger[token.split(",", 1)[0]]
                             if token in DOUBLE_SAENGER
                             else Saenger[token]
                         )
-                        base_pairs.append(BasePair(residue_left, residue_right, leontis_westhof, saenger))
+                        base_pairs.append(
+                            BasePair(
+                                residue_left, residue_right, leontis_westhof, saenger
+                            )
+                        )
 
                 else:
                     logging.warning(f"Unknown RNAView interaction: {token}")
