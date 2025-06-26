@@ -348,9 +348,9 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("input", help="Path to PDB or mmCIF file")
     parser.add_argument(
-        "--external",
-        required=True,
-        help="Path to external tool output file (FR3D, DSSR, etc.)",
+        "external_files",
+        nargs="*",
+        help="Path(s) to external tool output file(s) (FR3D, DSSR, etc.)",
     )
     parser.add_argument(
         "--tool",
@@ -371,13 +371,19 @@ def main():
     file = handle_input_file(args.input)
     structure3d = read_3d_structure(file, None)
 
-    # Process external tool output and get secondary structure
-    structure2d, mapping = process_external_tool_output(
-        structure3d,
-        args.external,
-        ExternalTool(args.tool),
-        args.find_gaps,
-    )
+    # Process external tool output files and get secondary structure
+    # If no external files provided, create empty BaseInteractions
+    if not args.external_files:
+        base_interactions = BaseInteractions([], [], [], [], [])
+        structure2d, mapping = structure3d.extract_secondary_structure(base_interactions, args.find_gaps)
+    else:
+        # For now, process only the first external file (can be extended later for multiple files)
+        structure2d, mapping = process_external_tool_output(
+            structure3d,
+            args.external_files[0],
+            ExternalTool(args.tool),
+            args.find_gaps,
+        )
 
     if args.all_dot_brackets:
         dot_brackets = mapping.all_dot_brackets
