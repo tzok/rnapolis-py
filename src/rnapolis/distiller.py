@@ -314,59 +314,69 @@ def find_structure_clusters(
         List of clusters, where each cluster is a list of structure indices
     """
     n_structures = len(structures)
-    
+
     if n_structures == 1:
         return [[0]]
-    
+
     # Get nucleotide residues for each structure
     nucleotide_lists = []
     for structure in structures:
-        nucleotides = [residue for residue in structure.residues if residue.is_nucleotide]
+        nucleotides = [
+            residue for residue in structure.residues if residue.is_nucleotide
+        ]
         nucleotide_lists.append(nucleotides)
-    
+
     # Compute nRMSD distance matrix
     print("Computing pairwise nRMSD distances...")
     distance_matrix = np.zeros((n_structures, n_structures))
-    
+
     for i in range(n_structures):
         for j in range(i + 1, n_structures):
             nrmsd = compute_nrmsd(nucleotide_lists[i], nucleotide_lists[j])
             distance_matrix[i, j] = nrmsd
             distance_matrix[j, i] = nrmsd
             print(f"  Structure {i} vs {j}: nRMSD = {nrmsd:.4f}")
-    
+
     # Convert to condensed distance matrix for scipy
     condensed_distances = squareform(distance_matrix)
-    
+
     # Perform hierarchical clustering with complete linkage
-    linkage_matrix = linkage(condensed_distances, method='complete')
-    
+    linkage_matrix = linkage(condensed_distances, method="complete")
+
     # Show dendrogram if requested
     if visualize:
         try:
             import matplotlib.pyplot as plt
+
             plt.figure(figsize=(10, 6))
-            dendrogram(linkage_matrix, labels=[f"Structure {i}" for i in range(n_structures)])
+            dendrogram(
+                linkage_matrix, labels=[f"Structure {i}" for i in range(n_structures)]
+            )
             plt.title("Hierarchical Clustering Dendrogram")
             plt.xlabel("Structure Index")
             plt.ylabel("nRMSD Distance")
-            plt.axhline(y=threshold, color='r', linestyle='--', label=f'Threshold = {threshold}')
+            plt.axhline(
+                y=threshold, color="r", linestyle="--", label=f"Threshold = {threshold}"
+            )
             plt.legend()
             plt.tight_layout()
             plt.show()
         except ImportError:
-            print("Warning: matplotlib not available, skipping dendrogram visualization", file=sys.stderr)
-    
+            print(
+                "Warning: matplotlib not available, skipping dendrogram visualization",
+                file=sys.stderr,
+            )
+
     # Get cluster labels using the threshold
-    cluster_labels = fcluster(linkage_matrix, threshold, criterion='distance')
-    
+    cluster_labels = fcluster(linkage_matrix, threshold, criterion="distance")
+
     # Group structure indices by cluster
     clusters = {}
     for i, label in enumerate(cluster_labels):
         if label not in clusters:
             clusters[label] = []
         clusters[label].append(i)
-    
+
     # Return as list of lists
     return list(clusters.values())
 
