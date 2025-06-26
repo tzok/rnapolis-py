@@ -309,7 +309,10 @@ def compute_nrmsd_pair(args):
 
 
 def find_structure_clusters(
-    structures: List[Structure], threshold: float, visualize: bool = False, n_jobs: int = None
+    structures: List[Structure],
+    threshold: float,
+    visualize: bool = False,
+    n_jobs: int = None,
 ) -> List[List[int]]:
     """
     Find clusters of almost identical structures using hierarchical clustering.
@@ -344,7 +347,9 @@ def find_structure_clusters(
         nucleotide_lists.append(nucleotides)
 
     # Compute nRMSD distance matrix in parallel
-    print(f"Computing pairwise nRMSD distances using {n_jobs or cpu_count()} processes...")
+    print(
+        f"Computing pairwise nRMSD distances using {n_jobs or cpu_count()} processes..."
+    )
     distance_matrix = np.zeros((n_structures, n_structures))
 
     # Prepare arguments for parallel computation
@@ -450,7 +455,9 @@ def main():
 
     # Find clusters
     print("\nFinding structure clusters...")
-    clusters = find_structure_clusters(structures, args.threshold, args.visualize, args.jobs)
+    clusters = find_structure_clusters(
+        structures, args.threshold, args.visualize, args.jobs
+    )
 
     # Output results
     print(f"\nFound {len(clusters)} clusters:")
