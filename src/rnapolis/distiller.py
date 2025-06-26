@@ -1,5 +1,6 @@
 import argparse
 import sys
+from multiprocessing import Pool, cpu_count
 from pathlib import Path
 from typing import List, Tuple
 
@@ -34,6 +35,13 @@ def parse_arguments():
         "--visualize",
         action="store_true",
         help="Show dendrogram visualization of clustering",
+    )
+
+    parser.add_argument(
+        "--jobs",
+        type=int,
+        default=cpu_count(),
+        help=f"Number of parallel jobs for nRMSD computation (default: {cpu_count()})",
     )
 
     return parser.parse_args()
@@ -293,8 +301,15 @@ def validate_nucleotide_counts(
     print(f"All structures have {first_count} nucleotides")
 
 
+def compute_nrmsd_pair(args):
+    """Helper function for parallel nRMSD computation."""
+    i, j, nucleotides_i, nucleotides_j = args
+    nrmsd = compute_nrmsd(nucleotides_i, nucleotides_j)
+    return i, j, nrmsd
+
+
 def find_structure_clusters(
-    structures: List[Structure], threshold: float, visualize: bool = False
+    structures: List[Structure], threshold: float, visualize: bool = False, n_jobs: int = None
 ) -> List[List[int]]:
     """
     Find clusters of almost identical structures using hierarchical clustering.
@@ -307,6 +322,8 @@ def find_structure_clusters(
         nRMSD threshold for clustering
     visualize : bool
         Whether to show dendrogram visualization
+    n_jobs : int
+        Number of parallel jobs for nRMSD computation
 
     Returns:
     --------
@@ -326,16 +343,30 @@ def find_structure_clusters(
         ]
         nucleotide_lists.append(nucleotides)
 
-    # Compute nRMSD distance matrix
-    print("Computing pairwise nRMSD distances...")
+    # Compute nRMSD distance matrix in parallel
+    print(f"Computing pairwise nRMSD distances using {n_jobs or cpu_count()} processes...")
     distance_matrix = np.zeros((n_structures, n_structures))
 
+    # Prepare arguments for parallel computation
+    pairs = []
     for i in range(n_structures):
         for j in range(i + 1, n_structures):
-            nrmsd = compute_nrmsd(nucleotide_lists[i], nucleotide_lists[j])
-            distance_matrix[i, j] = nrmsd
-            distance_matrix[j, i] = nrmsd
-            print(f"  Structure {i} vs {j}: nRMSD = {nrmsd:.4f}")
+            pairs.append((i, j, nucleotide_lists[i], nucleotide_lists[j]))
+
+    # Compute nRMSD values in parallel
+    if n_jobs == 1:
+        # Sequential computation
+        results = [compute_nrmsd_pair(pair) for pair in pairs]
+    else:
+        # Parallel computation
+        with Pool(processes=n_jobs) as pool:
+            results = pool.map(compute_nrmsd_pair, pairs)
+
+    # Fill the distance matrix
+    for i, j, nrmsd in results:
+        distance_matrix[i, j] = nrmsd
+        distance_matrix[j, i] = nrmsd
+        print(f"  Structure {i} vs {j}: nRMSD = {nrmsd:.4f}")
 
     # Convert to condensed distance matrix for scipy
     condensed_distances = squareform(distance_matrix)
@@ -419,7 +450,7 @@ def main():
 
     # Find clusters
     print("\nFinding structure clusters...")
-    clusters = find_structure_clusters(structures, args.threshold, args.visualize)
+    clusters = find_structure_clusters(structures, args.threshold, args.visualize, args.jobs)
 
     # Output results
     print(f"\nFound {len(clusters)} clusters:")
