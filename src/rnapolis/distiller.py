@@ -687,15 +687,18 @@ def compute_nrmsd_batch(
         coords1_padded[idx, :n_atoms] = coords1
         coords2_padded[idx, :n_atoms] = coords2
 
+    # Convert atom_counts to numpy array
+    atom_counts_array = np.array(atom_counts)
+
     # Compute RMSD using GPU or CPU
     if CUPY_AVAILABLE:
         try:
-            rmsd_values = compute_rmsd_batch_gpu(coords1_padded, coords2_padded)
+            rmsd_values = compute_rmsd_batch_gpu(coords1_padded, coords2_padded, atom_counts_array)
         except Exception as e:
             print(f"GPU computation failed, falling back to CPU: {e}")
-            rmsd_values = compute_rmsd_batch_cpu(coords1_padded, coords2_padded)
+            rmsd_values = compute_rmsd_batch_cpu(coords1_padded, coords2_padded, atom_counts_array)
     else:
-        rmsd_values = compute_rmsd_batch_cpu(coords1_padded, coords2_padded)
+        rmsd_values = compute_rmsd_batch_cpu(coords1_padded, coords2_padded, atom_counts_array)
 
     # Convert to nRMSD and update results
     results = []
