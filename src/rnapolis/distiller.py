@@ -348,7 +348,7 @@ def compute_rmsd_batch_gpu(
     # Compute RMSD for each pair using only actual atoms
     diff = centered1 - rotated2  # (batch_size, max_atoms, 3)
     squared_diff = cp.sum(diff**2, axis=2)  # (batch_size, max_atoms)
-    
+
     # Apply mask to exclude padded atoms from RMSD calculation
     masked_squared_diff = squared_diff * masks  # (batch_size, max_atoms)
     sum_squared_diff = cp.sum(masked_squared_diff, axis=1)  # (batch_size,)
@@ -693,12 +693,18 @@ def compute_nrmsd_batch(
     # Compute RMSD using GPU or CPU
     if CUPY_AVAILABLE:
         try:
-            rmsd_values = compute_rmsd_batch_gpu(coords1_padded, coords2_padded, atom_counts_array)
+            rmsd_values = compute_rmsd_batch_gpu(
+                coords1_padded, coords2_padded, atom_counts_array
+            )
         except Exception as e:
             print(f"GPU computation failed, falling back to CPU: {e}")
-            rmsd_values = compute_rmsd_batch_cpu(coords1_padded, coords2_padded, atom_counts_array)
+            rmsd_values = compute_rmsd_batch_cpu(
+                coords1_padded, coords2_padded, atom_counts_array
+            )
     else:
-        rmsd_values = compute_rmsd_batch_cpu(coords1_padded, coords2_padded, atom_counts_array)
+        rmsd_values = compute_rmsd_batch_cpu(
+            coords1_padded, coords2_padded, atom_counts_array
+        )
 
     # Convert to nRMSD and update results
     results = []
