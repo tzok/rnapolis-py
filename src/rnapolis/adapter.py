@@ -737,7 +737,9 @@ def parse_rnaview_output(file_paths: List[str]) -> BaseInteractions:
             return LeontisWesthof[f"{trans_cis}WW"]
         return LeontisWesthof[f"{trans_cis}{lw_info[0].upper()}{lw_info[2].upper()}"]
 
-    def append_residues_from_pdb_using_rnaview_indexing(pdb_content: str) -> Dict[int, Residue]:
+    def append_residues_from_pdb_using_rnaview_indexing(
+        pdb_content: str,
+    ) -> Dict[int, Residue]:
         """Parse PDB content and create RNAView-style residue mapping."""
         potential_residues: Dict[str, PotentialResidue] = {}
 
@@ -746,11 +748,7 @@ def parse_rnaview_output(file_paths: List[str]) -> BaseInteractions:
                 atom_name = line[ATOM_NAME_INDEX].strip()
 
                 number = int(line[NUMBER_INDEX].strip())
-                icode = (
-                    None
-                    if line[ICODE_INDEX].strip() == ""
-                    else line[ICODE_INDEX]
-                )
+                icode = None if line[ICODE_INDEX].strip() == "" else line[ICODE_INDEX]
                 chain = line[CHAIN_INDEX].strip()
                 name = line[NAME_INDEX].strip()
 
@@ -844,9 +842,13 @@ def parse_rnaview_output(file_paths: List[str]) -> BaseInteractions:
         try:
             with open(pdb_file, "r", encoding="utf-8") as f:
                 pdb_content = f.read()
-            residues_from_pdb = append_residues_from_pdb_using_rnaview_indexing(pdb_content)
+            residues_from_pdb = append_residues_from_pdb_using_rnaview_indexing(
+                pdb_content
+            )
         except Exception as e:
-            logging.warning(f"Error processing RNAView PDB file {pdb_file}: {e}", exc_info=True)
+            logging.warning(
+                f"Error processing RNAView PDB file {pdb_file}: {e}", exc_info=True
+            )
 
     # Process the RNAView output file
     logging.info(f"Processing RNAView file: {out_file}")
@@ -887,7 +889,9 @@ def parse_rnaview_output(file_paths: List[str]) -> BaseInteractions:
                 # Use residue mapping if available, otherwise create residues from regex
                 if residues_from_pdb:
                     try:
-                        check_indexing_correctness(rnaview_regex_groups, line, residues_from_pdb)
+                        check_indexing_correctness(
+                            rnaview_regex_groups, line, residues_from_pdb
+                        )
                         residue_left = residues_from_pdb[int(rnaview_regex_groups[0])]
                         residue_right = residues_from_pdb[int(rnaview_regex_groups[1])]
                     except (KeyError, ValueError) as e:
