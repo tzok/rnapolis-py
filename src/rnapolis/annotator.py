@@ -660,12 +660,6 @@ def write_bpseq(path: str, bpseq: BpSeq):
 
 def add_common_output_arguments(parser: argparse.ArgumentParser):
     """Adds common output and processing arguments to the parser."""
-    parser.add_argument(
-        "-a",
-        "--all-dot-brackets",
-        action="store_true",
-        help="(optional) print all dot-brackets, not only optimal one (exclusive with -e/--extended)",
-    )
     parser.add_argument("-b", "--bpseq", help="(optional) path to output BPSEQ file")
     parser.add_argument("-c", "--csv", help="(optional) path to output CSV file")
     parser.add_argument(
@@ -713,9 +707,6 @@ def handle_output_arguments(
 
     if args.extended:
         print(structure2d.extended_dot_bracket)
-    elif args.all_dot_brackets:
-        for dot_bracket in dot_brackets:
-            print(dot_bracket)
     else:
         print(structure2d.dot_bracket)
 
@@ -842,10 +833,7 @@ def main():
         base_interactions, args.find_gaps
     )
 
-    if args.all_dot_brackets:
-        dot_brackets = mapping.all_dot_brackets
-    else:
-        dot_brackets = [mapping.dot_bracket]
+    dot_brackets = [mapping.dot_bracket]
 
     handle_output_arguments(args, structure2d, dot_brackets, mapping, args.input)
 

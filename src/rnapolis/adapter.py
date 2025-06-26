@@ -433,10 +433,7 @@ def main():
         args.find_gaps,
     )
 
-    if args.all_dot_brackets:
-        dot_brackets = mapping.all_dot_brackets
-    else:
-        dot_brackets = [mapping.dot_bracket]
+    dot_brackets = [mapping.dot_bracket]
 
     handle_output_arguments(args, structure2d, dot_brackets, mapping, args.input)
 
