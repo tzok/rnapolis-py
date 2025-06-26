@@ -256,14 +256,14 @@ def parse_dssr_output(
     # Find the first .json file in the list
     json_file = None
     for file_path in file_paths:
-        if file_path.endswith('.json'):
+        if file_path.endswith(".json"):
             json_file = file_path
             break
-    
+
     if json_file is None:
         logging.warning("No .json file found in DSSR file list")
         return BaseInteractions([], [], [], [], [])
-    
+
     # Log unused files
     unused_files = [f for f in file_paths if f != json_file]
     if unused_files:
