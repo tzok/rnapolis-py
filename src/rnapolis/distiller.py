@@ -88,14 +88,14 @@ def parse_structure_file(file_path: Path) -> Structure:
 def compute_nrmsd(residues1: List[Residue], residues2: List[Residue]) -> float:
     """
     Compute normalized RMSD between two lists of residues.
-    
+
     Parameters:
     -----------
     residues1 : List[Residue]
         First list of residues
     residues2 : List[Residue]
         Second list of residues (must have same length as residues1)
-        
+
     Returns:
     --------
     float
@@ -103,34 +103,47 @@ def compute_nrmsd(residues1: List[Residue], residues2: List[Residue]) -> float:
     """
     if len(residues1) != len(residues2):
         raise ValueError("Residue lists must have the same length")
-    
+
     # Define atom sets for different residue types
-    backbone_atoms = {"P", "OP1", "OP2", "O5'", "C5'", "C4'", "C3'", "C2'", "C1'", "O4'", "O3'", "O2'"}
+    backbone_atoms = {
+        "P",
+        "OP1",
+        "OP2",
+        "O5'",
+        "C5'",
+        "C4'",
+        "C3'",
+        "C2'",
+        "C1'",
+        "O4'",
+        "O3'",
+        "O2'",
+    }
     ribose_atoms = {"C1'", "C2'", "C3'", "C4'", "O4'", "O2'", "O3'"}
-    
+
     # Purine ring atoms (two rings)
     purine_ring_atoms = {"N9", "C8", "N7", "C5", "C6", "N1", "C2", "N3", "C4"}
-    
+
     # Pyrimidine ring atoms (one ring)
     pyrimidine_ring_atoms = {"N1", "C2", "N3", "C4", "C5", "C6"}
-    
+
     # Define purine and pyrimidine residue names
     purines = {"A", "G", "DA", "DG"}
     pyrimidines = {"C", "U", "T", "DC", "DT"}
-    
+
     atom_pairs = []
-    
+
     for res1, res2 in zip(residues1, residues2):
         res1_name = res1.residue_name
         res2_name = res2.residue_name
-        
+
         if res1_name == res2_name:
             # Same residue type - collect all matching atom pairs
             for atom1 in res1.atoms_list:
                 atom2 = res2.find_atom(atom1.name)
                 if atom2 is not None:
                     atom_pairs.append((atom1.coordinates, atom2.coordinates))
-        
+
         elif res1_name in purines and res2_name in purines:
             # Both purines - backbone + ribose + purine rings
             target_atoms = backbone_atoms | ribose_atoms | purine_ring_atoms
@@ -139,7 +152,7 @@ def compute_nrmsd(residues1: List[Residue], residues2: List[Residue]) -> float:
                 atom2 = res2.find_atom(atom_name)
                 if atom1 is not None and atom2 is not None:
                     atom_pairs.append((atom1.coordinates, atom2.coordinates))
-        
+
         elif res1_name in pyrimidines and res2_name in pyrimidines:
             # Both pyrimidines - backbone + ribose + pyrimidine ring
             target_atoms = backbone_atoms | ribose_atoms | pyrimidine_ring_atoms
@@ -148,7 +161,7 @@ def compute_nrmsd(residues1: List[Residue], residues2: List[Residue]) -> float:
                 atom2 = res2.find_atom(atom_name)
                 if atom1 is not None and atom2 is not None:
                     atom_pairs.append((atom1.coordinates, atom2.coordinates))
-        
+
         else:
             # Purine-pyrimidine or other combinations - only backbone + ribose
             target_atoms = backbone_atoms | ribose_atoms
@@ -157,17 +170,17 @@ def compute_nrmsd(residues1: List[Residue], residues2: List[Residue]) -> float:
                 atom2 = res2.find_atom(atom_name)
                 if atom1 is not None and atom2 is not None:
                     atom_pairs.append((atom1.coordinates, atom2.coordinates))
-    
+
     if not atom_pairs:
-        return float('inf')  # No matching atoms found
-    
+        return float("inf")  # No matching atoms found
+
     # Convert to numpy arrays
     coords1 = np.array([pair[0] for pair in atom_pairs])
     coords2 = np.array([pair[1] for pair in atom_pairs])
-    
+
     # Compute optimal superposition using Kabsch algorithm
     rmsd = compute_rmsd_with_superposition(coords1, coords2)
-    
+
     # Return normalized RMSD
     nrmsd = rmsd / np.sqrt(len(atom_pairs))
     return nrmsd
@@ -176,14 +189,14 @@ def compute_nrmsd(residues1: List[Residue], residues2: List[Residue]) -> float:
 def compute_rmsd_with_superposition(coords1: np.ndarray, coords2: np.ndarray) -> float:
     """
     Compute RMSD between two sets of coordinates after optimal superposition.
-    
+
     Parameters:
     -----------
     coords1 : np.ndarray
         First set of coordinates (N x 3)
     coords2 : np.ndarray
         Second set of coordinates (N x 3)
-        
+
     Returns:
     --------
     float
@@ -192,31 +205,31 @@ def compute_rmsd_with_superposition(coords1: np.ndarray, coords2: np.ndarray) ->
     # Center the coordinates
     centroid1 = np.mean(coords1, axis=0)
     centroid2 = np.mean(coords2, axis=0)
-    
+
     centered1 = coords1 - centroid1
     centered2 = coords2 - centroid2
-    
+
     # Compute the cross-covariance matrix
     H = centered1.T @ centered2
-    
+
     # Singular value decomposition
     U, S, Vt = np.linalg.svd(H)
-    
+
     # Compute rotation matrix
     R = Vt.T @ U.T
-    
+
     # Ensure proper rotation (det(R) = 1)
     if np.linalg.det(R) < 0:
         Vt[-1, :] *= -1
         R = Vt.T @ U.T
-    
+
     # Apply rotation to centered2
     rotated2 = centered2 @ R.T
-    
+
     # Compute RMSD
     diff = centered1 - rotated2
     rmsd = np.sqrt(np.mean(np.sum(diff**2, axis=1)))
-    
+
     return rmsd
 
 
