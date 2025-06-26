@@ -18,6 +18,7 @@ from rnapolis.tertiary_v2 import Structure, Residue
 # Try to import CuPy for GPU acceleration
 try:
     import cupy as cp
+
     CUPY_AVAILABLE = True
     print("CuPy detected - GPU acceleration enabled")
 except ImportError:
@@ -267,7 +268,9 @@ def compute_rmsd_with_superposition(coords1: np.ndarray, coords2: np.ndarray) ->
     return rmsd
 
 
-def compute_rmsd_batch_gpu(coords1_batch: np.ndarray, coords2_batch: np.ndarray) -> np.ndarray:
+def compute_rmsd_batch_gpu(
+    coords1_batch: np.ndarray, coords2_batch: np.ndarray
+) -> np.ndarray:
     """
     Compute RMSD for a batch of coordinate pairs using GPU acceleration.
 
@@ -285,51 +288,55 @@ def compute_rmsd_batch_gpu(coords1_batch: np.ndarray, coords2_batch: np.ndarray)
     """
     if not CUPY_AVAILABLE:
         raise RuntimeError("CuPy not available for GPU computation")
-    
+
     # Transfer to GPU
     coords1_gpu = cp.asarray(coords1_batch)
     coords2_gpu = cp.asarray(coords2_batch)
-    
+
     batch_size = coords1_gpu.shape[0]
-    
+
     # Center coordinates
     centroid1 = cp.mean(coords1_gpu, axis=1, keepdims=True)  # (batch_size, 1, 3)
     centroid2 = cp.mean(coords2_gpu, axis=1, keepdims=True)  # (batch_size, 1, 3)
-    
+
     centered1 = coords1_gpu - centroid1  # (batch_size, N, 3)
     centered2 = coords2_gpu - centroid2  # (batch_size, N, 3)
-    
+
     # Compute cross-covariance matrices for all pairs
     H = cp.matmul(centered1.transpose(0, 2, 1), centered2)  # (batch_size, 3, 3)
-    
+
     # SVD for each matrix in the batch
     U, S, Vt = cp.linalg.svd(H)  # Each is (batch_size, 3, 3)
-    
+
     # Compute rotation matrices
     R = cp.matmul(Vt.transpose(0, 2, 1), U.transpose(0, 2, 1))  # (batch_size, 3, 3)
-    
+
     # Ensure proper rotation (det(R) = 1) for each matrix
     det_R = cp.linalg.det(R)  # (batch_size,)
     flip_mask = det_R < 0
-    
+
     # Flip the last row of Vt for matrices with negative determinant
     Vt_corrected = Vt.copy()
     Vt_corrected[flip_mask, -1, :] *= -1
     R_corrected = cp.matmul(Vt_corrected.transpose(0, 2, 1), U.transpose(0, 2, 1))
-    
+
     # Apply rotation to centered2
-    rotated2 = cp.matmul(centered2, R_corrected.transpose(0, 2, 1))  # (batch_size, N, 3)
-    
+    rotated2 = cp.matmul(
+        centered2, R_corrected.transpose(0, 2, 1)
+    )  # (batch_size, N, 3)
+
     # Compute RMSD for each pair
     diff = centered1 - rotated2  # (batch_size, N, 3)
     squared_diff = cp.sum(diff**2, axis=2)  # (batch_size, N)
     rmsd = cp.sqrt(cp.mean(squared_diff, axis=1))  # (batch_size,)
-    
+
     # Transfer back to CPU
     return cp.asnumpy(rmsd)
 
 
-def compute_rmsd_batch_cpu(coords1_batch: np.ndarray, coords2_batch: np.ndarray) -> np.ndarray:
+def compute_rmsd_batch_cpu(
+    coords1_batch: np.ndarray, coords2_batch: np.ndarray
+) -> np.ndarray:
     """
     Compute RMSD for a batch of coordinate pairs using CPU.
 
@@ -347,10 +354,12 @@ def compute_rmsd_batch_cpu(coords1_batch: np.ndarray, coords2_batch: np.ndarray)
     """
     batch_size = coords1_batch.shape[0]
     rmsd_values = np.zeros(batch_size)
-    
+
     for i in range(batch_size):
-        rmsd_values[i] = compute_rmsd_with_superposition(coords1_batch[i], coords2_batch[i])
-    
+        rmsd_values[i] = compute_rmsd_with_superposition(
+            coords1_batch[i], coords2_batch[i]
+        )
+
     return rmsd_values
 
 
@@ -510,17 +519,19 @@ def compute_nrmsd_pair(args):
     return i, j, nrmsd
 
 
-def extract_atom_coordinates(residues1: List[Residue], residues2: List[Residue]) -> Tuple[np.ndarray, np.ndarray]:
+def extract_atom_coordinates(
+    residues1: List[Residue], residues2: List[Residue]
+) -> Tuple[np.ndarray, np.ndarray]:
     """
     Extract matching atom coordinates from two residue lists.
-    
+
     Parameters:
     -----------
     residues1 : List[Residue]
         First list of residues
     residues2 : List[Residue]
         Second list of residues
-        
+
     Returns:
     --------
     Tuple[np.ndarray, np.ndarray]
@@ -528,22 +539,33 @@ def extract_atom_coordinates(residues1: List[Residue], residues2: List[Residue])
     """
     # Define atom sets for different residue types
     backbone_atoms = {
-        "P", "OP1", "OP2", "O5'", "C5'", "C4'", "C3'", "C2'", "C1'", "O4'", "O3'", "O2'"
+        "P",
+        "OP1",
+        "OP2",
+        "O5'",
+        "C5'",
+        "C4'",
+        "C3'",
+        "C2'",
+        "C1'",
+        "O4'",
+        "O3'",
+        "O2'",
     }
     ribose_atoms = {"C1'", "C2'", "C3'", "C4'", "O4'", "O2'", "O3'"}
     purine_ring_atoms = {"N9", "C8", "N7", "C5", "C6", "N1", "C2", "N3", "C4"}
     pyrimidine_ring_atoms = {"N1", "C2", "N3", "C4", "C5", "C6"}
-    
+
     purines = {"A", "G", "DA", "DG"}
     pyrimidines = {"C", "U", "T", "DC", "DT"}
-    
+
     coords1_list = []
     coords2_list = []
-    
+
     for res1, res2 in zip(residues1, residues2):
         res1_name = res1.residue_name
         res2_name = res2.residue_name
-        
+
         if res1_name == res2_name:
             # Same residue type - collect all matching atom pairs
             for atom1 in res1.atoms_list:
@@ -578,22 +600,24 @@ def extract_atom_coordinates(residues1: List[Residue], residues2: List[Residue])
                 if atom1 is not None and atom2 is not None:
                     coords1_list.append(atom1.coordinates)
                     coords2_list.append(atom2.coordinates)
-    
+
     if not coords1_list:
         return np.array([]).reshape(0, 3), np.array([]).reshape(0, 3)
-    
+
     return np.array(coords1_list), np.array(coords2_list)
 
 
-def compute_nrmsd_batch(pairs_data: List[Tuple[int, int, List[Residue], List[Residue]]]) -> List[Tuple[int, int, float]]:
+def compute_nrmsd_batch(
+    pairs_data: List[Tuple[int, int, List[Residue], List[Residue]]],
+) -> List[Tuple[int, int, float]]:
     """
     Compute nRMSD for a batch of structure pairs using GPU acceleration if available.
-    
+
     Parameters:
     -----------
     pairs_data : List[Tuple[int, int, List[Residue], List[Residue]]]
         List of (i, j, residues_i, residues_j) tuples
-        
+
     Returns:
     --------
     List[Tuple[int, int, float]]
@@ -601,38 +625,40 @@ def compute_nrmsd_batch(pairs_data: List[Tuple[int, int, List[Residue], List[Res
     """
     if not pairs_data:
         return []
-    
+
     # Extract coordinates for all pairs
     coords1_batch = []
     coords2_batch = []
     atom_counts = []
     valid_pairs = []
-    
+
     for i, j, residues_i, residues_j in pairs_data:
         coords1, coords2 = extract_atom_coordinates(residues_i, residues_j)
-        
+
         if len(coords1) == 0:
             # No matching atoms - return infinite nRMSD
-            valid_pairs.append((i, j, float('inf')))
+            valid_pairs.append((i, j, float("inf")))
             continue
-            
+
         coords1_batch.append(coords1)
         coords2_batch.append(coords2)
         atom_counts.append(len(coords1))
         valid_pairs.append((i, j, None))  # Placeholder for nRMSD
-    
+
     if not coords1_batch:
         return valid_pairs
-    
+
     # Pad coordinates to same length for batching
     max_atoms = max(atom_counts)
     coords1_padded = np.zeros((len(coords1_batch), max_atoms, 3))
     coords2_padded = np.zeros((len(coords2_batch), max_atoms, 3))
-    
-    for idx, (coords1, coords2, n_atoms) in enumerate(zip(coords1_batch, coords2_batch, atom_counts)):
+
+    for idx, (coords1, coords2, n_atoms) in enumerate(
+        zip(coords1_batch, coords2_batch, atom_counts)
+    ):
         coords1_padded[idx, :n_atoms] = coords1
         coords2_padded[idx, :n_atoms] = coords2
-    
+
     # Compute RMSD using GPU or CPU
     if CUPY_AVAILABLE:
         try:
@@ -642,11 +668,11 @@ def compute_nrmsd_batch(pairs_data: List[Tuple[int, int, List[Residue], List[Res
             rmsd_values = compute_rmsd_batch_cpu(coords1_padded, coords2_padded)
     else:
         rmsd_values = compute_rmsd_batch_cpu(coords1_padded, coords2_padded)
-    
+
     # Convert to nRMSD and update results
     results = []
     batch_idx = 0
-    
+
     for i, j, nrmsd_placeholder in valid_pairs:
         if nrmsd_placeholder is None:
             # This was a valid pair that we computed
@@ -658,7 +684,7 @@ def compute_nrmsd_batch(pairs_data: List[Tuple[int, int, List[Residue], List[Res
         else:
             # This was an invalid pair (infinite nRMSD)
             results.append((i, j, nrmsd_placeholder))
-    
+
     return results
 
 
@@ -702,9 +728,13 @@ def find_structure_clusters(
 
     # Compute nRMSD distance matrix using batched computation
     batch_size = 100
-    use_gpu = CUPY_AVAILABLE and n_jobs != 1  # Use GPU unless explicitly requesting single-threaded
-    
-    print(f"Computing pairwise nRMSD distances using {'GPU' if use_gpu else 'CPU'} with batch size {batch_size}...")
+    use_gpu = (
+        CUPY_AVAILABLE and n_jobs != 1
+    )  # Use GPU unless explicitly requesting single-threaded
+
+    print(
+        f"Computing pairwise nRMSD distances using {'GPU' if use_gpu else 'CPU'} with batch size {batch_size}..."
+    )
     distance_matrix = np.zeros((n_structures, n_structures))
 
     # Prepare all pairs
@@ -716,11 +746,11 @@ def find_structure_clusters(
     # Process pairs in batches
     total_pairs = len(all_pairs)
     processed_pairs = 0
-    
+
     for batch_start in range(0, total_pairs, batch_size):
         batch_end = min(batch_start + batch_size, total_pairs)
         batch_pairs = all_pairs[batch_start:batch_end]
-        
+
         if use_gpu:
             # Use GPU batched computation
             results = compute_nrmsd_batch(batch_pairs)
@@ -731,15 +761,17 @@ def find_structure_clusters(
             else:
                 with Pool(processes=n_jobs) as pool:
                     results = pool.map(compute_nrmsd_pair, batch_pairs)
-        
+
         # Fill the distance matrix
         for i, j, nrmsd in results:
             distance_matrix[i, j] = nrmsd
             distance_matrix[j, i] = nrmsd
             print(f"  Structure {i} vs {j}: nRMSD = {nrmsd:.4f}")
-        
+
         processed_pairs += len(batch_pairs)
-        print(f"  Processed {processed_pairs}/{total_pairs} pairs ({100*processed_pairs/total_pairs:.1f}%)")
+        print(
+            f"  Processed {processed_pairs}/{total_pairs} pairs ({100 * processed_pairs / total_pairs:.1f}%)"
+        )
 
     # Convert to condensed distance matrix for scipy
     condensed_distances = squareform(distance_matrix)
