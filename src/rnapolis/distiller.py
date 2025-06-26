@@ -54,75 +54,88 @@ def validate_input_files(files: List[Path]) -> List[Path]:
 def parse_structure_file(file_path: Path) -> Structure:
     """
     Parse a structure file (PDB or mmCIF) into a Structure object.
-    
+
     Parameters:
     -----------
     file_path : Path
         Path to the structure file
-        
+
     Returns:
     --------
     Structure
         Parsed structure object
     """
     try:
-        with open(file_path, 'r') as f:
+        with open(file_path, "r") as f:
             content = f.read()
-            
+
         # Determine file type and parse accordingly
-        if file_path.suffix.lower() == '.pdb':
+        if file_path.suffix.lower() == ".pdb":
             atoms_df = parse_pdb_atoms(content)
         else:  # .cif or .mmcif
             atoms_df = parse_cif_atoms(content)
-            
+
         return Structure(atoms_df)
-        
+
     except Exception as e:
         print(f"Error parsing {file_path}: {e}", file=sys.stderr)
         raise
 
 
-def validate_nucleotide_counts(structures: List[Structure], file_paths: List[Path]) -> None:
+def validate_nucleotide_counts(
+    structures: List[Structure], file_paths: List[Path]
+) -> None:
     """
     Validate that all structures have the same number of nucleotides.
-    
+
     Parameters:
     -----------
     structures : List[Structure]
         List of parsed structures
     file_paths : List[Path]
         Corresponding file paths for error reporting
-        
+
     Raises:
     -------
     SystemExit
         If structures have different numbers of nucleotides
     """
     nucleotide_counts = []
-    
+
     for structure, file_path in zip(structures, file_paths):
-        nucleotide_residues = [residue for residue in structure.residues if residue.is_nucleotide]
+        nucleotide_residues = [
+            residue for residue in structure.residues if residue.is_nucleotide
+        ]
         nucleotide_counts.append((len(nucleotide_residues), file_path))
-    
+
     if not nucleotide_counts:
         print("Error: No structures with nucleotides found", file=sys.stderr)
         sys.exit(1)
-    
+
     # Check if all counts are the same
     first_count = nucleotide_counts[0][0]
-    mismatched = [(count, path) for count, path in nucleotide_counts if count != first_count]
-    
+    mismatched = [
+        (count, path) for count, path in nucleotide_counts if count != first_count
+    ]
+
     if mismatched:
-        print("Error: Structures have different numbers of nucleotides:", file=sys.stderr)
-        print(f"Expected: {first_count} nucleotides (from {nucleotide_counts[0][1]})", file=sys.stderr)
+        print(
+            "Error: Structures have different numbers of nucleotides:", file=sys.stderr
+        )
+        print(
+            f"Expected: {first_count} nucleotides (from {nucleotide_counts[0][1]})",
+            file=sys.stderr,
+        )
         for count, path in mismatched:
             print(f"Found: {count} nucleotides in {path}", file=sys.stderr)
         sys.exit(1)
-    
+
     print(f"All structures have {first_count} nucleotides")
 
 
-def find_structure_clusters(structures: List[Structure], threshold: float) -> List[List[int]]:
+def find_structure_clusters(
+    structures: List[Structure], threshold: float
+) -> List[List[int]]:
     """
     Find clusters of almost identical structures.
 
@@ -173,7 +186,7 @@ def main():
         sys.exit(1)
 
     # Update valid_files to match successfully parsed structures
-    valid_files = valid_files[:len(structures)]
+    valid_files = valid_files[: len(structures)]
 
     # Validate nucleotide counts
     print("\nValidating nucleotide counts...")
