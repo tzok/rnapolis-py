@@ -11,6 +11,7 @@ from scipy.spatial.distance import squareform
 from scipy.spatial.transform import Rotation
 from sklearn.cluster import AgglomerativeClustering
 from sklearn.metrics import silhouette_score
+from tqdm import tqdm
 
 from rnapolis.parser_v2 import parse_cif_atoms, parse_pdb_atoms
 from rnapolis.tertiary_v2 import Structure, Residue
@@ -780,35 +781,37 @@ def find_structure_clusters(
         for j in range(i + 1, n_structures):
             all_pairs.append((i, j, nucleotide_lists[i], nucleotide_lists[j]))
 
-    # Process pairs in batches
+    # Process pairs in batches with progress bar
     total_pairs = len(all_pairs)
-    processed_pairs = 0
+    num_batches = (total_pairs + batch_size - 1) // batch_size
+    
+    with tqdm(total=num_batches, desc="Processing batches", unit="batch") as pbar:
+        for batch_start in range(0, total_pairs, batch_size):
+            batch_end = min(batch_start + batch_size, total_pairs)
+            batch_pairs = all_pairs[batch_start:batch_end]
 
-    for batch_start in range(0, total_pairs, batch_size):
-        batch_end = min(batch_start + batch_size, total_pairs)
-        batch_pairs = all_pairs[batch_start:batch_end]
-
-        if use_gpu:
-            # Use GPU batched computation
-            results = compute_nrmsd_batch(batch_pairs)
-        else:
-            # Use CPU computation (potentially parallel)
-            if n_jobs == 1:
-                results = [compute_nrmsd_pair(pair) for pair in batch_pairs]
+            if use_gpu:
+                # Use GPU batched computation
+                results = compute_nrmsd_batch(batch_pairs)
             else:
-                with Pool(processes=n_jobs) as pool:
-                    results = pool.map(compute_nrmsd_pair, batch_pairs)
+                # Use CPU computation (potentially parallel)
+                if n_jobs == 1:
+                    results = [compute_nrmsd_pair(pair) for pair in batch_pairs]
+                else:
+                    with Pool(processes=n_jobs) as pool:
+                        results = pool.map(compute_nrmsd_pair, batch_pairs)
 
-        # Fill the distance matrix
-        for i, j, nrmsd in results:
-            distance_matrix[i, j] = nrmsd
-            distance_matrix[j, i] = nrmsd
-            print(f"  Structure {i} vs {j}: nRMSD = {nrmsd:.4f}")
+            # Fill the distance matrix
+            for i, j, nrmsd in results:
+                distance_matrix[i, j] = nrmsd
+                distance_matrix[j, i] = nrmsd
 
-        processed_pairs += len(batch_pairs)
-        print(
-            f"  Processed {processed_pairs}/{total_pairs} pairs ({100 * processed_pairs / total_pairs:.1f}%)"
-        )
+            # Update progress bar
+            pbar.set_postfix({
+                'pairs': f"{batch_end}/{total_pairs}",
+                'batch_size': len(batch_pairs)
+            })
+            pbar.update(1)
 
     # Convert to condensed distance matrix for scipy
     condensed_distances = squareform(distance_matrix)
