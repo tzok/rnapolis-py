@@ -375,7 +375,9 @@ def main():
     # If no external files provided, create empty BaseInteractions
     if not args.external_files:
         base_interactions = BaseInteractions([], [], [], [], [])
-        structure2d, mapping = structure3d.extract_secondary_structure(base_interactions, args.find_gaps)
+        structure2d, mapping = structure3d.extract_secondary_structure(
+            base_interactions, args.find_gaps
+        )
     else:
         # For now, process only the first external file (can be extended later for multiple files)
         structure2d, mapping = process_external_tool_output(
