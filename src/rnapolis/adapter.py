@@ -1,8 +1,12 @@
 #! /usr/bin/env python
 import argparse
 import logging
+import math
 import os
+import re
+from dataclasses import dataclass
 from enum import Enum
+from tempfile import NamedTemporaryFile
 from typing import Dict, List, Optional, Tuple
 
 import orjson
@@ -22,10 +26,13 @@ from rnapolis.common import (
     OtherInteraction,
     Residue,
     ResidueAuth,
+    ResidueLabel,
+    Saenger,
     Stacking,
     StackingTopology,
     Structure2D,
 )
+from rnapolis.metareader import read_metadata
 from rnapolis.parser import read_3d_structure
 from rnapolis.tertiary import (
     Mapping2D3D,
@@ -318,10 +325,6 @@ def parse_maxit_output(file_paths: List[str]) -> BaseInteractions:
     Returns:
         BaseInteractions object containing the interactions found by MAXIT
     """
-    from tempfile import NamedTemporaryFile
-
-    from rnapolis.common import ResidueLabel, Saenger
-    from rnapolis.metareader import read_metadata
 
     def convert_saenger(hbond_type_28: str) -> Optional[Saenger]:
         if hbond_type_28 == "?":
@@ -658,10 +661,6 @@ def parse_rnaview_output(file_paths: List[str]) -> BaseInteractions:
     Returns:
         BaseInteractions object containing the interactions found by RNAView
     """
-    import math
-    import re
-    from dataclasses import dataclass
-    from rnapolis.common import Saenger
 
     @dataclass
     class PotentialResidue:
