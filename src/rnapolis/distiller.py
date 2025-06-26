@@ -784,7 +784,7 @@ def find_structure_clusters(
     # Process pairs in batches with progress bar
     total_pairs = len(all_pairs)
     num_batches = (total_pairs + batch_size - 1) // batch_size
-    
+
     with tqdm(total=num_batches, desc="Processing batches", unit="batch") as pbar:
         for batch_start in range(0, total_pairs, batch_size):
             batch_end = min(batch_start + batch_size, total_pairs)
@@ -807,10 +807,9 @@ def find_structure_clusters(
                 distance_matrix[j, i] = nrmsd
 
             # Update progress bar
-            pbar.set_postfix({
-                'pairs': f"{batch_end}/{total_pairs}",
-                'batch_size': len(batch_pairs)
-            })
+            pbar.set_postfix(
+                {"pairs": f"{batch_end}/{total_pairs}", "batch_size": len(batch_pairs)}
+            )
             pbar.update(1)
 
     # Convert to condensed distance matrix for scipy
