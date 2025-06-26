@@ -764,7 +764,7 @@ def find_structure_clusters(
         nucleotide_lists.append(nucleotides)
 
     # Compute nRMSD distance matrix using batched computation
-    batch_size = 100
+    batch_size = 1000
     use_gpu = (
         CUPY_AVAILABLE and n_jobs != 1
     )  # Use GPU unless explicitly requesting single-threaded
