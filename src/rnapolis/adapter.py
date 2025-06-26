@@ -464,7 +464,7 @@ def parse_bpnet_output(file_paths: List[str]) -> BaseInteractions:
 
     def residues_from_overlap_info(fields):
         """Parse residue information from overlap line fields."""
-        chains = fields[6].split("-")
+        chains = fields[6].split("^")
         numbers = list(map(int, fields[3].split(":")))
         icode1, icode2 = fields[2], fields[4]
         names = fields[5].split(":")
