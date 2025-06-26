@@ -396,7 +396,17 @@ def find_structure_clusters(
             )
             plt.legend()
             plt.tight_layout()
-            plt.show()
+            
+            # Always save the plot when --visualize is used
+            plt.savefig("dendrogram.png", dpi=300, bbox_inches='tight')
+            print("Dendrogram saved to dendrogram.png")
+            
+            # Try to show interactively, but don't fail if it doesn't work
+            try:
+                plt.show()
+            except Exception:
+                print("Note: Could not display plot interactively, but saved to file")
+                
         except ImportError:
             print(
                 "Warning: matplotlib not available, skipping dendrogram visualization",
