@@ -328,14 +328,14 @@ def rmsd_qcp(residues1, residues2):
 def rmsd_to_nrmsd(rmsd: float, num_atoms: int) -> float:
     """
     Convert RMSD to normalized RMSD (nRMSD).
-    
+
     Parameters:
     -----------
     rmsd : float
         Root Mean Square Deviation value
     num_atoms : int
         Number of atoms used in the RMSD calculation
-        
+
     Returns:
     --------
     float
