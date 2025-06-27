@@ -361,7 +361,7 @@ def rmsd_to_nrmsd(rmsd: float, num_atoms: int) -> float:
 def nrmsd_quaternions(coords1: np.ndarray, coords2: np.ndarray) -> float:
     """
     Calculates nRMSD using the Quaternion method.
-    
+
     Parameters:
     -----------
     coords1 : np.ndarray
@@ -376,7 +376,7 @@ def nrmsd_quaternions(coords1: np.ndarray, coords2: np.ndarray) -> float:
 def nrmsd_svd(coords1: np.ndarray, coords2: np.ndarray) -> float:
     """
     Calculates nRMSD using SVD decomposition (Kabsch algorithm).
-    
+
     Parameters:
     -----------
     coords1 : np.ndarray
@@ -391,7 +391,7 @@ def nrmsd_svd(coords1: np.ndarray, coords2: np.ndarray) -> float:
 def nrmsd_qcp(coords1: np.ndarray, coords2: np.ndarray) -> float:
     """
     Calculates nRMSD using the QCP (Quaternion Characteristic Polynomial) method.
-    
+
     Parameters:
     -----------
     coords1 : np.ndarray
@@ -458,7 +458,9 @@ def nrmsd_validate(coords1: np.ndarray, coords2: np.ndarray) -> float:
     return result_quaternions
 
 
-def nrmsd_quaternions_residues(residues1: List["Residue"], residues2: List["Residue"]) -> float:
+def nrmsd_quaternions_residues(
+    residues1: List["Residue"], residues2: List["Residue"]
+) -> float:
     """
     Calculates nRMSD using the Quaternion method from residue lists.
     residues1 and residues2 are lists of Residue objects.
@@ -485,7 +487,9 @@ def nrmsd_qcp_residues(residues1: List["Residue"], residues2: List["Residue"]) -
     return nrmsd_qcp(coords1, coords2)
 
 
-def nrmsd_validate_residues(residues1: List["Residue"], residues2: List["Residue"]) -> float:
+def nrmsd_validate_residues(
+    residues1: List["Residue"], residues2: List["Residue"]
+) -> float:
     """
     Validates that all nRMSD methods produce the same result from residue lists.
     residues1 and residues2 are lists of Residue objects.
