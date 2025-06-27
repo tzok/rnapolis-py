@@ -18,6 +18,7 @@ from rnapolis.tertiary_v2 import Residue, Structure
 # Try to import CuPy for GPU acceleration
 try:
     import cupy as cp
+
     CUPY_AVAILABLE = True
     # Check if CUDA is actually available
     try:
@@ -486,11 +487,11 @@ def rmsd_squared_cupy(P, Q):
     """
     if not CUPY_AVAILABLE or not CUDA_AVAILABLE:
         raise RuntimeError("CuPy or CUDA not available for GPU computation")
-    
+
     # Transfer to GPU
     P_gpu = cp.asarray(P)
     Q_gpu = cp.asarray(Q)
-    
+
     # 1. Center coordinates
     centroid_P = cp.mean(P_gpu, axis=0)
     centroid_Q = cp.mean(Q_gpu, axis=0)
