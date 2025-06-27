@@ -77,9 +77,9 @@ def parse_arguments():
     parser.add_argument(
         "--rmsd-method",
         type=str,
-        choices=["quaternions", "svd"],
+        choices=["quaternions", "svd", "validate"],
         default="quaternions",
-        help="RMSD calculation method (default: quaternions)",
+        help="RMSD calculation method (default: quaternions). Use 'validate' to check both methods agree.",
     )
 
     return parser.parse_args()
@@ -273,6 +273,44 @@ def nrmsd_svd(residues1, residues2):
     return np.sqrt(rmsd_sq) / np.sqrt(P.shape[0])
 
 
+def nrmsd_validate(residues1, residues2):
+    """
+    Validates that both RMSD methods produce the same result.
+    Uses quaternions method as the primary result after validation.
+    
+    Parameters:
+    -----------
+    residues1 : List[Residue]
+        List of residues from the first structure
+    residues2 : List[Residue]
+        List of residues from the second structure
+        
+    Returns:
+    --------
+    float
+        nRMSD value (from quaternions method after validation)
+        
+    Raises:
+    -------
+    ValueError
+        If the two methods produce significantly different results
+    """
+    # Calculate using both methods
+    result_quaternions = nrmsd_quaternions(residues1, residues2)
+    result_svd = nrmsd_svd(residues1, residues2)
+    
+    # Check if results are approximately equal (within 1e-6 tolerance)
+    tolerance = 1e-6
+    if abs(result_quaternions - result_svd) > tolerance:
+        raise ValueError(
+            f"RMSD methods disagree: quaternions={result_quaternions:.8f}, "
+            f"svd={result_svd:.8f}, difference={abs(result_quaternions - result_svd):.8f}"
+        )
+    
+    # Return quaternions result as the validated value
+    return result_quaternions
+
+
 def find_optimal_threshold(
     distance_matrix: np.ndarray, linkage_matrix: np.ndarray
 ) -> float:
@@ -435,6 +473,9 @@ def find_structure_clusters(
     elif rmsd_method == "svd":
         rmsd_func = nrmsd_svd
         print("Computing pairwise nRMSD distances using SVD method...")
+    elif rmsd_method == "validate":
+        rmsd_func = nrmsd_validate
+        print("Computing pairwise nRMSD distances using validation mode (both methods)...")
     else:
         raise ValueError(f"Unknown RMSD method: {rmsd_method}")
 
