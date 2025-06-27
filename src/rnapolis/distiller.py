@@ -385,75 +385,6 @@ def find_paired_coordinates(
     return coords_1, coords_2
 
 
-# def extract_coordinates(
-#     i: int, j: int, residues1: List[Residue], residues2: List[Residue]
-# ) -> Tuple[int, int, np.ndarray, np.ndarray]:
-#     """
-#     Compute normalized RMSD between two lists of residues.
-
-#     Parameters:
-#     -----------
-#     i, j : int
-#         Indices of the two structures to compare
-#     residues1 : List[Residue]
-#         List of residues for the first structure
-#     residues2 : List[Residue]
-#         List of residues for the second structure
-
-#     Returns:
-#     --------
-#     Tuple[int, int, np.ndarray, np.ndarray]
-#         Tuple of i and j indices and two numpy arrays containing coordinates of matching atom pairs
-#     """
-#     if len(residues1) != len(residues2):
-#         raise ValueError("Residue lists must have the same length")
-
-#     atom_pairs = []
-
-#     for res1, res2 in zip(residues1, residues2):
-#         res1_name = res1.residue_name
-#         res2_name = res2.residue_name
-
-#         if res1_name == res2_name:
-#             # Same residue type - collect all matching atom pairs
-#             for atom1 in res1.atoms_list:
-#                 atom2 = res2.find_atom(atom1.name)
-#                 if atom2 is not None:
-#                     atom_pairs.append((atom1.coordinates, atom2.coordinates))
-
-#         elif res1_name in purines and res2_name in purines:
-#             # Both purines - backbone + ribose + purine rings
-#             target_atoms = BACKBONE_ATOMS | RIBOSE_ATOMS | PURINE_ATOMS
-#             for atom_name in target_atoms:
-#                 atom1 = res1.find_atom(atom_name)
-#                 atom2 = res2.find_atom(atom_name)
-#                 if atom1 is not None and atom2 is not None:
-#                     atom_pairs.append((atom1.coordinates, atom2.coordinates))
-
-#         elif res1_name in pyrimidines and res2_name in pyrimidines:
-#             # Both pyrimidines - backbone + ribose + pyrimidine ring
-#             target_atoms = BACKBONE_ATOMS | RIBOSE_ATOMS | PYRIMIDINE_ATOMS
-#             for atom_name in target_atoms:
-#                 atom1 = res1.find_atom(atom_name)
-#                 atom2 = res2.find_atom(atom_name)
-#                 if atom1 is not None and atom2 is not None:
-#                     atom_pairs.append((atom1.coordinates, atom2.coordinates))
-
-#         else:
-#             # Purine-pyrimidine or other combinations - only backbone + ribose
-#             target_atoms = BACKBONE_ATOMS | RIBOSE_ATOMS
-#             for atom_name in target_atoms:
-#                 atom1 = res1.find_atom(atom_name)
-#                 atom2 = res2.find_atom(atom_name)
-#                 if atom1 is not None and atom2 is not None:
-#                     atom_pairs.append((atom1.coordinates, atom2.coordinates))
-
-#     # Convert to numpy arrays
-#     coords1 = np.array([pair[0] for pair in atom_pairs])
-#     coords2 = np.array([pair[1] for pair in atom_pairs])
-#     return i, j, coords1, coords2
-
-
 def find_structure_clusters(
     structures: List[Structure],
     threshold: Optional[float] = None,
@@ -504,29 +435,16 @@ def find_structure_clusters(
     distance_matrix = np.zeros((n_structures, n_structures))
 
     # Prepare all pairs
-    all_pairs = []
-    with ProcessPoolExecutor() as executor:
-        futures = {
-            executor.submit(
-                find_paired_coordinates, nucleotide_lists[i], nucleotide_lists[j]
-            ): (i, j)
-            for i, j in itertools.combinations(range(n_structures), 2)
-        }
-        for future in tqdm(
-            futures,
-            total=len(futures),
-            desc="Extracting coordinates",
-            unit="pair",
-        ):
-            i, j = futures[future]
-            coords_i, coords_j = future.result()
-            all_pairs.append((i, j, coords_i, coords_j))
+    all_pairs = [
+        (i, j, nucleotide_lists[i], nucleotide_lists[j])
+        for i, j in itertools.combinations(range(n_structures), 2)
+    ]
 
     # Process pairs with progress bar
     with ProcessPoolExecutor() as executor:
         futures_dict = {
-            executor.submit(rmsd_func, coords_i, coords_j): (i, j)
-            for i, j, coords_i, coords_j in all_pairs
+            executor.submit(rmsd_func, nucleotides_i, nucleotides_j): (i, j)
+            for i, j, nucleotides_i, nucleotides_j in all_pairs
         }
         results = []
         for future in tqdm(
