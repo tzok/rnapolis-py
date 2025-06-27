@@ -469,11 +469,11 @@ class Residue:
     def _atom_dict(self) -> dict[str, "Atom"]:
         """Cache a dictionary of atom names to Atom instances."""
         atom_dict = {}
-        
+
         for i in range(len(self.atoms)):
             atom_data = self.atoms.iloc[i]
             atom = Atom(atom_data, self.format)
-            
+
             # Get the atom name based on format
             if self.format == "PDB":
                 atom_name = atom_data["name"]
@@ -484,9 +484,9 @@ class Residue:
                     atom_name = atom_data["label_atom_id"]
             else:
                 continue
-                
+
             atom_dict[atom_name] = atom
-            
+
         return atom_dict
 
     def find_atom(self, atom_name: str) -> Optional["Atom"]:
