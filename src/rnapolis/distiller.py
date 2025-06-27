@@ -191,11 +191,14 @@ def validate_nucleotide_counts(
     print(f"All structures have {first_count} nucleotides")
 
 
-def nrmsd_quaternions(P, Q):
+def nrmsd_quaternions(residues1, residues2):
     """
     Calculates nRMSD using the Quaternion method.
-    P and Q are Nx3 numpy arrays.
+    residues1 and residues2 are lists of Residue objects.
     """
+    # Get paired coordinates
+    P, Q = find_paired_coordinates(residues1, residues2)
+    
     # 1. Center coordinates using vectorized operations
     centroid_P = np.mean(P, axis=0)
     centroid_Q = np.mean(Q, axis=0)
@@ -232,11 +235,14 @@ def nrmsd_quaternions(P, Q):
     return np.sqrt(max(0.0, rmsd_sq) / N)
 
 
-def nrmsd_svd(P, Q):
+def nrmsd_svd(residues1, residues2):
     """
     Calculates nRMSD using SVD decomposition (Kabsch algorithm).
-    P and Q are Nx3 numpy arrays.
+    residues1 and residues2 are lists of Residue objects.
     """
+    # Get paired coordinates
+    P, Q = find_paired_coordinates(residues1, residues2)
+    
     # 1. Center coordinates
     centroid_P = np.mean(P, axis=0)
     centroid_Q = np.mean(Q, axis=0)
