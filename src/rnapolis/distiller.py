@@ -288,41 +288,27 @@ def nrmsd_qcp(residues1, residues2):
     P_centered = P - centroid_P
     Q_centered = Q - centroid_Q
 
-    # 2. Calculate the inner product matrix elements
-    N = P.shape[0]
-
-    # Calculate Sxx, Sxy, Sxz, Syy, Syz, Szz
-    Sxx = np.sum(P_centered[:, 0] * Q_centered[:, 0])
-    Sxy = np.sum(P_centered[:, 0] * Q_centered[:, 1])
-    Sxz = np.sum(P_centered[:, 0] * Q_centered[:, 2])
-    Syx = np.sum(P_centered[:, 1] * Q_centered[:, 0])
-    Syy = np.sum(P_centered[:, 1] * Q_centered[:, 1])
-    Syz = np.sum(P_centered[:, 1] * Q_centered[:, 2])
-    Szx = np.sum(P_centered[:, 2] * Q_centered[:, 0])
-    Szy = np.sum(P_centered[:, 2] * Q_centered[:, 1])
-    Szz = np.sum(P_centered[:, 2] * Q_centered[:, 2])
+    # 2. Calculate the inner product matrix elements (cross-covariance matrix)
+    C = P_centered.T @ Q_centered
+    
+    # Extract elements
+    Sxx, Sxy, Sxz = C[0, 0], C[0, 1], C[0, 2]
+    Syx, Syy, Syz = C[1, 0], C[1, 1], C[1, 2]
+    Szx, Szy, Szz = C[2, 0], C[2, 1], C[2, 2]
 
     # 3. Calculate the coefficients of the characteristic polynomial
-    SxxpSyy = Sxx + Syy
-    SxxmSyy = Sxx - Syy
-    SxypSyx = Sxy + Syx
-    SxymSyx = Sxy - Syx
-    SxzpSzx = Sxz + Szx
-    SxzmSzx = Sxz - Szx
-    SyzpSzy = Syz + Szy
-    SyzmSzy = Syz - Szy
-
-    # Coefficients for the characteristic polynomial
-    C2 = -2.0 * (Sxx * Syy + Sxx * Szz + Syy * Szz - Sxy * Sxy - Sxz * Sxz - Syz * Syz)
-    C1 = -8.0 * (
-        Sxx * Syz * Syz + Syy * Sxz * Sxz + Szz * Sxy * Sxy - Sxy * Sxz * Syz * 2.0
-    )
-    C0 = (
-        (Sxy * Sxy + Sxz * Sxz - Sxx * Sxx) * (Syz * Syz + Sxy * Sxy - Syy * Syy)
-        + (Sxz * Sxz + Syz * Syz - Szz * Szz) * (Sxy * Sxy + Syy * Syy - Sxx * Sxx)
-        + 2.0
-        * (Sxy * Sxz * (Syz - Syy) + Sxy * Syz * (Sxz - Szz) + Sxz * Syz * (Sxy - Sxx))
-    )
+    # For the K matrix eigenvalue problem: det(K - λI) = 0
+    # This gives us: λ^4 + C2*λ^2 + C1*λ + C0 = 0
+    
+    # Coefficients (corrected formulation)
+    C2 = -2.0 * (Sxx*Sxx + Sxy*Sxy + Sxz*Sxz + Syx*Syx + Syy*Syy +
+                  Syz*Syz + Szx*Szx + Szy*Szy + Szz*Szz)
+    
+    C1 = 8.0 * (Sxx*Syz*Szy + Syy*Szx*Sxz + Szz*Sxy*Syx - 
+                Sxx*Syy*Szz - Sxy*Syz*Szx - Sxz*Syx*Szy)
+    
+    C0 = -8.0 * (Sxx*Syy*Szz + Sxy*Syz*Szx + Sxz*Syx*Szy - 
+                 Sxx*Syz*Szy - Syy*Szx*Sxz - Szz*Sxy*Syx)**2
 
     # 4. Calculate E0 (sum of squared distances from centroids)
     E0 = np.sum(P_centered**2) + np.sum(Q_centered**2)
@@ -335,10 +321,12 @@ def nrmsd_qcp(residues1, residues2):
     for _ in range(50):  # Maximum 50 iterations
         lambda2 = lambda_max * lambda_max
         lambda3 = lambda2 * lambda_max
+        lambda4 = lambda3 * lambda_max
 
-        # Polynomial and its derivative
-        p = lambda3 + C2 * lambda_max + C1 * lambda_max + C0
-        dp = 3.0 * lambda2 + 2.0 * C2 * lambda_max + C1
+        # Polynomial: λ^4 + C2*λ^2 + C1*λ + C0 = 0
+        # Derivative: 4*λ^3 + 2*C2*λ + C1
+        p = lambda4 + C2 * lambda2 + C1 * lambda_max + C0
+        dp = 4.0 * lambda3 + 2.0 * C2 * lambda_max + C1
 
         if abs(dp) < 1e-14:
             break
@@ -350,10 +338,10 @@ def nrmsd_qcp(residues1, residues2):
             break
 
     # 6. Calculate RMSD
-    rmsd_sq = (E0 - 2.0 * lambda_max) / N
+    rmsd_sq = (E0 - 2.0 * lambda_max) / P.shape[0]
 
     # Handle potential floating point inaccuracies
-    return np.sqrt(max(0.0, rmsd_sq) / N)
+    return np.sqrt(max(0.0, rmsd_sq) / P.shape[0])
 
 
 def nrmsd_validate(residues1, residues2):
