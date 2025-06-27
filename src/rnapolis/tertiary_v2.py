@@ -23,17 +23,42 @@ BACKBONE_RIBOSE_ATOMS = {
 }
 PURINE_CORE_ATOMS = {"N9", "C8", "N7", "C5", "C6", "N1", "C2", "N3", "C4"}
 PYRIMIDINE_CORE_ATOMS = {"N1", "C2", "N3", "C4", "C5", "C6"}
+# DNA backbone atoms (no O2' compared to RNA)
+BACKBONE_DEOXYRIBOSE_ATOMS = {
+    "P",
+    "O5'",
+    "C5'",
+    "C4'",
+    "O4'",
+    "C3'",
+    "O3'",
+    "C2'",
+    "C1'",
+}
+
+# RNA nucleotides
 ATOMS_A = BACKBONE_RIBOSE_ATOMS | PURINE_CORE_ATOMS | {"N6"}
 ATOMS_G = BACKBONE_RIBOSE_ATOMS | PURINE_CORE_ATOMS | {"O6"}
 ATOMS_C = BACKBONE_RIBOSE_ATOMS | PYRIMIDINE_CORE_ATOMS | {"N4", "O2"}
 ATOMS_U = BACKBONE_RIBOSE_ATOMS | PYRIMIDINE_CORE_ATOMS | {"O4", "O2"}
-PURINES = {"A", "G"}
-PYRIMIDINES = {"C", "U"}
+
+# DNA nucleotides
+ATOMS_DA = BACKBONE_DEOXYRIBOSE_ATOMS | PURINE_CORE_ATOMS | {"N6"}
+ATOMS_DG = BACKBONE_DEOXYRIBOSE_ATOMS | PURINE_CORE_ATOMS | {"O6"}
+ATOMS_DC = BACKBONE_DEOXYRIBOSE_ATOMS | PYRIMIDINE_CORE_ATOMS | {"N4", "O2"}
+ATOMS_DT = BACKBONE_DEOXYRIBOSE_ATOMS | PYRIMIDINE_CORE_ATOMS | {"O4", "O2", "C7"}
+
+PURINES = {"A", "G", "DA", "DG"}
+PYRIMIDINES = {"C", "U", "DC", "DT"}
 RESIDUE_ATOMS_MAP = {
     "A": ATOMS_A,
     "G": ATOMS_G,
     "C": ATOMS_C,
     "U": ATOMS_U,
+    "DA": ATOMS_DA,
+    "DG": ATOMS_DG,
+    "DC": ATOMS_DC,
+    "DT": ATOMS_DT,
 }
 
 
@@ -115,11 +140,27 @@ def find_paired_coordinates(
         if res_name1 == res_name2:
             atoms_to_match = RESIDUE_ATOMS_MAP.get(res_name1)
         elif res_name1 in PURINES and res_name2 in PURINES:
-            atoms_to_match = BACKBONE_RIBOSE_ATOMS | PURINE_CORE_ATOMS
+            # For mixed RNA/DNA purines, use common backbone + purine core
+            if any(name.startswith('D') for name in [res_name1, res_name2]):
+                # At least one is DNA, use deoxyribose backbone
+                atoms_to_match = BACKBONE_DEOXYRIBOSE_ATOMS | PURINE_CORE_ATOMS
+            else:
+                # Both RNA, use ribose backbone
+                atoms_to_match = BACKBONE_RIBOSE_ATOMS | PURINE_CORE_ATOMS
         elif res_name1 in PYRIMIDINES and res_name2 in PYRIMIDINES:
-            atoms_to_match = BACKBONE_RIBOSE_ATOMS | PYRIMIDINE_CORE_ATOMS
+            # For mixed RNA/DNA pyrimidines, use common backbone + pyrimidine core
+            if any(name.startswith('D') for name in [res_name1, res_name2]):
+                # At least one is DNA, use deoxyribose backbone
+                atoms_to_match = BACKBONE_DEOXYRIBOSE_ATOMS | PYRIMIDINE_CORE_ATOMS
+            else:
+                # Both RNA, use ribose backbone
+                atoms_to_match = BACKBONE_RIBOSE_ATOMS | PYRIMIDINE_CORE_ATOMS
         else:
-            atoms_to_match = BACKBONE_RIBOSE_ATOMS
+            # Different types, use minimal common backbone
+            if any(name.startswith('D') for name in [res_name1, res_name2]):
+                atoms_to_match = BACKBONE_DEOXYRIBOSE_ATOMS
+            else:
+                atoms_to_match = BACKBONE_RIBOSE_ATOMS
 
         if residue1.format == "mmCIF":
             df1 = residue1.atoms
