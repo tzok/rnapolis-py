@@ -7,12 +7,13 @@ from pathlib import Path
 from typing import List, Optional, Tuple
 
 import numpy as np
+import pandas as pd
 from scipy.cluster.hierarchy import dendrogram, fcluster, linkage
 from scipy.spatial.distance import squareform
 from sklearn.metrics import silhouette_score
 from tqdm import tqdm
 
-from rnapolis.parser_v2 import parse_cif_atoms, parse_pdb_atoms
+from rnapolis.parser_v2 import parse_cif_atoms, parse_pdb_atoms, write_cif
 from rnapolis.tertiary_v2 import Residue, Structure
 
 # Try to import Numba for JIT acceleration
@@ -40,31 +41,32 @@ except ImportError:
     CUDA_AVAILABLE = False
 
 # Define atom sets for different residue types
-backbone_atoms = {
+BACKBONE_RIBOSE_ATOMS = {
     "P",
-    "OP1",
-    "OP2",
     "O5'",
     "C5'",
     "C4'",
-    "C3'",
-    "C2'",
-    "C1'",
     "O4'",
+    "C3'",
     "O3'",
+    "C2'",
     "O2'",
+    "C1'",
 }
-ribose_atoms = {"C1'", "C2'", "C3'", "C4'", "O4'", "O2'", "O3'"}
-
-# Purine ring atoms (two rings)
-purine_ring_atoms = {"N9", "C8", "N7", "C5", "C6", "N1", "C2", "N3", "C4"}
-
-# Pyrimidine ring atoms (one ring)
-pyrimidine_ring_atoms = {"N1", "C2", "N3", "C4", "C5", "C6"}
-
-# Define purine and pyrimidine residue names
-purines = {"A", "G", "DA", "DG"}
-pyrimidines = {"C", "U", "T", "DC", "DT"}
+PURINE_CORE_ATOMS = {"N9", "C8", "N7", "C5", "C6", "N1", "C2", "N3", "C4"}
+PYRIMIDINE_CORE_ATOMS = {"N1", "C2", "N3", "C4", "C5", "C6"}
+ATOMS_A = BACKBONE_RIBOSE_ATOMS | PURINE_CORE_ATOMS | {"N6"}
+ATOMS_G = BACKBONE_RIBOSE_ATOMS | PURINE_CORE_ATOMS | {"O6"}
+ATOMS_C = BACKBONE_RIBOSE_ATOMS | PYRIMIDINE_CORE_ATOMS | {"N4", "O2"}
+ATOMS_U = BACKBONE_RIBOSE_ATOMS | PYRIMIDINE_CORE_ATOMS | {"O4", "O2"}
+PURINES = {"A", "G"}
+PYRIMIDINES = {"C", "U"}
+RESIDUE_ATOMS_MAP = {
+    "A": ATOMS_A,
+    "G": ATOMS_G,
+    "C": ATOMS_C,
+    "U": ATOMS_U,
+}
 
 
 def parse_arguments():
@@ -388,73 +390,137 @@ def find_optimal_threshold(
     return best_threshold
 
 
-def extract_coordinates(
-    i: int, j: int, residues1: List[Residue], residues2: List[Residue]
-) -> Tuple[int, int, np.ndarray, np.ndarray]:
+def find_paired_coordinates(
+    residues1: List[Residue], residues2: List[Residue]
+) -> Tuple[np.ndarray, np.ndarray]:
     """
-    Compute normalized RMSD between two lists of residues.
+    Find paired coordinates of matching atoms between two residues.
 
     Parameters:
     -----------
-    i, j : int
-        Indices of the two structures to compare
     residues1 : List[Residue]
-        List of residues for the first structure
+        List of residues from the first structure
     residues2 : List[Residue]
-        List of residues for the second structure
+        List of residues from the second structure
 
     Returns:
     --------
-    Tuple[int, int, np.ndarray, np.ndarray]
-        Tuple of i and j indices and two numpy arrays containing coordinates of matching atom pairs
+    Tuple[np.ndarray, np.ndarray]
+        Tuple of two numpy arrays containing coordinates of matching atom pairs
     """
-    if len(residues1) != len(residues2):
-        raise ValueError("Residue lists must have the same length")
+    all_paired_dfs = []
 
-    atom_pairs = []
+    for residue1, residue2 in zip(residues1, residues2):
+        res_name1 = residue1.residue_name
+        res_name2 = residue2.residue_name
 
-    for res1, res2 in zip(residues1, residues2):
-        res1_name = res1.residue_name
-        res2_name = res2.residue_name
+        atoms_to_match = None
 
-        if res1_name == res2_name:
-            # Same residue type - collect all matching atom pairs
-            for atom1 in res1.atoms_list:
-                atom2 = res2.find_atom(atom1.name)
-                if atom2 is not None:
-                    atom_pairs.append((atom1.coordinates, atom2.coordinates))
-
-        elif res1_name in purines and res2_name in purines:
-            # Both purines - backbone + ribose + purine rings
-            target_atoms = backbone_atoms | ribose_atoms | purine_ring_atoms
-            for atom_name in target_atoms:
-                atom1 = res1.find_atom(atom_name)
-                atom2 = res2.find_atom(atom_name)
-                if atom1 is not None and atom2 is not None:
-                    atom_pairs.append((atom1.coordinates, atom2.coordinates))
-
-        elif res1_name in pyrimidines and res2_name in pyrimidines:
-            # Both pyrimidines - backbone + ribose + pyrimidine ring
-            target_atoms = backbone_atoms | ribose_atoms | pyrimidine_ring_atoms
-            for atom_name in target_atoms:
-                atom1 = res1.find_atom(atom_name)
-                atom2 = res2.find_atom(atom_name)
-                if atom1 is not None and atom2 is not None:
-                    atom_pairs.append((atom1.coordinates, atom2.coordinates))
-
+        if res_name1 == res_name2:
+            atoms_to_match = RESIDUE_ATOMS_MAP.get(res_name1)
+        elif res_name1 in PURINES and res_name2 in PURINES:
+            atoms_to_match = BACKBONE_RIBOSE_ATOMS | PURINE_CORE_ATOMS
+        elif res_name1 in PYRIMIDINES and res_name2 in PYRIMIDINES:
+            atoms_to_match = BACKBONE_RIBOSE_ATOMS | PYRIMIDINE_CORE_ATOMS
         else:
-            # Purine-pyrimidine or other combinations - only backbone + ribose
-            target_atoms = backbone_atoms | ribose_atoms
-            for atom_name in target_atoms:
-                atom1 = res1.find_atom(atom_name)
-                atom2 = res2.find_atom(atom_name)
-                if atom1 is not None and atom2 is not None:
-                    atom_pairs.append((atom1.coordinates, atom2.coordinates))
+            atoms_to_match = BACKBONE_RIBOSE_ATOMS
 
-    # Convert to numpy arrays
-    coords1 = np.array([pair[0] for pair in atom_pairs])
-    coords2 = np.array([pair[1] for pair in atom_pairs])
-    return i, j, coords1, coords2
+        if residue1.format == "mmCIF":
+            df1 = residue1.atoms
+        else:
+            df1 = parse_cif_atoms(write_cif(residue1.atoms_df))
+
+        if residue2.format == "mmCIF":
+            df2 = residue2.atoms
+        else:
+            df2 = parse_cif_atoms(write_cif(residue2.atoms_df))
+
+        df1_filtered = df1[df1["auth_atom_id"].isin(atoms_to_match)]
+        df2_filtered = df2[df2["auth_atom_id"].isin(atoms_to_match)]
+
+        paired_df = pd.merge(
+            df1_filtered[["auth_atom_id", "Cartn_x", "Cartn_y", "Cartn_z"]],
+            df2_filtered[["auth_atom_id", "Cartn_x", "Cartn_y", "Cartn_z"]],
+            on="auth_atom_id",
+            suffixes=("_1", "_2"),
+        )
+
+        if not paired_df.empty:
+            all_paired_dfs.append(paired_df)
+
+    final_df = pd.concat(all_paired_dfs, ignore_index=True)
+    coords_1 = final_df[["Cartn_x_1", "Cartn_y_1", "Cartn_z_1"]].to_numpy()
+    coords_2 = final_df[["Cartn_x_2", "Cartn_y_2", "Cartn_z_2"]].to_numpy()
+    return coords_1, coords_2
+
+
+# def extract_coordinates(
+#     i: int, j: int, residues1: List[Residue], residues2: List[Residue]
+# ) -> Tuple[int, int, np.ndarray, np.ndarray]:
+#     """
+#     Compute normalized RMSD between two lists of residues.
+
+#     Parameters:
+#     -----------
+#     i, j : int
+#         Indices of the two structures to compare
+#     residues1 : List[Residue]
+#         List of residues for the first structure
+#     residues2 : List[Residue]
+#         List of residues for the second structure
+
+#     Returns:
+#     --------
+#     Tuple[int, int, np.ndarray, np.ndarray]
+#         Tuple of i and j indices and two numpy arrays containing coordinates of matching atom pairs
+#     """
+#     if len(residues1) != len(residues2):
+#         raise ValueError("Residue lists must have the same length")
+
+#     atom_pairs = []
+
+#     for res1, res2 in zip(residues1, residues2):
+#         res1_name = res1.residue_name
+#         res2_name = res2.residue_name
+
+#         if res1_name == res2_name:
+#             # Same residue type - collect all matching atom pairs
+#             for atom1 in res1.atoms_list:
+#                 atom2 = res2.find_atom(atom1.name)
+#                 if atom2 is not None:
+#                     atom_pairs.append((atom1.coordinates, atom2.coordinates))
+
+#         elif res1_name in purines and res2_name in purines:
+#             # Both purines - backbone + ribose + purine rings
+#             target_atoms = BACKBONE_ATOMS | RIBOSE_ATOMS | PURINE_ATOMS
+#             for atom_name in target_atoms:
+#                 atom1 = res1.find_atom(atom_name)
+#                 atom2 = res2.find_atom(atom_name)
+#                 if atom1 is not None and atom2 is not None:
+#                     atom_pairs.append((atom1.coordinates, atom2.coordinates))
+
+#         elif res1_name in pyrimidines and res2_name in pyrimidines:
+#             # Both pyrimidines - backbone + ribose + pyrimidine ring
+#             target_atoms = BACKBONE_ATOMS | RIBOSE_ATOMS | PYRIMIDINE_ATOMS
+#             for atom_name in target_atoms:
+#                 atom1 = res1.find_atom(atom_name)
+#                 atom2 = res2.find_atom(atom_name)
+#                 if atom1 is not None and atom2 is not None:
+#                     atom_pairs.append((atom1.coordinates, atom2.coordinates))
+
+#         else:
+#             # Purine-pyrimidine or other combinations - only backbone + ribose
+#             target_atoms = BACKBONE_ATOMS | RIBOSE_ATOMS
+#             for atom_name in target_atoms:
+#                 atom1 = res1.find_atom(atom_name)
+#                 atom2 = res2.find_atom(atom_name)
+#                 if atom1 is not None and atom2 is not None:
+#                     atom_pairs.append((atom1.coordinates, atom2.coordinates))
+
+#     # Convert to numpy arrays
+#     coords1 = np.array([pair[0] for pair in atom_pairs])
+#     coords2 = np.array([pair[1] for pair in atom_pairs])
+#     return i, j, coords1, coords2
 
 
 def find_structure_clusters(
@@ -503,20 +569,21 @@ def find_structure_clusters(
     # Prepare all pairs
     all_pairs = []
     with ProcessPoolExecutor() as executor:
-        futures = [
+        futures = {
             executor.submit(
-                extract_coordinates, i, j, nucleotide_lists[i], nucleotide_lists[j]
-            )
+                find_paired_coordinates, nucleotide_lists[i], nucleotide_lists[j]
+            ): (i, j)
             for i, j in itertools.combinations(range(n_structures), 2)
-        ]
+        }
         for future in tqdm(
             futures,
             total=len(futures),
             desc="Extracting coordinates",
             unit="pair",
         ):
-            result = future.result()
-            all_pairs.append(result)
+            i, j = futures[future]
+            coords_i, coords_j = future.result()
+            all_pairs.append((i, j, coords_i, coords_j))
 
     # Process pairs with progress bar
     total_pairs = len(all_pairs)
