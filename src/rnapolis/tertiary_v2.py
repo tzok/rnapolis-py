@@ -194,7 +194,7 @@ def find_paired_coordinates(
 def rmsd_quaternions(coords1: np.ndarray, coords2: np.ndarray) -> float:
     """
     Calculates RMSD using the Quaternion method.
-    
+
     Parameters:
     -----------
     coords1 : np.ndarray
@@ -243,7 +243,7 @@ def rmsd_quaternions(coords1: np.ndarray, coords2: np.ndarray) -> float:
 def rmsd_svd(coords1: np.ndarray, coords2: np.ndarray) -> float:
     """
     Calculates RMSD using SVD decomposition (Kabsch algorithm).
-    
+
     Parameters:
     -----------
     coords1 : np.ndarray
@@ -288,7 +288,7 @@ def rmsd_qcp(coords1: np.ndarray, coords2: np.ndarray) -> float:
     Calculates RMSD using the QCP (Quaternion Characteristic Polynomial) method.
     This implementation follows the BioPython QCP algorithm but uses np.linalg.eigh
     instead of Newton-Raphson for simplicity.
-    
+
     Parameters:
     -----------
     coords1 : np.ndarray
