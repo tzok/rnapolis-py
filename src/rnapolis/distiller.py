@@ -17,6 +17,7 @@ from rnapolis.tertiary_v2 import Residue, Structure
 # Try to import Numba for JIT acceleration
 try:
     import numba
+
     NUMBA_AVAILABLE = True
 except ImportError:
     NUMBA_AVAILABLE = False
@@ -478,7 +479,9 @@ def rmsd_squared_numba_impl(P, Q):
 
 # Conditionally apply Numba JIT compilation
 if NUMBA_AVAILABLE:
-    rmsd_squared_numba = numba.jit(nopython=True, fastmath=True)(rmsd_squared_numba_impl)
+    rmsd_squared_numba = numba.jit(nopython=True, fastmath=True)(
+        rmsd_squared_numba_impl
+    )
 else:
     rmsd_squared_numba = rmsd_squared_numba_impl
 
