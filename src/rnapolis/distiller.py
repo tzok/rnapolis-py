@@ -276,104 +276,53 @@ def nrmsd_svd(residues1, residues2):
 def nrmsd_qcp(residues1, residues2):
     """
     Calculates nRMSD using the QCP (Quaternion Characteristic Polynomial) method.
-    This implementation follows the BioJava QCP algorithm.
+    This implementation follows the BioPython QCP algorithm but uses np.linalg.eigh
+    instead of Newton-Raphson for simplicity.
     residues1 and residues2 are lists of Residue objects.
     """
     # Get paired coordinates
-    P, Q = find_paired_coordinates(residues1, residues2)
-
-    # 1. Center coordinates
-    centroid_P = np.mean(P, axis=0)
-    centroid_Q = np.mean(Q, axis=0)
-    P_centered = P - centroid_P
-    Q_centered = Q - centroid_Q
-
-    # 2. Calculate inner product matrix elements
-    N = P.shape[0]
-
-    # Calculate cross-covariance matrix elements
-    Sxx = np.sum(P_centered[:, 0] * Q_centered[:, 0])
-    Sxy = np.sum(P_centered[:, 0] * Q_centered[:, 1])
-    Sxz = np.sum(P_centered[:, 0] * Q_centered[:, 2])
-    Syx = np.sum(P_centered[:, 1] * Q_centered[:, 0])
-    Syy = np.sum(P_centered[:, 1] * Q_centered[:, 1])
-    Syz = np.sum(P_centered[:, 1] * Q_centered[:, 2])
-    Szx = np.sum(P_centered[:, 2] * Q_centered[:, 0])
-    Szy = np.sum(P_centered[:, 2] * Q_centered[:, 1])
-    Szz = np.sum(P_centered[:, 2] * Q_centered[:, 2])
-
-    # 3. Calculate E0 (sum of squared distances from centroids)
-    E0 = np.sum(P_centered**2) + np.sum(Q_centered**2)
-
-    # 4. Calculate coefficients for the characteristic polynomial (following BioJava)
-    Sxx2 = Sxx * Sxx
-    Syy2 = Syy * Syy
-    Szz2 = Szz * Szz
-    Sxy2 = Sxy * Sxy
-    Syz2 = Syz * Syz
-    Sxz2 = Sxz * Sxz
-    Syx2 = Syx * Syx
-    Szy2 = Szy * Szy
-    Szx2 = Szx * Szx
-
-    SyzSzymSyySzz2 = 2.0 * (Syz * Szy - Syy * Szz)
-    Sxx2Syy2Szz2Syz2Szy2 = Syy2 + Szz2 - Sxx2 + Syz2 + Szy2
-
-    c2 = -2.0 * (Sxx2 + Syy2 + Szz2 + Sxy2 + Syx2 + Sxz2 + Szx2 + Syz2 + Szy2)
-    c1 = 8.0 * (
-        Sxx * Syz * Szy
-        + Syy * Szx * Sxz
-        + Szz * Sxy * Syx
-        - Sxx * Syy * Szz
-        - Syz * Szx * Sxy
-        - Szy * Syx * Sxz
-    )
-
-    SxzpSzx = Sxz + Szx
-    SyzpSzy = Syz + Szy
-    SxypSyx = Sxy + Syx
-    SyzmSzy = Syz - Szy
-    SxzmSzx = Sxz - Szx
-    SxymSyx = Sxy - Syx
-    SxxpSyy = Sxx + Syy
-    SxxmSyy = Sxx - Syy
-
-    Sxy2Sxz2Syx2Szx2 = Sxy2 + Sxz2 - Syx2 - Szx2
-
-    c0 = (
-        Sxy2Sxz2Syx2Szx2 * Sxy2Sxz2Syx2Szx2
-        + (Sxx2Syy2Szz2Syz2Szy2 + SyzSzymSyySzz2)
-        * (Sxx2Syy2Szz2Syz2Szy2 - SyzSzymSyySzz2)
-        + (-(SxzpSzx) * (SyzmSzy) + (SxymSyx) * (SxxmSyy - Szz))
-        * (-(SxzmSzx) * (SyzpSzy) + (SxymSyx) * (SxxmSyy + Szz))
-        + (-(SxzpSzx) * (SyzpSzy) - (SxypSyx) * (SxxpSyy - Szz))
-        * (-(SxzmSzx) * (SyzmSzy) - (SxypSyx) * (SxxpSyy + Szz))
-        + (+(SxypSyx) * (SyzpSzy) + (SxzpSzx) * (SxxmSyy + Szz))
-        * (-(SxymSyx) * (SyzmSzy) + (SxzpSzx) * (SxxpSyy + Szz))
-        + (+(SxypSyx) * (SyzmSzy) + (SxzmSzx) * (SxxmSyy - Szz))
-        * (-(SxymSyx) * (SyzpSzy) + (SxzmSzx) * (SxxpSyy - Szz))
-    )
-
-    # 5. Find the largest eigenvalue using Newton-Raphson method
-    mxEigenV = E0
-
-    eval_prec = 1e-11
-    for i in range(50):
-        oldg = mxEigenV
-        x2 = mxEigenV * mxEigenV
-        b = (x2 + c2) * mxEigenV
-        a = b + c1
-        delta = (a * mxEigenV + c0) / (2.0 * x2 * mxEigenV + b + a)
-        mxEigenV -= delta
-
-        if abs(mxEigenV - oldg) < abs(eval_prec * mxEigenV):
-            break
-
-    # 6. Calculate RMSD
-    rmsd_sq = 2.0 * (E0 - mxEigenV) / N
-    rmsd = np.sqrt(abs(rmsd_sq))
-
-    return rmsd
+    coords1, coords2 = find_paired_coordinates(residues1, residues2)
+    
+    # Center coordinates at origin
+    centroid1 = np.mean(coords1, axis=0)
+    centroid2 = np.mean(coords2, axis=0)
+    coords1_centered = coords1 - centroid1
+    coords2_centered = coords2 - centroid2
+    
+    # Calculate G1, G2, and cross-covariance matrix A (following BioPython)
+    G1 = np.trace(np.dot(coords2_centered, coords2_centered.T))
+    G2 = np.trace(np.dot(coords1_centered, coords1_centered.T))
+    A = np.dot(coords2_centered.T, coords1_centered)  # Cross-covariance matrix
+    E0 = (G1 + G2) * 0.5
+    
+    # Extract elements from A matrix
+    Sxx, Sxy, Sxz = A[0, 0], A[0, 1], A[0, 2]
+    Syx, Syy, Syz = A[1, 0], A[1, 1], A[1, 2]
+    Szx, Szy, Szz = A[2, 0], A[2, 1], A[2, 2]
+    
+    # Build the K matrix (quaternion matrix) as in BioPython
+    K = np.zeros((4, 4))
+    K[0, 0] = Sxx + Syy + Szz
+    K[0, 1] = K[1, 0] = Syz - Szy
+    K[0, 2] = K[2, 0] = Szx - Sxz
+    K[0, 3] = K[3, 0] = Sxy - Syx
+    K[1, 1] = Sxx - Syy - Szz
+    K[1, 2] = K[2, 1] = Sxy + Syx
+    K[1, 3] = K[3, 1] = Szx + Sxz
+    K[2, 2] = -Sxx + Syy - Szz
+    K[2, 3] = K[3, 2] = Syz + Szy
+    K[3, 3] = -Sxx - Syy + Szz
+    
+    # Find the largest eigenvalue using numpy
+    eigenvalues, _ = np.linalg.eigh(K)
+    max_eigenvalue = np.max(eigenvalues)
+    
+    # Calculate RMSD following BioPython formula
+    natoms = coords1.shape[0]
+    rmsd_sq = (2.0 * abs(E0 - max_eigenvalue)) / natoms
+    rmsd = np.sqrt(rmsd_sq)
+    
+    return rmsd / np.sqrt(natoms)
 
 
 def nrmsd_validate(residues1, residues2):
