@@ -74,7 +74,6 @@ def parse_arguments():
         help="Output JSON file to save clustering results",
     )
 
-
     return parser.parse_args()
 
 
