@@ -9,4 +9,5 @@ pulp==3.2.1
 requests==2.32.4
 scikit-learn==1.7.0
 scipy==1.15.2
+tqdm==4.67.1
 viennarna==2.7.0

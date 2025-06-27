@@ -3,18 +3,17 @@ import json
 import sys
 from multiprocessing import Pool, cpu_count
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
+import numba
 import numpy as np
 from scipy.cluster.hierarchy import dendrogram, fcluster, linkage
 from scipy.spatial.distance import squareform
-from scipy.spatial.transform import Rotation
-from sklearn.cluster import AgglomerativeClustering
 from sklearn.metrics import silhouette_score
 from tqdm import tqdm
 
 from rnapolis.parser_v2 import parse_cif_atoms, parse_pdb_atoms
-from rnapolis.tertiary_v2 import Structure, Residue
+from rnapolis.tertiary_v2 import Residue, Structure
 
 # Try to import CuPy for GPU acceleration
 try:
@@ -25,6 +24,104 @@ try:
 except ImportError:
     CUPY_AVAILABLE = False
     print("CuPy not available - using CPU computation")
+
+
+def rmsd_numpy(P, Q):
+    """
+    Calculates RMSD using the Quaternion method.
+    P and Q are Nx3 numpy arrays.
+    """
+    # 1. Center coordinates
+    centroid_P = np.mean(P, axis=0)
+    centroid_Q = np.mean(Q, axis=0)
+    P_centered = P - centroid_P
+    Q_centered = Q - centroid_Q
+
+    # 2. Covariance matrix
+    C = P_centered.T @ Q_centered
+
+    # 3. K matrix
+    K = np.zeros((4, 4))
+    K[0, 0] = C[0, 0] + C[1, 1] + C[2, 2]
+    K[0, 1] = K[1, 0] = C[1, 2] - C[2, 1]
+    K[0, 2] = K[2, 0] = C[2, 0] - C[0, 2]
+    K[0, 3] = K[3, 0] = C[0, 1] - C[1, 0]
+    K[1, 1] = C[0, 0] - C[1, 1] - C[2, 2]
+    K[1, 2] = K[2, 1] = C[0, 1] + C[1, 0]
+    K[1, 3] = K[3, 1] = C[0, 2] + C[2, 0]
+    K[2, 2] = -C[0, 0] + C[1, 1] - C[2, 2]
+    K[2, 3] = K[3, 2] = C[1, 2] + C[2, 1]
+    K[3, 3] = -C[0, 0] - C[1, 1] + C[2, 2]
+
+    # 4. Eigenvalue/vector
+    # numpy's eigh is highly optimized for symmetric matrices
+    eigenvalues, _ = np.linalg.eigh(K)
+
+    # We don't even need the rotation matrix for the RMSD value
+    # E0 = sum(|P_i-cP|^2) + sum(|Q_i-cQ|^2)
+    E0 = np.sum(np.sum(P_centered**2, axis=1)) + np.sum(np.sum(Q_centered**2, axis=1))
+
+    # The min RMSD squared is (E0 - 2*max_eigenvalue) / N
+    N = P.shape[0]
+    rmsd_sq = (E0 - 2 * np.max(eigenvalues)) / N
+
+    # Handle potential floating point inaccuracies
+    return np.sqrt(max(0.0, rmsd_sq))
+
+
+@numba.jit(nopython=True, fastmath=True)
+def rmsd_numba(P, Q):
+    # The *exact same code* as the numpy function goes here
+    # but using basic loops instead of numpy functions
+    N = P.shape[0]
+    # 1. Center
+    centroid_P = np.zeros(3)
+    centroid_Q = np.zeros(3)
+    for i in range(3):
+        centroid_P[i] = np.mean(P[:, i])
+        centroid_Q[i] = np.mean(Q[:, i])
+
+    P_centered = P - centroid_P
+    Q_centered = Q - centroid_Q
+
+    # 2. Covariance matrix implemented with explicit loops
+    # and array access, which numba is great at optimizing.
+    # C = P_centered.T @ Q_centered becomes:
+    C = np.zeros((3, 3))
+    for i in range(3):
+        for j in range(3):
+            sum_val = 0.0
+            for k in range(N):
+                sum_val += P_centered[k, i] * Q_centered[k, j]
+            C[i, j] = sum_val
+
+    # 3. K matrix
+    K = np.zeros((4, 4))
+    K[0, 0] = C[0, 0] + C[1, 1] + C[2, 2]
+    K[0, 1] = K[1, 0] = C[1, 2] - C[2, 1]
+    K[0, 2] = K[2, 0] = C[2, 0] - C[0, 2]
+    K[0, 3] = K[3, 0] = C[0, 1] - C[1, 0]
+    K[1, 1] = C[0, 0] - C[1, 1] - C[2, 2]
+    K[1, 2] = K[2, 1] = C[0, 1] + C[1, 0]
+    K[1, 3] = K[3, 1] = C[0, 2] + C[2, 0]
+    K[2, 2] = -C[0, 0] + C[1, 1] - C[2, 2]
+    K[2, 3] = K[3, 2] = C[1, 2] + C[2, 1]
+    K[3, 3] = -C[0, 0] - C[1, 1] + C[2, 2]
+
+    # 4. Eigenvalue/vector
+    # numpy's eigh is highly optimized for symmetric matrices
+    eigenvalues, _ = np.linalg.eigh(K)
+
+    # We don't even need the rotation matrix for the RMSD value
+    # E0 = sum(|P_i-cP|^2) + sum(|Q_i-cQ|^2)
+    E0 = np.sum(np.sum(P_centered**2, axis=1)) + np.sum(np.sum(Q_centered**2, axis=1))
+
+    # The min RMSD squared is (E0 - 2*max_eigenvalue) / N
+    N = P.shape[0]
+    rmsd_sq = (E0 - 2 * np.max(eigenvalues)) / N
+
+    # Handle potential floating point inaccuracies
+    return np.sqrt(max(0.0, rmsd_sq))
 
 
 def parse_arguments():
@@ -730,7 +827,7 @@ def find_structure_clusters(
     structures: List[Structure],
     threshold: float,
     visualize: bool = False,
-    n_jobs: int = None,
+    n_jobs: Optional[int] = None,
 ) -> Tuple[List[List[int]], np.ndarray]:
     """
     Find clusters of almost identical structures using hierarchical clustering.
@@ -754,7 +851,7 @@ def find_structure_clusters(
     n_structures = len(structures)
 
     if n_structures == 1:
-        return [[0]]
+        return [[0]], np.zeros((1, 1))
 
     # Get nucleotide residues for each structure
     nucleotide_lists = []
@@ -878,7 +975,7 @@ def find_structure_clusters(
     cluster_labels = fcluster(linkage_matrix, threshold, criterion="distance")
 
     # Group structure indices by cluster
-    clusters = {}
+    clusters: dict[int, list[int]] = {}
     for i, label in enumerate(cluster_labels):
         if label not in clusters:
             clusters[label] = []
@@ -899,7 +996,7 @@ def main():
         print("Error: No valid input files found", file=sys.stderr)
         sys.exit(1)
 
-    threshold_msg = f"auto-selected" if args.threshold is None else f"{args.threshold}"
+    threshold_msg = "auto-selected" if args.threshold is None else f"{args.threshold}"
     print(f"Processing {len(valid_files)} files with nRMSD threshold {threshold_msg}")
 
     # Parse all structure files
