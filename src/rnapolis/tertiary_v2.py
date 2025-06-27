@@ -172,7 +172,7 @@ def find_paired_coordinates(
         else:
             df2 = parse_cif_atoms(write_cif(residue2.atoms))
 
-        if "auth_atom_id" in df1.columns and "auth_atom_id" and in df2.columns:
+        if "auth_atom_id" in df1.columns and "auth_atom_id" in df2.columns:
             atom_column = "auth_atom_id"
         elif "label_atom_id" in df1.columns and "label_atom_id" in df2.columns:
             atom_column = "label_atom_id"
