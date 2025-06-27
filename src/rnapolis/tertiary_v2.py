@@ -358,47 +358,62 @@ def rmsd_to_nrmsd(rmsd: float, num_atoms: int) -> float:
     return rmsd / np.sqrt(num_atoms)
 
 
-def nrmsd_quaternions(residues1: List["Residue"], residues2: List["Residue"]) -> float:
+def nrmsd_quaternions(coords1: np.ndarray, coords2: np.ndarray) -> float:
     """
     Calculates nRMSD using the Quaternion method.
-    residues1 and residues2 are lists of Residue objects.
+    
+    Parameters:
+    -----------
+    coords1 : np.ndarray
+        Nx3 array of coordinates for the first structure
+    coords2 : np.ndarray
+        Nx3 array of coordinates for the second structure
     """
-    coords1, coords2 = find_paired_coordinates(residues1, residues2)
     rmsd = rmsd_quaternions(coords1, coords2)
     return rmsd_to_nrmsd(rmsd, coords1.shape[0])
 
 
-def nrmsd_svd(residues1: List["Residue"], residues2: List["Residue"]) -> float:
+def nrmsd_svd(coords1: np.ndarray, coords2: np.ndarray) -> float:
     """
     Calculates nRMSD using SVD decomposition (Kabsch algorithm).
-    residues1 and residues2 are lists of Residue objects.
+    
+    Parameters:
+    -----------
+    coords1 : np.ndarray
+        Nx3 array of coordinates for the first structure
+    coords2 : np.ndarray
+        Nx3 array of coordinates for the second structure
     """
-    coords1, coords2 = find_paired_coordinates(residues1, residues2)
     rmsd = rmsd_svd(coords1, coords2)
     return rmsd_to_nrmsd(rmsd, coords1.shape[0])
 
 
-def nrmsd_qcp(residues1: List["Residue"], residues2: List["Residue"]) -> float:
+def nrmsd_qcp(coords1: np.ndarray, coords2: np.ndarray) -> float:
     """
     Calculates nRMSD using the QCP (Quaternion Characteristic Polynomial) method.
-    residues1 and residues2 are lists of Residue objects.
+    
+    Parameters:
+    -----------
+    coords1 : np.ndarray
+        Nx3 array of coordinates for the first structure
+    coords2 : np.ndarray
+        Nx3 array of coordinates for the second structure
     """
-    coords1, coords2 = find_paired_coordinates(residues1, residues2)
     rmsd = rmsd_qcp(coords1, coords2)
     return rmsd_to_nrmsd(rmsd, coords1.shape[0])
 
 
-def nrmsd_validate(residues1: List["Residue"], residues2: List["Residue"]) -> float:
+def nrmsd_validate(coords1: np.ndarray, coords2: np.ndarray) -> float:
     """
     Validates that all nRMSD methods produce the same result.
     Uses quaternions method as the primary result after validation.
 
     Parameters:
     -----------
-    residues1 : List[Residue]
-        List of residues from the first structure
-    residues2 : List[Residue]
-        List of residues from the second structure
+    coords1 : np.ndarray
+        Nx3 array of coordinates for the first structure
+    coords2 : np.ndarray
+        Nx3 array of coordinates for the second structure
 
     Returns:
     --------
@@ -411,9 +426,9 @@ def nrmsd_validate(residues1: List["Residue"], residues2: List["Residue"]) -> fl
         If any methods produce significantly different results
     """
     # Calculate using all methods
-    result_quaternions = nrmsd_quaternions(residues1, residues2)
-    result_svd = nrmsd_svd(residues1, residues2)
-    result_qcp = nrmsd_qcp(residues1, residues2)
+    result_quaternions = nrmsd_quaternions(coords1, coords2)
+    result_svd = nrmsd_svd(coords1, coords2)
+    result_qcp = nrmsd_qcp(coords1, coords2)
 
     # Check if results are approximately equal (within 1e-6 tolerance)
     tolerance = 1e-6
@@ -441,6 +456,42 @@ def nrmsd_validate(residues1: List["Residue"], residues2: List["Residue"]) -> fl
 
     # Return quaternions result as the validated value
     return result_quaternions
+
+
+def nrmsd_quaternions_residues(residues1: List["Residue"], residues2: List["Residue"]) -> float:
+    """
+    Calculates nRMSD using the Quaternion method from residue lists.
+    residues1 and residues2 are lists of Residue objects.
+    """
+    coords1, coords2 = find_paired_coordinates(residues1, residues2)
+    return nrmsd_quaternions(coords1, coords2)
+
+
+def nrmsd_svd_residues(residues1: List["Residue"], residues2: List["Residue"]) -> float:
+    """
+    Calculates nRMSD using SVD decomposition from residue lists.
+    residues1 and residues2 are lists of Residue objects.
+    """
+    coords1, coords2 = find_paired_coordinates(residues1, residues2)
+    return nrmsd_svd(coords1, coords2)
+
+
+def nrmsd_qcp_residues(residues1: List["Residue"], residues2: List["Residue"]) -> float:
+    """
+    Calculates nRMSD using the QCP method from residue lists.
+    residues1 and residues2 are lists of Residue objects.
+    """
+    coords1, coords2 = find_paired_coordinates(residues1, residues2)
+    return nrmsd_qcp(coords1, coords2)
+
+
+def nrmsd_validate_residues(residues1: List["Residue"], residues2: List["Residue"]) -> float:
+    """
+    Validates that all nRMSD methods produce the same result from residue lists.
+    residues1 and residues2 are lists of Residue objects.
+    """
+    coords1, coords2 = find_paired_coordinates(residues1, residues2)
+    return nrmsd_validate(coords1, coords2)
 
 
 class Structure:

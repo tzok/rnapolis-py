@@ -17,10 +17,10 @@ from rnapolis.parser_v2 import parse_cif_atoms, parse_pdb_atoms, write_cif
 from rnapolis.tertiary_v2 import (
     Residue,
     Structure,
-    nrmsd_quaternions,
-    nrmsd_svd,
-    nrmsd_qcp,
-    nrmsd_validate,
+    nrmsd_quaternions_residues,
+    nrmsd_svd_residues,
+    nrmsd_qcp_residues,
+    nrmsd_validate_residues,
 )
 
 
@@ -263,16 +263,16 @@ def find_structure_clusters(
 
     # Select nRMSD function based on method
     if rmsd_method == "quaternions":
-        nrmsd_func = nrmsd_quaternions
+        nrmsd_func = nrmsd_quaternions_residues
         print("Computing pairwise nRMSD distances using quaternion method...")
     elif rmsd_method == "svd":
-        nrmsd_func = nrmsd_svd
+        nrmsd_func = nrmsd_svd_residues
         print("Computing pairwise nRMSD distances using SVD method...")
     elif rmsd_method == "qcp":
-        nrmsd_func = nrmsd_qcp
+        nrmsd_func = nrmsd_qcp_residues
         print("Computing pairwise nRMSD distances using QCP method...")
     elif rmsd_method == "validate":
-        nrmsd_func = nrmsd_validate
+        nrmsd_func = nrmsd_validate_residues
         print(
             "Computing pairwise nRMSD distances using validation mode (all methods)..."
         )
