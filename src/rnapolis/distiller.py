@@ -16,30 +16,6 @@ from tqdm import tqdm
 from rnapolis.parser_v2 import parse_cif_atoms, parse_pdb_atoms, write_cif
 from rnapolis.tertiary_v2 import Residue, Structure
 
-# Try to import Numba for JIT acceleration
-try:
-    import numba
-
-    NUMBA_AVAILABLE = True
-except ImportError:
-    NUMBA_AVAILABLE = False
-
-# Try to import CuPy for GPU acceleration
-try:
-    import cupy as cp
-
-    CUPY_AVAILABLE = True
-    # Check if CUDA is actually available
-    try:
-        cp.cuda.Device(0).compute_capability
-        CUDA_AVAILABLE = True
-    except cp.cuda.runtime.CUDARuntimeError:
-        CUDA_AVAILABLE = False
-        print("Warning: CuPy is installed but CUDA is not available")
-except ImportError:
-    CUPY_AVAILABLE = False
-    CUDA_AVAILABLE = False
-
 # Define atom sets for different residue types
 BACKBONE_RIBOSE_ATOMS = {
     "P",
@@ -98,13 +74,6 @@ def parse_arguments():
         help="Output JSON file to save clustering results",
     )
 
-    parser.add_argument(
-        "--rmsd-mode",
-        type=str,
-        choices=["NumPy", "Numba", "CuPy"],
-        default="NumPy",
-        help="RMSD calculation mode (default: NumPy)",
-    )
 
     return parser.parse_args()
 
@@ -266,74 +235,6 @@ def nrmsd_numpy(P, Q):
 
     # Handle potential floating point inaccuracies
     return np.sqrt(max(0.0, rmsd_sq) / N)
-
-
-if NUMBA_AVAILABLE:
-    nrmsd_numba = numba.jit(nopython=True, fastmath=True, cache=True)(nrmsd_numpy)
-
-    @numba.jit(nopython=True, fastmath=True, cache=True, parallel=True)
-    def nrmsd_numba_batch(
-        args: List[Tuple[int, int, np.ndarray, np.ndarray]],
-    ) -> List[Tuple[int, int, float]]:
-        num_pairs = len(args)
-        results = []
-
-        for idx in numba.prange(num_pairs):
-            i, j, coords_i, coords_j = args[idx]
-            nrmsd_value = nrmsd_numba(coords_i, coords_j)
-            results.append((i, j, nrmsd_value))
-
-        return results
-
-
-def nrmsd_cupy(P, Q):
-    """
-    Calculates RMSD using the Quaternion method with CuPy for GPU acceleration.
-    P and Q are Nx3 numpy arrays that will be transferred to GPU.
-    """
-    if not CUPY_AVAILABLE or not CUDA_AVAILABLE:
-        raise RuntimeError("CuPy or CUDA not available for GPU computation")
-
-    # Transfer to GPU
-    P_gpu = cp.asarray(P)
-    Q_gpu = cp.asarray(Q)
-
-    # 1. Center coordinates
-    centroid_P = cp.mean(P_gpu, axis=0)
-    centroid_Q = cp.mean(Q_gpu, axis=0)
-    P_centered = P_gpu - centroid_P
-    Q_centered = Q_gpu - centroid_Q
-
-    # 2. Covariance matrix
-    C = P_centered.T @ Q_centered
-
-    # 3. K matrix
-    K = cp.zeros((4, 4))
-    K[0, 0] = C[0, 0] + C[1, 1] + C[2, 2]
-    K[0, 1] = K[1, 0] = C[1, 2] - C[2, 1]
-    K[0, 2] = K[2, 0] = C[2, 0] - C[0, 2]
-    K[0, 3] = K[3, 0] = C[0, 1] - C[1, 0]
-    K[1, 1] = C[0, 0] - C[1, 1] - C[2, 2]
-    K[1, 2] = K[2, 1] = C[0, 1] + C[1, 0]
-    K[1, 3] = K[3, 1] = C[0, 2] + C[2, 0]
-    K[2, 2] = -C[0, 0] + C[1, 1] - C[2, 2]
-    K[2, 3] = K[3, 2] = C[1, 2] + C[2, 1]
-    K[3, 3] = -C[0, 0] - C[1, 1] + C[2, 2]
-
-    # 4. Eigenvalue/vector
-    # CuPy's eigh is optimized for symmetric matrices on GPU
-    eigenvalues, _ = cp.linalg.eigh(K)
-
-    # We don't even need the rotation matrix for the RMSD value
-    # E0 = sum(|P_i-cP|^2) + sum(|Q_i-cQ|^2)
-    E0 = cp.sum(cp.sum(P_centered**2, axis=1)) + cp.sum(cp.sum(Q_centered**2, axis=1))
-
-    # The min RMSD squared is (E0 - 2*max_eigenvalue) / N
-    N = P_gpu.shape[0]
-    rmsd_sq = (E0 - 2 * cp.max(eigenvalues)) / N
-
-    # Handle potential floating point inaccuracies and transfer back to CPU
-    return float(cp.asnumpy(cp.sqrt(cp.maximum(0.0, rmsd_sq) / N)))
 
 
 def find_optimal_threshold(
@@ -527,7 +428,6 @@ def find_structure_clusters(
     structures: List[Structure],
     threshold: Optional[float] = None,
     visualize: bool = False,
-    rmsd_mode: str = "NumPy",
 ) -> Tuple[List[List[int]], np.ndarray]:
     """
     Find clusters of almost identical structures using hierarchical clustering.
@@ -540,10 +440,6 @@ def find_structure_clusters(
         nRMSD threshold for clustering
     visualize : bool
         Whether to show dendrogram visualization
-    n_jobs : int
-        Number of parallel jobs for nRMSD computation
-    rmsd_mode : str
-        RMSD calculation mode ("NumPy", "Numba", or "CuPy")
 
     Returns:
     --------
@@ -563,7 +459,7 @@ def find_structure_clusters(
         )
 
     # Compute nRMSD distance matrix
-    print(f"Computing pairwise nRMSD distances using {rmsd_mode} mode...")
+    print("Computing pairwise nRMSD distances...")
     distance_matrix = np.zeros((n_structures, n_structures))
 
     # Prepare all pairs
@@ -586,45 +482,21 @@ def find_structure_clusters(
             all_pairs.append((i, j, coords_i, coords_j))
 
     # Process pairs with progress bar
-    total_pairs = len(all_pairs)
-    results = []
-
-    if rmsd_mode == "Numba":
-        print("Using Numba for RMSD computation")
-        if not NUMBA_AVAILABLE:
-            print(
-                "Warning: Numba not available, falling back to NumPy for RMSD computation"
-            )
-            rmsd_mode = "NumPy"
-        else:
-            results = nrmsd_numba_batch(all_pairs)
-
-    if rmsd_mode == "CuPy":
-        if not CUPY_AVAILABLE or not CUDA_AVAILABLE:
-            print(
-                "Warning: CuPy or CUDA not available, falling back to NumPy for RMSD computation"
-            )
-            rmsd_mode = "NumPy"
-        else:
-            print("Using CuPy for GPU-accelerated RMSD computation")
-
-    if rmsd_mode == "NumPy":
-        print("Using NumPy for RMSD computation")
-
-        with ProcessPoolExecutor() as executor:
-            futures_dict = {
-                executor.submit(nrmsd_numpy, coords_i, coords_j): (i, j)
-                for i, j, coords_i, coords_j in all_pairs
-            }
-            for future in tqdm(
-                futures_dict,
-                total=len(futures_dict),
-                desc="Computing nRMSD",
-                unit="pair",
-            ):
-                i, j = futures_dict[future]
-                nrmsd_value = future.result()
-                results.append((i, j, nrmsd_value))
+    with ProcessPoolExecutor() as executor:
+        futures_dict = {
+            executor.submit(nrmsd_numpy, coords_i, coords_j): (i, j)
+            for i, j, coords_i, coords_j in all_pairs
+        }
+        results = []
+        for future in tqdm(
+            futures_dict,
+            total=len(futures_dict),
+            desc="Computing nRMSD",
+            unit="pair",
+        ):
+            i, j = futures_dict[future]
+            nrmsd_value = future.result()
+            results.append((i, j, nrmsd_value))
 
     # Fill the distance matrix
     for i, j, nrmsd in results:
@@ -780,7 +652,7 @@ def main():
     # Find clusters
     print("\nFinding structure clusters...")
     clusters, distance_matrix = find_structure_clusters(
-        structures, args.threshold, args.visualize, args.rmsd_mode
+        structures, args.threshold, args.visualize
     )
 
     # Find medoids for each cluster
