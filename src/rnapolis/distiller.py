@@ -160,6 +160,14 @@ def parse_arguments():
         help="Output JSON file to save clustering results",
     )
 
+    parser.add_argument(
+        "--rmsd-mode",
+        type=str,
+        choices=["NumPy", "Numba", "CuPy"],
+        default="NumPy",
+        help="RMSD calculation mode (default: NumPy)",
+    )
+
     return parser.parse_args()
 
 
