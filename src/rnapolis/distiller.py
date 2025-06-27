@@ -1,7 +1,8 @@
 import argparse
+import itertools
 import json
 import sys
-from multiprocessing import Pool, cpu_count
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 from typing import List, Optional, Tuple
 
@@ -38,6 +39,33 @@ except ImportError:
     CUPY_AVAILABLE = False
     CUDA_AVAILABLE = False
 
+# Define atom sets for different residue types
+backbone_atoms = {
+    "P",
+    "OP1",
+    "OP2",
+    "O5'",
+    "C5'",
+    "C4'",
+    "C3'",
+    "C2'",
+    "C1'",
+    "O4'",
+    "O3'",
+    "O2'",
+}
+ribose_atoms = {"C1'", "C2'", "C3'", "C4'", "O4'", "O2'", "O3'"}
+
+# Purine ring atoms (two rings)
+purine_ring_atoms = {"N9", "C8", "N7", "C5", "C6", "N1", "C2", "N3", "C4"}
+
+# Pyrimidine ring atoms (one ring)
+pyrimidine_ring_atoms = {"N1", "C2", "N3", "C4", "C5", "C6"}
+
+# Define purine and pyrimidine residue names
+purines = {"A", "G", "DA", "DG"}
+pyrimidines = {"C", "U", "T", "DC", "DT"}
+
 
 def parse_arguments():
     """Parse command line arguments."""
@@ -60,13 +88,6 @@ def parse_arguments():
         "--visualize",
         action="store_true",
         help="Show dendrogram visualization of clustering",
-    )
-
-    parser.add_argument(
-        "--jobs",
-        type=int,
-        default=cpu_count(),
-        help=f"Number of parallel jobs for nRMSD computation (default: {cpu_count()})",
     )
 
     parser.add_argument(
@@ -192,9 +213,9 @@ def validate_nucleotide_counts(
     print(f"All structures have {first_count} nucleotides")
 
 
-def rmsd_squared_numpy(P, Q):
+def nrmsd_numpy(P, Q):
     """
-    Calculates RMSD using the Quaternion method.
+    Calculates nRMSD using the Quaternion method.
     P and Q are Nx3 numpy arrays.
     """
     # 1. Center coordinates
@@ -242,19 +263,28 @@ def rmsd_squared_numpy(P, Q):
     rmsd_sq = (E0 - 2 * np.max(eigenvalues)) / N
 
     # Handle potential floating point inaccuracies
-    return max(0.0, rmsd_sq)
+    return np.sqrt(max(0.0, rmsd_sq) / N)
 
 
-# Conditionally apply Numba JIT compilation
 if NUMBA_AVAILABLE:
-    rmsd_squared_numba = numba.jit(nopython=True, fastmath=True, cache=True)(
-        rmsd_squared_numpy
-    )
-else:
-    rmsd_squared_numba = rmsd_squared_numpy
+    nrmsd_numba = numba.jit(nopython=True, fastmath=True, cache=True)(nrmsd_numpy)
+
+    @numba.jit(nopython=True, fastmath=True, cache=True, parallel=True)
+    def nrmsd_numba_batch(
+        args: List[Tuple[int, int, np.ndarray, np.ndarray]],
+    ) -> List[Tuple[int, int, float]]:
+        num_pairs = len(args)
+        results = []
+
+        for idx in numba.prange(num_pairs):
+            i, j, coords_i, coords_j = args[idx]
+            nrmsd_value = nrmsd_numba(coords_i, coords_j)
+            results.append((i, j, nrmsd_value))
+
+        return results
 
 
-def rmsd_squared_cupy(P, Q):
+def nrmsd_cupy(P, Q):
     """
     Calculates RMSD using the Quaternion method with CuPy for GPU acceleration.
     P and Q are Nx3 numpy arrays that will be transferred to GPU.
@@ -301,134 +331,7 @@ def rmsd_squared_cupy(P, Q):
     rmsd_sq = (E0 - 2 * cp.max(eigenvalues)) / N
 
     # Handle potential floating point inaccuracies and transfer back to CPU
-    result = float(cp.asnumpy(cp.maximum(0.0, rmsd_sq)))
-    return result
-
-
-def compute_nrmsd(
-    residues1: List[Residue], residues2: List[Residue], rmsd_mode: str = "NumPy"
-) -> float:
-    """
-    Compute normalized RMSD between two lists of residues.
-
-    Parameters:
-    -----------
-    residues1 : List[Residue]
-        First list of residues
-    residues2 : List[Residue]
-        Second list of residues (must have same length as residues1)
-    rmsd_mode : str
-        RMSD calculation mode ("NumPy", "Numba", or "CuPy")
-
-    Returns:
-    --------
-    float
-        Normalized RMSD (RMSD / sqrt(number of atom pairs))
-    """
-    if len(residues1) != len(residues2):
-        raise ValueError("Residue lists must have the same length")
-
-    # Define atom sets for different residue types
-    backbone_atoms = {
-        "P",
-        "OP1",
-        "OP2",
-        "O5'",
-        "C5'",
-        "C4'",
-        "C3'",
-        "C2'",
-        "C1'",
-        "O4'",
-        "O3'",
-        "O2'",
-    }
-    ribose_atoms = {"C1'", "C2'", "C3'", "C4'", "O4'", "O2'", "O3'"}
-
-    # Purine ring atoms (two rings)
-    purine_ring_atoms = {"N9", "C8", "N7", "C5", "C6", "N1", "C2", "N3", "C4"}
-
-    # Pyrimidine ring atoms (one ring)
-    pyrimidine_ring_atoms = {"N1", "C2", "N3", "C4", "C5", "C6"}
-
-    # Define purine and pyrimidine residue names
-    purines = {"A", "G", "DA", "DG"}
-    pyrimidines = {"C", "U", "T", "DC", "DT"}
-
-    atom_pairs = []
-
-    for res1, res2 in zip(residues1, residues2):
-        res1_name = res1.residue_name
-        res2_name = res2.residue_name
-
-        if res1_name == res2_name:
-            # Same residue type - collect all matching atom pairs
-            for atom1 in res1.atoms_list:
-                atom2 = res2.find_atom(atom1.name)
-                if atom2 is not None:
-                    atom_pairs.append((atom1.coordinates, atom2.coordinates))
-
-        elif res1_name in purines and res2_name in purines:
-            # Both purines - backbone + ribose + purine rings
-            target_atoms = backbone_atoms | ribose_atoms | purine_ring_atoms
-            for atom_name in target_atoms:
-                atom1 = res1.find_atom(atom_name)
-                atom2 = res2.find_atom(atom_name)
-                if atom1 is not None and atom2 is not None:
-                    atom_pairs.append((atom1.coordinates, atom2.coordinates))
-
-        elif res1_name in pyrimidines and res2_name in pyrimidines:
-            # Both pyrimidines - backbone + ribose + pyrimidine ring
-            target_atoms = backbone_atoms | ribose_atoms | pyrimidine_ring_atoms
-            for atom_name in target_atoms:
-                atom1 = res1.find_atom(atom_name)
-                atom2 = res2.find_atom(atom_name)
-                if atom1 is not None and atom2 is not None:
-                    atom_pairs.append((atom1.coordinates, atom2.coordinates))
-
-        else:
-            # Purine-pyrimidine or other combinations - only backbone + ribose
-            target_atoms = backbone_atoms | ribose_atoms
-            for atom_name in target_atoms:
-                atom1 = res1.find_atom(atom_name)
-                atom2 = res2.find_atom(atom_name)
-                if atom1 is not None and atom2 is not None:
-                    atom_pairs.append((atom1.coordinates, atom2.coordinates))
-
-    if not atom_pairs:
-        return float("inf")  # No matching atoms found
-
-    # Convert to numpy arrays
-    coords1 = np.array([pair[0] for pair in atom_pairs])
-    coords2 = np.array([pair[1] for pair in atom_pairs])
-
-    # Compute RMSD squared using the specified mode
-    if rmsd_mode == "Numba":
-        if NUMBA_AVAILABLE:
-            rmsd_sq = rmsd_squared_numba(coords1, coords2)
-        else:
-            print("Warning: Numba not available, falling back to NumPy")
-            rmsd_sq = rmsd_squared_numpy(coords1, coords2)
-    elif rmsd_mode == "CuPy":
-        try:
-            rmsd_sq = rmsd_squared_cupy(coords1, coords2)
-        except (RuntimeError, Exception) as e:
-            # Fall back to NumPy if CuPy fails
-            print(f"Warning: CuPy computation failed ({e}), falling back to NumPy")
-            rmsd_sq = rmsd_squared_numpy(coords1, coords2)
-    else:  # Default to NumPy
-        rmsd_sq = rmsd_squared_numpy(coords1, coords2)
-
-    # Return normalized RMSD
-    nrmsd = np.sqrt(rmsd_sq / len(atom_pairs))
-    return nrmsd
-
-
-def compute_nrmsd_pair(args):
-    """Helper function for parallel nRMSD computation."""
-    i, j, nucleotides_i, nucleotides_j, rmsd_mode = args
-    nrmsd = compute_nrmsd(nucleotides_i, nucleotides_j, rmsd_mode)
-    return i, j, nrmsd
+    return float(cp.asnumpy(cp.sqrt(cp.maximum(0.0, rmsd_sq) / N)))
 
 
 def find_optimal_threshold(
@@ -485,11 +388,79 @@ def find_optimal_threshold(
     return best_threshold
 
 
+def extract_coordinates(
+    i: int, j: int, residues1: List[Residue], residues2: List[Residue]
+) -> Tuple[int, int, np.ndarray, np.ndarray]:
+    """
+    Compute normalized RMSD between two lists of residues.
+
+    Parameters:
+    -----------
+    i, j : int
+        Indices of the two structures to compare
+    residues1 : List[Residue]
+        List of residues for the first structure
+    residues2 : List[Residue]
+        List of residues for the second structure
+
+    Returns:
+    --------
+    Tuple[int, int, np.ndarray, np.ndarray]
+        Tuple of i and j indices and two numpy arrays containing coordinates of matching atom pairs
+    """
+    if len(residues1) != len(residues2):
+        raise ValueError("Residue lists must have the same length")
+
+    atom_pairs = []
+
+    for res1, res2 in zip(residues1, residues2):
+        res1_name = res1.residue_name
+        res2_name = res2.residue_name
+
+        if res1_name == res2_name:
+            # Same residue type - collect all matching atom pairs
+            for atom1 in res1.atoms_list:
+                atom2 = res2.find_atom(atom1.name)
+                if atom2 is not None:
+                    atom_pairs.append((atom1.coordinates, atom2.coordinates))
+
+        elif res1_name in purines and res2_name in purines:
+            # Both purines - backbone + ribose + purine rings
+            target_atoms = backbone_atoms | ribose_atoms | purine_ring_atoms
+            for atom_name in target_atoms:
+                atom1 = res1.find_atom(atom_name)
+                atom2 = res2.find_atom(atom_name)
+                if atom1 is not None and atom2 is not None:
+                    atom_pairs.append((atom1.coordinates, atom2.coordinates))
+
+        elif res1_name in pyrimidines and res2_name in pyrimidines:
+            # Both pyrimidines - backbone + ribose + pyrimidine ring
+            target_atoms = backbone_atoms | ribose_atoms | pyrimidine_ring_atoms
+            for atom_name in target_atoms:
+                atom1 = res1.find_atom(atom_name)
+                atom2 = res2.find_atom(atom_name)
+                if atom1 is not None and atom2 is not None:
+                    atom_pairs.append((atom1.coordinates, atom2.coordinates))
+
+        else:
+            # Purine-pyrimidine or other combinations - only backbone + ribose
+            target_atoms = backbone_atoms | ribose_atoms
+            for atom_name in target_atoms:
+                atom1 = res1.find_atom(atom_name)
+                atom2 = res2.find_atom(atom_name)
+                if atom1 is not None and atom2 is not None:
+                    atom_pairs.append((atom1.coordinates, atom2.coordinates))
+
+    # Convert to numpy arrays
+    coords1 = np.array([pair[0] for pair in atom_pairs])
+    coords2 = np.array([pair[1] for pair in atom_pairs])
+    return i, j, coords1, coords2
+
+
 def find_structure_clusters(
     structures: List[Structure],
     threshold: Optional[float] = None,
     visualize: bool = False,
-    n_jobs: Optional[int] = None,
     rmsd_mode: str = "NumPy",
 ) -> Tuple[List[List[int]], np.ndarray]:
     """
@@ -521,10 +492,9 @@ def find_structure_clusters(
     # Get nucleotide residues for each structure
     nucleotide_lists = []
     for structure in structures:
-        nucleotides = [
-            residue for residue in structure.residues if residue.is_nucleotide
-        ]
-        nucleotide_lists.append(nucleotides)
+        nucleotide_lists.append(
+            [residue for residue in structure.residues if residue.is_nucleotide]
+        )
 
     # Compute nRMSD distance matrix
     print(f"Computing pairwise nRMSD distances using {rmsd_mode} mode...")
@@ -532,35 +502,67 @@ def find_structure_clusters(
 
     # Prepare all pairs
     all_pairs = []
-    for i in range(n_structures):
-        for j in range(i + 1, n_structures):
-            all_pairs.append(
-                (i, j, nucleotide_lists[i], nucleotide_lists[j], rmsd_mode)
+    with ProcessPoolExecutor() as executor:
+        futures = [
+            executor.submit(
+                extract_coordinates, i, j, nucleotide_lists[i], nucleotide_lists[j]
             )
+            for i, j in itertools.combinations(range(n_structures), 2)
+        ]
+        for future in tqdm(
+            futures,
+            total=len(futures),
+            desc="Extracting coordinates",
+            unit="pair",
+        ):
+            result = future.result()
+            all_pairs.append(result)
 
     # Process pairs with progress bar
     total_pairs = len(all_pairs)
+    results = []
 
-    with tqdm(total=total_pairs, desc="Computing nRMSD", unit="pair") as pbar:
-        if n_jobs == 1:
-            # Single-threaded computation
-            results = []
-            for pair in all_pairs:
-                result = compute_nrmsd_pair(pair)
-                results.append(result)
-                pbar.update(1)
+    if rmsd_mode == "Numba":
+        print("Using Numba for RMSD computation")
+        if not NUMBA_AVAILABLE:
+            print(
+                "Warning: Numba not available, falling back to NumPy for RMSD computation"
+            )
+            rmsd_mode = "NumPy"
         else:
-            # Multi-threaded computation
-            with Pool(processes=n_jobs) as pool:
-                results = []
-                for result in pool.imap(compute_nrmsd_pair, all_pairs):
-                    results.append(result)
-                    pbar.update(1)
+            results = nrmsd_numba_batch(all_pairs)
 
-        # Fill the distance matrix
-        for i, j, nrmsd in results:
-            distance_matrix[i, j] = nrmsd
-            distance_matrix[j, i] = nrmsd
+    if rmsd_mode == "CuPy":
+        if not CUPY_AVAILABLE or not CUDA_AVAILABLE:
+            print(
+                "Warning: CuPy or CUDA not available, falling back to NumPy for RMSD computation"
+            )
+            rmsd_mode = "NumPy"
+        else:
+            print("Using CuPy for GPU-accelerated RMSD computation")
+
+    if rmsd_mode == "NumPy":
+        print("Using NumPy for RMSD computation")
+
+        with ProcessPoolExecutor() as executor:
+            futures_dict = {
+                executor.submit(nrmsd_numpy, coords_i, coords_j): (i, j)
+                for i, j, coords_i, coords_j in all_pairs
+            }
+            for future in tqdm(
+                futures_dict,
+                total=len(futures_dict),
+                desc="Computing nRMSD",
+                unit="pair",
+            ):
+                i, j = futures_dict[future]
+                nrmsd_value = future.result()
+                results.append((i, j, nrmsd_value))
+
+    # Fill the distance matrix
+    for i, j, nrmsd in results:
+        distance_matrix[i, j] = nrmsd
+        distance_matrix[j, i] = nrmsd
 
     # Convert to condensed distance matrix for scipy
     condensed_distances = squareform(distance_matrix)
@@ -711,7 +713,7 @@ def main():
     # Find clusters
     print("\nFinding structure clusters...")
     clusters, distance_matrix = find_structure_clusters(
-        structures, args.threshold, args.visualize, args.jobs, args.rmsd_mode
+        structures, args.threshold, args.visualize, args.rmsd_mode
     )
 
     # Find medoids for each cluster
