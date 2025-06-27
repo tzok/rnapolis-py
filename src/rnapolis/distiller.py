@@ -282,24 +282,24 @@ def nrmsd_qcp(residues1, residues2):
     """
     # Get paired coordinates
     coords1, coords2 = find_paired_coordinates(residues1, residues2)
-    
+
     # Center coordinates at origin
     centroid1 = np.mean(coords1, axis=0)
     centroid2 = np.mean(coords2, axis=0)
     coords1_centered = coords1 - centroid1
     coords2_centered = coords2 - centroid2
-    
+
     # Calculate G1, G2, and cross-covariance matrix A (following BioPython)
     G1 = np.trace(np.dot(coords2_centered, coords2_centered.T))
     G2 = np.trace(np.dot(coords1_centered, coords1_centered.T))
     A = np.dot(coords2_centered.T, coords1_centered)  # Cross-covariance matrix
     E0 = (G1 + G2) * 0.5
-    
+
     # Extract elements from A matrix
     Sxx, Sxy, Sxz = A[0, 0], A[0, 1], A[0, 2]
     Syx, Syy, Syz = A[1, 0], A[1, 1], A[1, 2]
     Szx, Szy, Szz = A[2, 0], A[2, 1], A[2, 2]
-    
+
     # Build the K matrix (quaternion matrix) as in BioPython
     K = np.zeros((4, 4))
     K[0, 0] = Sxx + Syy + Szz
@@ -312,16 +312,16 @@ def nrmsd_qcp(residues1, residues2):
     K[2, 2] = -Sxx + Syy - Szz
     K[2, 3] = K[3, 2] = Syz + Szy
     K[3, 3] = -Sxx - Syy + Szz
-    
+
     # Find the largest eigenvalue using numpy
     eigenvalues, _ = np.linalg.eigh(K)
     max_eigenvalue = np.max(eigenvalues)
-    
+
     # Calculate RMSD following BioPython formula
     natoms = coords1.shape[0]
     rmsd_sq = (2.0 * abs(E0 - max_eigenvalue)) / natoms
     rmsd = np.sqrt(rmsd_sq)
-    
+
     return rmsd / np.sqrt(natoms)
 
 
