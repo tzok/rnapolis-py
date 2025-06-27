@@ -172,13 +172,22 @@ def find_paired_coordinates(
         else:
             df2 = parse_cif_atoms(write_cif(residue2.atoms))
 
-        df1_filtered = df1[df1["auth_atom_id"].isin(atoms_to_match)]
-        df2_filtered = df2[df2["auth_atom_id"].isin(atoms_to_match)]
+        if "auth_atom_id" in df1.columns and "auth_atom_id" and in df2.columns:
+            atom_column = "auth_atom_id"
+        elif "label_atom_id" in df1.columns and "label_atom_id" in df2.columns:
+            atom_column = "label_atom_id"
+        else:
+            raise ValueError(
+                "No suitable atom identifier column found in the provided residues."
+            )
+
+        df1_filtered = df1[df1[atom_column].isin(atoms_to_match)]
+        df2_filtered = df2[df2[atom_column].isin(atoms_to_match)]
 
         paired_df = pd.merge(
-            df1_filtered[["auth_atom_id", "Cartn_x", "Cartn_y", "Cartn_z"]],
-            df2_filtered[["auth_atom_id", "Cartn_x", "Cartn_y", "Cartn_z"]],
-            on="auth_atom_id",
+            df1_filtered[[atom_column, "Cartn_x", "Cartn_y", "Cartn_z"]],
+            df2_filtered[[atom_column, "Cartn_x", "Cartn_y", "Cartn_z"]],
+            on=atom_column,
             suffixes=("_1", "_2"),
         )
 
