@@ -277,19 +277,19 @@ def nrmsd_validate(residues1, residues2):
     """
     Validates that both RMSD methods produce the same result.
     Uses quaternions method as the primary result after validation.
-    
+
     Parameters:
     -----------
     residues1 : List[Residue]
         List of residues from the first structure
     residues2 : List[Residue]
         List of residues from the second structure
-        
+
     Returns:
     --------
     float
         nRMSD value (from quaternions method after validation)
-        
+
     Raises:
     -------
     ValueError
@@ -298,7 +298,7 @@ def nrmsd_validate(residues1, residues2):
     # Calculate using both methods
     result_quaternions = nrmsd_quaternions(residues1, residues2)
     result_svd = nrmsd_svd(residues1, residues2)
-    
+
     # Check if results are approximately equal (within 1e-6 tolerance)
     tolerance = 1e-6
     if abs(result_quaternions - result_svd) > tolerance:
@@ -306,7 +306,7 @@ def nrmsd_validate(residues1, residues2):
             f"RMSD methods disagree: quaternions={result_quaternions:.8f}, "
             f"svd={result_svd:.8f}, difference={abs(result_quaternions - result_svd):.8f}"
         )
-    
+
     # Return quaternions result as the validated value
     return result_quaternions
 
@@ -475,7 +475,9 @@ def find_structure_clusters(
         print("Computing pairwise nRMSD distances using SVD method...")
     elif rmsd_method == "validate":
         rmsd_func = nrmsd_validate
-        print("Computing pairwise nRMSD distances using validation mode (both methods)...")
+        print(
+            "Computing pairwise nRMSD distances using validation mode (both methods)..."
+        )
     else:
         raise ValueError(f"Unknown RMSD method: {rmsd_method}")
 
