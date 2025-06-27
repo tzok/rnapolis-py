@@ -290,7 +290,7 @@ def nrmsd_qcp(residues1, residues2):
 
     # 2. Calculate the inner product matrix elements (cross-covariance matrix)
     C = P_centered.T @ Q_centered
-    
+
     # Extract elements
     Sxx, Sxy, Sxz = C[0, 0], C[0, 1], C[0, 2]
     Syx, Syy, Syz = C[1, 0], C[1, 1], C[1, 2]
@@ -299,16 +299,41 @@ def nrmsd_qcp(residues1, residues2):
     # 3. Calculate the coefficients of the characteristic polynomial
     # For the K matrix eigenvalue problem: det(K - λI) = 0
     # This gives us: λ^4 + C2*λ^2 + C1*λ + C0 = 0
-    
+
     # Coefficients (corrected formulation)
-    C2 = -2.0 * (Sxx*Sxx + Sxy*Sxy + Sxz*Sxz + Syx*Syx + Syy*Syy +
-                  Syz*Syz + Szx*Szx + Szy*Szy + Szz*Szz)
-    
-    C1 = 8.0 * (Sxx*Syz*Szy + Syy*Szx*Sxz + Szz*Sxy*Syx - 
-                Sxx*Syy*Szz - Sxy*Syz*Szx - Sxz*Syx*Szy)
-    
-    C0 = -8.0 * (Sxx*Syy*Szz + Sxy*Syz*Szx + Sxz*Syx*Szy - 
-                 Sxx*Syz*Szy - Syy*Szx*Sxz - Szz*Sxy*Syx)**2
+    C2 = -2.0 * (
+        Sxx * Sxx
+        + Sxy * Sxy
+        + Sxz * Sxz
+        + Syx * Syx
+        + Syy * Syy
+        + Syz * Syz
+        + Szx * Szx
+        + Szy * Szy
+        + Szz * Szz
+    )
+
+    C1 = 8.0 * (
+        Sxx * Syz * Szy
+        + Syy * Szx * Sxz
+        + Szz * Sxy * Syx
+        - Sxx * Syy * Szz
+        - Sxy * Syz * Szx
+        - Sxz * Syx * Szy
+    )
+
+    C0 = (
+        -8.0
+        * (
+            Sxx * Syy * Szz
+            + Sxy * Syz * Szx
+            + Sxz * Syx * Szy
+            - Sxx * Syz * Szy
+            - Syy * Szx * Sxz
+            - Szz * Sxy * Syx
+        )
+        ** 2
+    )
 
     # 4. Calculate E0 (sum of squared distances from centroids)
     E0 = np.sum(P_centered**2) + np.sum(Q_centered**2)
