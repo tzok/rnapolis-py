@@ -290,7 +290,7 @@ def nrmsd_qcp(residues1, residues2):
 
     # 2. Calculate inner product matrix elements
     N = P.shape[0]
-    
+
     # Calculate cross-covariance matrix elements
     Sxx = np.sum(P_centered[:, 0] * Q_centered[:, 0])
     Sxy = np.sum(P_centered[:, 0] * Q_centered[:, 1])
@@ -320,8 +320,14 @@ def nrmsd_qcp(residues1, residues2):
     Sxx2Syy2Szz2Syz2Szy2 = Syy2 + Szz2 - Sxx2 + Syz2 + Szy2
 
     c2 = -2.0 * (Sxx2 + Syy2 + Szz2 + Sxy2 + Syx2 + Sxz2 + Szx2 + Syz2 + Szy2)
-    c1 = 8.0 * (Sxx * Syz * Szy + Syy * Szx * Sxz + Szz * Sxy * Syx - 
-                Sxx * Syy * Szz - Syz * Szx * Sxy - Szy * Syx * Sxz)
+    c1 = 8.0 * (
+        Sxx * Syz * Szy
+        + Syy * Szx * Sxz
+        + Szz * Sxy * Syx
+        - Sxx * Syy * Szz
+        - Syz * Szx * Sxy
+        - Szy * Syx * Sxz
+    )
 
     SxzpSzx = Sxz + Szx
     SyzpSzy = Syz + Szy
@@ -334,16 +340,19 @@ def nrmsd_qcp(residues1, residues2):
 
     Sxy2Sxz2Syx2Szx2 = Sxy2 + Sxz2 - Syx2 - Szx2
 
-    c0 = (Sxy2Sxz2Syx2Szx2 * Sxy2Sxz2Syx2Szx2 +
-          (Sxx2Syy2Szz2Syz2Szy2 + SyzSzymSyySzz2) * (Sxx2Syy2Szz2Syz2Szy2 - SyzSzymSyySzz2) +
-          (-(SxzpSzx) * (SyzmSzy) + (SxymSyx) * (SxxmSyy - Szz)) *
-          (-(SxzmSzx) * (SyzpSzy) + (SxymSyx) * (SxxmSyy + Szz)) +
-          (-(SxzpSzx) * (SyzpSzy) - (SxypSyx) * (SxxpSyy - Szz)) *
-          (-(SxzmSzx) * (SyzmSzy) - (SxypSyx) * (SxxpSyy + Szz)) +
-          (+(SxypSyx) * (SyzpSzy) + (SxzpSzx) * (SxxmSyy + Szz)) *
-          (-(SxymSyx) * (SyzmSzy) + (SxzpSzx) * (SxxpSyy + Szz)) +
-          (+(SxypSyx) * (SyzmSzy) + (SxzmSzx) * (SxxmSyy - Szz)) *
-          (-(SxymSyx) * (SyzpSzy) + (SxzmSzx) * (SxxpSyy - Szz)))
+    c0 = (
+        Sxy2Sxz2Syx2Szx2 * Sxy2Sxz2Syx2Szx2
+        + (Sxx2Syy2Szz2Syz2Szy2 + SyzSzymSyySzz2)
+        * (Sxx2Syy2Szz2Syz2Szy2 - SyzSzymSyySzz2)
+        + (-(SxzpSzx) * (SyzmSzy) + (SxymSyx) * (SxxmSyy - Szz))
+        * (-(SxzmSzx) * (SyzpSzy) + (SxymSyx) * (SxxmSyy + Szz))
+        + (-(SxzpSzx) * (SyzpSzy) - (SxypSyx) * (SxxpSyy - Szz))
+        * (-(SxzmSzx) * (SyzmSzy) - (SxypSyx) * (SxxpSyy + Szz))
+        + (+(SxypSyx) * (SyzpSzy) + (SxzpSzx) * (SxxmSyy + Szz))
+        * (-(SxymSyx) * (SyzmSzy) + (SxzpSzx) * (SxxpSyy + Szz))
+        + (+(SxypSyx) * (SyzmSzy) + (SxzmSzx) * (SxxmSyy - Szz))
+        * (-(SxymSyx) * (SyzpSzy) + (SxzmSzx) * (SxxpSyy - Szz))
+    )
 
     # 5. Find the largest eigenvalue using Newton-Raphson method
     mxEigenV = E0
@@ -354,7 +363,7 @@ def nrmsd_qcp(residues1, residues2):
         x2 = mxEigenV * mxEigenV
         b = (x2 + c2) * mxEigenV
         a = b + c1
-        delta = ((a * mxEigenV + c0) / (2.0 * x2 * mxEigenV + b + a))
+        delta = (a * mxEigenV + c0) / (2.0 * x2 * mxEigenV + b + a)
         mxEigenV -= delta
 
         if abs(mxEigenV - oldg) < abs(eval_prec * mxEigenV):
