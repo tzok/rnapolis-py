@@ -191,9 +191,9 @@ def validate_nucleotide_counts(
     print(f"All structures have {first_count} nucleotides")
 
 
-def nrmsd_quaternions(residues1, residues2):
+def rmsd_quaternions(residues1, residues2):
     """
-    Calculates nRMSD using the Quaternion method.
+    Calculates RMSD using the Quaternion method.
     residues1 and residues2 are lists of Residue objects.
     """
     # Get paired coordinates
@@ -232,12 +232,12 @@ def nrmsd_quaternions(residues1, residues2):
     rmsd_sq = (E0 - 2 * np.max(eigenvalues)) / N
 
     # Handle potential floating point inaccuracies
-    return np.sqrt(max(0.0, rmsd_sq) / N)
+    return np.sqrt(max(0.0, rmsd_sq))
 
 
-def nrmsd_svd(residues1, residues2):
+def rmsd_svd(residues1, residues2):
     """
-    Calculates nRMSD using SVD decomposition (Kabsch algorithm).
+    Calculates RMSD using SVD decomposition (Kabsch algorithm).
     residues1 and residues2 are lists of Residue objects.
     """
     # Get paired coordinates
@@ -270,12 +270,12 @@ def nrmsd_svd(residues1, residues2):
     diff = P_rotated - Q_centered
     rmsd_sq = np.sum(diff**2) / P.shape[0]
 
-    return np.sqrt(rmsd_sq) / np.sqrt(P.shape[0])
+    return np.sqrt(rmsd_sq)
 
 
-def nrmsd_qcp(residues1, residues2):
+def rmsd_qcp(residues1, residues2):
     """
-    Calculates nRMSD using the QCP (Quaternion Characteristic Polynomial) method.
+    Calculates RMSD using the QCP (Quaternion Characteristic Polynomial) method.
     This implementation follows the BioPython QCP algorithm but uses np.linalg.eigh
     instead of Newton-Raphson for simplicity.
     residues1 and residues2 are lists of Residue objects.
@@ -322,12 +322,61 @@ def nrmsd_qcp(residues1, residues2):
     rmsd_sq = (2.0 * abs(E0 - max_eigenvalue)) / natoms
     rmsd = np.sqrt(rmsd_sq)
 
-    return rmsd / np.sqrt(natoms)
+    return rmsd
+
+
+def rmsd_to_nrmsd(rmsd: float, num_atoms: int) -> float:
+    """
+    Convert RMSD to normalized RMSD (nRMSD).
+    
+    Parameters:
+    -----------
+    rmsd : float
+        Root Mean Square Deviation value
+    num_atoms : int
+        Number of atoms used in the RMSD calculation
+        
+    Returns:
+    --------
+    float
+        Normalized RMSD value
+    """
+    return rmsd / np.sqrt(num_atoms)
+
+
+def nrmsd_quaternions(residues1, residues2):
+    """
+    Calculates nRMSD using the Quaternion method.
+    residues1 and residues2 are lists of Residue objects.
+    """
+    rmsd = rmsd_quaternions(residues1, residues2)
+    coords1, coords2 = find_paired_coordinates(residues1, residues2)
+    return rmsd_to_nrmsd(rmsd, coords1.shape[0])
+
+
+def nrmsd_svd(residues1, residues2):
+    """
+    Calculates nRMSD using SVD decomposition (Kabsch algorithm).
+    residues1 and residues2 are lists of Residue objects.
+    """
+    rmsd = rmsd_svd(residues1, residues2)
+    coords1, coords2 = find_paired_coordinates(residues1, residues2)
+    return rmsd_to_nrmsd(rmsd, coords1.shape[0])
+
+
+def nrmsd_qcp(residues1, residues2):
+    """
+    Calculates nRMSD using the QCP (Quaternion Characteristic Polynomial) method.
+    residues1 and residues2 are lists of Residue objects.
+    """
+    rmsd = rmsd_qcp(residues1, residues2)
+    coords1, coords2 = find_paired_coordinates(residues1, residues2)
+    return rmsd_to_nrmsd(rmsd, coords1.shape[0])
 
 
 def nrmsd_validate(residues1, residues2):
     """
-    Validates that all RMSD methods produce the same result.
+    Validates that all nRMSD methods produce the same result.
     Uses quaternions method as the primary result after validation.
 
     Parameters:
@@ -358,21 +407,21 @@ def nrmsd_validate(residues1, residues2):
     # Check quaternions vs SVD
     if abs(result_quaternions - result_svd) > tolerance:
         raise ValueError(
-            f"RMSD methods disagree: quaternions={result_quaternions:.8f}, "
+            f"nRMSD methods disagree: quaternions={result_quaternions:.8f}, "
             f"svd={result_svd:.8f}, difference={abs(result_quaternions - result_svd):.8f}"
         )
 
     # Check quaternions vs QCP
     if abs(result_quaternions - result_qcp) > tolerance:
         raise ValueError(
-            f"RMSD methods disagree: quaternions={result_quaternions:.8f}, "
+            f"nRMSD methods disagree: quaternions={result_quaternions:.8f}, "
             f"qcp={result_qcp:.8f}, difference={abs(result_quaternions - result_qcp):.8f}"
         )
 
     # Check SVD vs QCP
     if abs(result_svd - result_qcp) > tolerance:
         raise ValueError(
-            f"RMSD methods disagree: svd={result_svd:.8f}, "
+            f"nRMSD methods disagree: svd={result_svd:.8f}, "
             f"qcp={result_qcp:.8f}, difference={abs(result_svd - result_qcp):.8f}"
         )
 
@@ -535,18 +584,18 @@ def find_structure_clusters(
             [residue for residue in structure.residues if residue.is_nucleotide]
         )
 
-    # Select RMSD function based on method
+    # Select nRMSD function based on method
     if rmsd_method == "quaternions":
-        rmsd_func = nrmsd_quaternions
+        nrmsd_func = nrmsd_quaternions
         print("Computing pairwise nRMSD distances using quaternion method...")
     elif rmsd_method == "svd":
-        rmsd_func = nrmsd_svd
+        nrmsd_func = nrmsd_svd
         print("Computing pairwise nRMSD distances using SVD method...")
     elif rmsd_method == "qcp":
-        rmsd_func = nrmsd_qcp
+        nrmsd_func = nrmsd_qcp
         print("Computing pairwise nRMSD distances using QCP method...")
     elif rmsd_method == "validate":
-        rmsd_func = nrmsd_validate
+        nrmsd_func = nrmsd_validate
         print(
             "Computing pairwise nRMSD distances using validation mode (all methods)..."
         )
@@ -564,7 +613,7 @@ def find_structure_clusters(
     # Process pairs with progress bar
     with ProcessPoolExecutor() as executor:
         futures_dict = {
-            executor.submit(rmsd_func, nucleotides_i, nucleotides_j): (i, j)
+            executor.submit(nrmsd_func, nucleotides_i, nucleotides_j): (i, j)
             for i, j, nucleotides_i, nucleotides_j in all_pairs
         }
         results = []
