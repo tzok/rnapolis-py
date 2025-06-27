@@ -16,7 +16,6 @@ from rnapolis.parser_v2 import parse_cif_atoms, parse_pdb_atoms
 from rnapolis.tertiary_v2 import Residue, Structure
 
 
-
 def parse_arguments():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
@@ -573,8 +572,6 @@ def compute_nrmsd(
     return nrmsd
 
 
-
-
 def find_optimal_threshold(
     distance_matrix: np.ndarray, linkage_matrix: np.ndarray
 ) -> float:
@@ -634,8 +631,6 @@ def compute_nrmsd_pair(args):
     i, j, nucleotides_i, nucleotides_j, rmsd_mode = args
     nrmsd = compute_nrmsd(nucleotides_i, nucleotides_j, rmsd_mode)
     return i, j, nrmsd
-
-
 
 
 def main():
