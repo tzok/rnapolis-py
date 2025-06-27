@@ -26,104 +26,6 @@ except ImportError:
     print("CuPy not available - using CPU computation")
 
 
-def rmsd_squared_numpy(P, Q):
-    """
-    Calculates RMSD using the Quaternion method.
-    P and Q are Nx3 numpy arrays.
-    """
-    # 1. Center coordinates
-    centroid_P = np.mean(P, axis=0)
-    centroid_Q = np.mean(Q, axis=0)
-    P_centered = P - centroid_P
-    Q_centered = Q - centroid_Q
-
-    # 2. Covariance matrix
-    C = P_centered.T @ Q_centered
-
-    # 3. K matrix
-    K = np.zeros((4, 4))
-    K[0, 0] = C[0, 0] + C[1, 1] + C[2, 2]
-    K[0, 1] = K[1, 0] = C[1, 2] - C[2, 1]
-    K[0, 2] = K[2, 0] = C[2, 0] - C[0, 2]
-    K[0, 3] = K[3, 0] = C[0, 1] - C[1, 0]
-    K[1, 1] = C[0, 0] - C[1, 1] - C[2, 2]
-    K[1, 2] = K[2, 1] = C[0, 1] + C[1, 0]
-    K[1, 3] = K[3, 1] = C[0, 2] + C[2, 0]
-    K[2, 2] = -C[0, 0] + C[1, 1] - C[2, 2]
-    K[2, 3] = K[3, 2] = C[1, 2] + C[2, 1]
-    K[3, 3] = -C[0, 0] - C[1, 1] + C[2, 2]
-
-    # 4. Eigenvalue/vector
-    # numpy's eigh is highly optimized for symmetric matrices
-    eigenvalues, _ = np.linalg.eigh(K)
-
-    # We don't even need the rotation matrix for the RMSD value
-    # E0 = sum(|P_i-cP|^2) + sum(|Q_i-cQ|^2)
-    E0 = np.sum(np.sum(P_centered**2, axis=1)) + np.sum(np.sum(Q_centered**2, axis=1))
-
-    # The min RMSD squared is (E0 - 2*max_eigenvalue) / N
-    N = P.shape[0]
-    rmsd_sq = (E0 - 2 * np.max(eigenvalues)) / N
-
-    # Handle potential floating point inaccuracies
-    return max(0.0, rmsd_sq)
-
-
-@numba.jit(nopython=True, fastmath=True)
-def rmsd_squared_numba(P, Q):
-    # The *exact same code* as the numpy function goes here
-    # but using basic loops instead of numpy functions
-    N = P.shape[0]
-    # 1. Center
-    centroid_P = np.zeros(3)
-    centroid_Q = np.zeros(3)
-    for i in range(3):
-        centroid_P[i] = np.mean(P[:, i])
-        centroid_Q[i] = np.mean(Q[:, i])
-
-    P_centered = P - centroid_P
-    Q_centered = Q - centroid_Q
-
-    # 2. Covariance matrix implemented with explicit loops
-    # and array access, which numba is great at optimizing.
-    # C = P_centered.T @ Q_centered becomes:
-    C = np.zeros((3, 3))
-    for i in range(3):
-        for j in range(3):
-            sum_val = 0.0
-            for k in range(N):
-                sum_val += P_centered[k, i] * Q_centered[k, j]
-            C[i, j] = sum_val
-
-    # 3. K matrix
-    K = np.zeros((4, 4))
-    K[0, 0] = C[0, 0] + C[1, 1] + C[2, 2]
-    K[0, 1] = K[1, 0] = C[1, 2] - C[2, 1]
-    K[0, 2] = K[2, 0] = C[2, 0] - C[0, 2]
-    K[0, 3] = K[3, 0] = C[0, 1] - C[1, 0]
-    K[1, 1] = C[0, 0] - C[1, 1] - C[2, 2]
-    K[1, 2] = K[2, 1] = C[0, 1] + C[1, 0]
-    K[1, 3] = K[3, 1] = C[0, 2] + C[2, 0]
-    K[2, 2] = -C[0, 0] + C[1, 1] - C[2, 2]
-    K[2, 3] = K[3, 2] = C[1, 2] + C[2, 1]
-    K[3, 3] = -C[0, 0] - C[1, 1] + C[2, 2]
-
-    # 4. Eigenvalue/vector
-    # numpy's eigh is highly optimized for symmetric matrices
-    eigenvalues, _ = np.linalg.eigh(K)
-
-    # We don't even need the rotation matrix for the RMSD value
-    # E0 = sum(|P_i-cP|^2) + sum(|Q_i-cQ|^2)
-    E0 = np.sum(np.sum(P_centered**2, axis=1)) + np.sum(np.sum(Q_centered**2, axis=1))
-
-    # The min RMSD squared is (E0 - 2*max_eigenvalue) / N
-    N = P.shape[0]
-    rmsd_sq = (E0 - 2 * np.max(eigenvalues)) / N
-
-    # Handle potential floating point inaccuracies
-    return max(0.0, rmsd_sq)
-
-
 def parse_arguments():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
@@ -224,6 +126,364 @@ def parse_structure_file(file_path: Path) -> Structure:
     except Exception as e:
         print(f"Error parsing {file_path}: {e}", file=sys.stderr)
         raise
+
+
+def validate_nucleotide_counts(
+    structures: List[Structure], file_paths: List[Path]
+) -> None:
+    """
+    Validate that all structures have the same number of nucleotides.
+
+    Parameters:
+    -----------
+    structures : List[Structure]
+        List of parsed structures
+    file_paths : List[Path]
+        Corresponding file paths for error reporting
+
+    Raises:
+    -------
+    SystemExit
+        If structures have different numbers of nucleotides
+    """
+    nucleotide_counts = []
+
+    for structure, file_path in zip(structures, file_paths):
+        nucleotide_residues = [
+            residue for residue in structure.residues if residue.is_nucleotide
+        ]
+        nucleotide_counts.append((len(nucleotide_residues), file_path))
+
+    if not nucleotide_counts:
+        print("Error: No structures with nucleotides found", file=sys.stderr)
+        sys.exit(1)
+
+    # Check if all counts are the same
+    first_count = nucleotide_counts[0][0]
+    mismatched = [
+        (count, path) for count, path in nucleotide_counts if count != first_count
+    ]
+
+    if mismatched:
+        print(
+            "Error: Structures have different numbers of nucleotides:", file=sys.stderr
+        )
+        print(
+            f"Expected: {first_count} nucleotides (from {nucleotide_counts[0][1]})",
+            file=sys.stderr,
+        )
+        for count, path in mismatched:
+            print(f"Found: {count} nucleotides in {path}", file=sys.stderr)
+        sys.exit(1)
+
+    print(f"All structures have {first_count} nucleotides")
+
+
+def find_structure_clusters(
+    structures: List[Structure],
+    threshold: Optional[float] = None,
+    visualize: bool = False,
+    n_jobs: Optional[int] = None,
+    rmsd_mode: str = "NumPy",
+) -> Tuple[List[List[int]], np.ndarray]:
+    """
+    Find clusters of almost identical structures using hierarchical clustering.
+
+    Parameters:
+    -----------
+    structures : List[Structure]
+        List of parsed structures to analyze
+    threshold : float
+        nRMSD threshold for clustering
+    visualize : bool
+        Whether to show dendrogram visualization
+    n_jobs : int
+        Number of parallel jobs for nRMSD computation
+
+    Returns:
+    --------
+    List[List[int]]
+        List of clusters, where each cluster is a list of structure indices
+    """
+    n_structures = len(structures)
+
+    if n_structures == 1:
+        return [[0]], np.zeros((1, 1))
+
+    # Get nucleotide residues for each structure
+    nucleotide_lists = []
+    for structure in structures:
+        nucleotides = [
+            residue for residue in structure.residues if residue.is_nucleotide
+        ]
+        nucleotide_lists.append(nucleotides)
+
+    # Compute nRMSD distance matrix using batched computation
+    batch_size = 1000
+    use_gpu = (
+        CUPY_AVAILABLE and n_jobs != 1
+    )  # Use GPU unless explicitly requesting single-threaded
+
+    print(
+        f"Computing pairwise nRMSD distances using {'GPU' if use_gpu else 'CPU'} with batch size {batch_size}..."
+    )
+    distance_matrix = np.zeros((n_structures, n_structures))
+
+    # Prepare all pairs
+    all_pairs = []
+    for i in range(n_structures):
+        for j in range(i + 1, n_structures):
+            all_pairs.append(
+                (i, j, nucleotide_lists[i], nucleotide_lists[j], rmsd_mode)
+            )
+
+    # Process pairs in batches with progress bar
+    total_pairs = len(all_pairs)
+    num_batches = (total_pairs + batch_size - 1) // batch_size
+
+    with tqdm(total=num_batches, desc="Processing batches", unit="batch") as pbar:
+        for batch_start in range(0, total_pairs, batch_size):
+            batch_end = min(batch_start + batch_size, total_pairs)
+            batch_pairs = all_pairs[batch_start:batch_end]
+
+            if use_gpu:
+                # Use GPU batched computation
+                results = compute_nrmsd_batch(batch_pairs)
+            else:
+                # Use CPU computation (potentially parallel)
+                if n_jobs == 1:
+                    results = [compute_nrmsd_pair(pair) for pair in batch_pairs]
+                else:
+                    with Pool(processes=n_jobs) as pool:
+                        results = pool.map(compute_nrmsd_pair, batch_pairs)
+
+            # Fill the distance matrix
+            for i, j, nrmsd in results:
+                distance_matrix[i, j] = nrmsd
+                distance_matrix[j, i] = nrmsd
+
+            # Update progress bar
+            pbar.set_postfix(
+                {"pairs": f"{batch_end}/{total_pairs}", "batch_size": len(batch_pairs)}
+            )
+            pbar.update(1)
+
+    # Convert to condensed distance matrix for scipy
+    condensed_distances = squareform(distance_matrix)
+
+    # Perform hierarchical clustering with complete linkage
+    linkage_matrix = linkage(condensed_distances, method="complete")
+
+    # Find optimal threshold if not provided
+    if threshold is None:
+        threshold = find_optimal_threshold(distance_matrix, linkage_matrix)
+
+    # Show dendrogram and nRMSD distribution if requested
+    if visualize:
+        try:
+            import matplotlib.pyplot as plt
+
+            # Create subplots for dendrogram and histogram
+            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
+
+            # Plot dendrogram
+            dendrogram(
+                linkage_matrix,
+                labels=[f"Structure {i}" for i in range(n_structures)],
+                color_threshold=threshold,
+                ax=ax1,
+            )
+            ax1.set_title("Hierarchical Clustering Dendrogram")
+            ax1.set_xlabel("Structure Index")
+            ax1.set_ylabel("nRMSD Distance")
+            ax1.axhline(
+                y=threshold, color="r", linestyle="--", label=f"Threshold = {threshold}"
+            )
+            ax1.legend()
+
+            # Plot nRMSD distribution
+            nrmsd_values = distance_matrix[np.triu_indices_from(distance_matrix, k=1)]
+            ax2.hist(nrmsd_values, bins=20, alpha=0.7, edgecolor="black")
+            ax2.axvline(
+                x=threshold, color="r", linestyle="--", label=f"Threshold = {threshold}"
+            )
+            ax2.set_title("Distribution of nRMSD Values")
+            ax2.set_xlabel("nRMSD")
+            ax2.set_ylabel("Frequency")
+            ax2.legend()
+
+            plt.tight_layout()
+
+            # Always save the plot when --visualize is used
+            plt.savefig("dendrogram.png", dpi=300, bbox_inches="tight")
+            print("Dendrogram and nRMSD distribution saved to dendrogram.png")
+
+            # Try to show interactively, but don't fail if it doesn't work
+            try:
+                plt.show()
+            except Exception:
+                print("Note: Could not display plot interactively, but saved to file")
+
+        except ImportError:
+            print(
+                "Warning: matplotlib not available, skipping dendrogram visualization",
+                file=sys.stderr,
+            )
+
+    # Get cluster labels using the threshold
+    cluster_labels = fcluster(linkage_matrix, threshold, criterion="distance")
+
+    # Group structure indices by cluster
+    clusters: dict[int, list[int]] = {}
+    for i, label in enumerate(cluster_labels):
+        if label not in clusters:
+            clusters[label] = []
+        clusters[label].append(i)
+
+    # Return clusters and distance matrix
+    return list(clusters.values()), distance_matrix
+
+
+def find_cluster_medoids(
+    clusters: List[List[int]], distance_matrix: np.ndarray
+) -> List[int]:
+    """
+    Find the medoid (representative) for each cluster.
+
+    Parameters:
+    -----------
+    clusters : List[List[int]]
+        List of clusters, where each cluster is a list of structure indices
+    distance_matrix : np.ndarray
+        Square distance matrix between all structures
+
+    Returns:
+    --------
+    List[int]
+        List of medoid indices, one for each cluster
+    """
+    medoids = []
+
+    for cluster in clusters:
+        if len(cluster) == 1:
+            # Single element cluster - it's its own medoid
+            medoids.append(cluster[0])
+        else:
+            # Find the element with minimum sum of distances to all other elements in cluster
+            min_sum_distance = float("inf")
+            medoid = cluster[0]
+
+            for candidate in cluster:
+                sum_distance = sum(
+                    distance_matrix[candidate, other]
+                    for other in cluster
+                    if other != candidate
+                )
+                if sum_distance < min_sum_distance:
+                    min_sum_distance = sum_distance
+                    medoid = candidate
+
+            medoids.append(medoid)
+
+    return medoids
+
+
+def rmsd_squared_numpy(P, Q):
+    """
+    Calculates RMSD using the Quaternion method.
+    P and Q are Nx3 numpy arrays.
+    """
+    # 1. Center coordinates
+    centroid_P = np.mean(P, axis=0)
+    centroid_Q = np.mean(Q, axis=0)
+    P_centered = P - centroid_P
+    Q_centered = Q - centroid_Q
+
+    # 2. Covariance matrix
+    C = P_centered.T @ Q_centered
+
+    # 3. K matrix
+    K = np.zeros((4, 4))
+    K[0, 0] = C[0, 0] + C[1, 1] + C[2, 2]
+    K[0, 1] = K[1, 0] = C[1, 2] - C[2, 1]
+    K[0, 2] = K[2, 0] = C[2, 0] - C[0, 2]
+    K[0, 3] = K[3, 0] = C[0, 1] - C[1, 0]
+    K[1, 1] = C[0, 0] - C[1, 1] - C[2, 2]
+    K[1, 2] = K[2, 1] = C[0, 1] + C[1, 0]
+    K[1, 3] = K[3, 1] = C[0, 2] + C[2, 0]
+    K[2, 2] = -C[0, 0] + C[1, 1] - C[2, 2]
+    K[2, 3] = K[3, 2] = C[1, 2] + C[2, 1]
+    K[3, 3] = -C[0, 0] - C[1, 1] + C[2, 2]
+
+    # 4. Eigenvalue/vector
+    # numpy's eigh is highly optimized for symmetric matrices
+    eigenvalues, _ = np.linalg.eigh(K)
+
+    # We don't even need the rotation matrix for the RMSD value
+    # E0 = sum(|P_i-cP|^2) + sum(|Q_i-cQ|^2)
+    E0 = np.sum(np.sum(P_centered**2, axis=1)) + np.sum(np.sum(Q_centered**2, axis=1))
+
+    # The min RMSD squared is (E0 - 2*max_eigenvalue) / N
+    N = P.shape[0]
+    rmsd_sq = (E0 - 2 * np.max(eigenvalues)) / N
+
+    # Handle potential floating point inaccuracies
+    return max(0.0, rmsd_sq)
+
+
+@numba.jit(nopython=True, fastmath=True)
+def rmsd_squared_numba(P, Q):
+    # The *exact same code* as the numpy function goes here
+    # but using basic loops instead of numpy functions
+    N = P.shape[0]
+    # 1. Center
+    centroid_P = np.zeros(3)
+    centroid_Q = np.zeros(3)
+    for i in range(3):
+        centroid_P[i] = np.mean(P[:, i])
+        centroid_Q[i] = np.mean(Q[:, i])
+
+    P_centered = P - centroid_P
+    Q_centered = Q - centroid_Q
+
+    # 2. Covariance matrix implemented with explicit loops
+    # and array access, which numba is great at optimizing.
+    # C = P_centered.T @ Q_centered becomes:
+    C = np.zeros((3, 3))
+    for i in range(3):
+        for j in range(3):
+            sum_val = 0.0
+            for k in range(N):
+                sum_val += P_centered[k, i] * Q_centered[k, j]
+            C[i, j] = sum_val
+
+    # 3. K matrix
+    K = np.zeros((4, 4))
+    K[0, 0] = C[0, 0] + C[1, 1] + C[2, 2]
+    K[0, 1] = K[1, 0] = C[1, 2] - C[2, 1]
+    K[0, 2] = K[2, 0] = C[2, 0] - C[0, 2]
+    K[0, 3] = K[3, 0] = C[0, 1] - C[1, 0]
+    K[1, 1] = C[0, 0] - C[1, 1] - C[2, 2]
+    K[1, 2] = K[2, 1] = C[0, 1] + C[1, 0]
+    K[1, 3] = K[3, 1] = C[0, 2] + C[2, 0]
+    K[2, 2] = -C[0, 0] + C[1, 1] - C[2, 2]
+    K[2, 3] = K[3, 2] = C[1, 2] + C[2, 1]
+    K[3, 3] = -C[0, 0] - C[1, 1] + C[2, 2]
+
+    # 4. Eigenvalue/vector
+    # numpy's eigh is highly optimized for symmetric matrices
+    eigenvalues, _ = np.linalg.eigh(K)
+
+    # We don't even need the rotation matrix for the RMSD value
+    # E0 = sum(|P_i-cP|^2) + sum(|Q_i-cQ|^2)
+    E0 = np.sum(np.sum(P_centered**2, axis=1)) + np.sum(np.sum(Q_centered**2, axis=1))
+
+    # The min RMSD squared is (E0 - 2*max_eigenvalue) / N
+    N = P.shape[0]
+    rmsd_sq = (E0 - 2 * np.max(eigenvalues)) / N
+
+    # Handle potential floating point inaccuracies
+    return max(0.0, rmsd_sq)
 
 
 def compute_nrmsd(
@@ -457,57 +717,6 @@ def compute_rmsd_batch_cpu(
     return rmsd_values
 
 
-def validate_nucleotide_counts(
-    structures: List[Structure], file_paths: List[Path]
-) -> None:
-    """
-    Validate that all structures have the same number of nucleotides.
-
-    Parameters:
-    -----------
-    structures : List[Structure]
-        List of parsed structures
-    file_paths : List[Path]
-        Corresponding file paths for error reporting
-
-    Raises:
-    -------
-    SystemExit
-        If structures have different numbers of nucleotides
-    """
-    nucleotide_counts = []
-
-    for structure, file_path in zip(structures, file_paths):
-        nucleotide_residues = [
-            residue for residue in structure.residues if residue.is_nucleotide
-        ]
-        nucleotide_counts.append((len(nucleotide_residues), file_path))
-
-    if not nucleotide_counts:
-        print("Error: No structures with nucleotides found", file=sys.stderr)
-        sys.exit(1)
-
-    # Check if all counts are the same
-    first_count = nucleotide_counts[0][0]
-    mismatched = [
-        (count, path) for count, path in nucleotide_counts if count != first_count
-    ]
-
-    if mismatched:
-        print(
-            "Error: Structures have different numbers of nucleotides:", file=sys.stderr
-        )
-        print(
-            f"Expected: {first_count} nucleotides (from {nucleotide_counts[0][1]})",
-            file=sys.stderr,
-        )
-        for count, path in mismatched:
-            print(f"Found: {count} nucleotides in {path}", file=sys.stderr)
-        sys.exit(1)
-
-    print(f"All structures have {first_count} nucleotides")
-
-
 def find_optimal_threshold(
     distance_matrix: np.ndarray, linkage_matrix: np.ndarray
 ) -> float:
@@ -560,50 +769,6 @@ def find_optimal_threshold(
         f"Optimal threshold: {best_threshold:.4f} (silhouette score: {best_score:.4f})"
     )
     return best_threshold
-
-
-def find_cluster_medoids(
-    clusters: List[List[int]], distance_matrix: np.ndarray
-) -> List[int]:
-    """
-    Find the medoid (representative) for each cluster.
-
-    Parameters:
-    -----------
-    clusters : List[List[int]]
-        List of clusters, where each cluster is a list of structure indices
-    distance_matrix : np.ndarray
-        Square distance matrix between all structures
-
-    Returns:
-    --------
-    List[int]
-        List of medoid indices, one for each cluster
-    """
-    medoids = []
-
-    for cluster in clusters:
-        if len(cluster) == 1:
-            # Single element cluster - it's its own medoid
-            medoids.append(cluster[0])
-        else:
-            # Find the element with minimum sum of distances to all other elements in cluster
-            min_sum_distance = float("inf")
-            medoid = cluster[0]
-
-            for candidate in cluster:
-                sum_distance = sum(
-                    distance_matrix[candidate, other]
-                    for other in cluster
-                    if other != candidate
-                )
-                if sum_distance < min_sum_distance:
-                    min_sum_distance = sum_distance
-                    medoid = candidate
-
-            medoids.append(medoid)
-
-    return medoids
 
 
 def compute_nrmsd_pair(args):
@@ -789,171 +954,6 @@ def compute_nrmsd_batch(
             results.append((i, j, nrmsd_placeholder))
 
     return results
-
-
-def find_structure_clusters(
-    structures: List[Structure],
-    threshold: float,
-    visualize: bool = False,
-    n_jobs: Optional[int] = None,
-    rmsd_mode: str = "NumPy",
-) -> Tuple[List[List[int]], np.ndarray]:
-    """
-    Find clusters of almost identical structures using hierarchical clustering.
-
-    Parameters:
-    -----------
-    structures : List[Structure]
-        List of parsed structures to analyze
-    threshold : float
-        nRMSD threshold for clustering
-    visualize : bool
-        Whether to show dendrogram visualization
-    n_jobs : int
-        Number of parallel jobs for nRMSD computation
-
-    Returns:
-    --------
-    List[List[int]]
-        List of clusters, where each cluster is a list of structure indices
-    """
-    n_structures = len(structures)
-
-    if n_structures == 1:
-        return [[0]], np.zeros((1, 1))
-
-    # Get nucleotide residues for each structure
-    nucleotide_lists = []
-    for structure in structures:
-        nucleotides = [
-            residue for residue in structure.residues if residue.is_nucleotide
-        ]
-        nucleotide_lists.append(nucleotides)
-
-    # Compute nRMSD distance matrix using batched computation
-    batch_size = 1000
-    use_gpu = (
-        CUPY_AVAILABLE and n_jobs != 1
-    )  # Use GPU unless explicitly requesting single-threaded
-
-    print(
-        f"Computing pairwise nRMSD distances using {'GPU' if use_gpu else 'CPU'} with batch size {batch_size}..."
-    )
-    distance_matrix = np.zeros((n_structures, n_structures))
-
-    # Prepare all pairs
-    all_pairs = []
-    for i in range(n_structures):
-        for j in range(i + 1, n_structures):
-            all_pairs.append(
-                (i, j, nucleotide_lists[i], nucleotide_lists[j], rmsd_mode)
-            )
-
-    # Process pairs in batches with progress bar
-    total_pairs = len(all_pairs)
-    num_batches = (total_pairs + batch_size - 1) // batch_size
-
-    with tqdm(total=num_batches, desc="Processing batches", unit="batch") as pbar:
-        for batch_start in range(0, total_pairs, batch_size):
-            batch_end = min(batch_start + batch_size, total_pairs)
-            batch_pairs = all_pairs[batch_start:batch_end]
-
-            if use_gpu:
-                # Use GPU batched computation
-                results = compute_nrmsd_batch(batch_pairs)
-            else:
-                # Use CPU computation (potentially parallel)
-                if n_jobs == 1:
-                    results = [compute_nrmsd_pair(pair) for pair in batch_pairs]
-                else:
-                    with Pool(processes=n_jobs) as pool:
-                        results = pool.map(compute_nrmsd_pair, batch_pairs)
-
-            # Fill the distance matrix
-            for i, j, nrmsd in results:
-                distance_matrix[i, j] = nrmsd
-                distance_matrix[j, i] = nrmsd
-
-            # Update progress bar
-            pbar.set_postfix(
-                {"pairs": f"{batch_end}/{total_pairs}", "batch_size": len(batch_pairs)}
-            )
-            pbar.update(1)
-
-    # Convert to condensed distance matrix for scipy
-    condensed_distances = squareform(distance_matrix)
-
-    # Perform hierarchical clustering with complete linkage
-    linkage_matrix = linkage(condensed_distances, method="complete")
-
-    # Find optimal threshold if not provided
-    if threshold is None:
-        threshold = find_optimal_threshold(distance_matrix, linkage_matrix)
-
-    # Show dendrogram and nRMSD distribution if requested
-    if visualize:
-        try:
-            import matplotlib.pyplot as plt
-
-            # Create subplots for dendrogram and histogram
-            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
-
-            # Plot dendrogram
-            dendrogram(
-                linkage_matrix,
-                labels=[f"Structure {i}" for i in range(n_structures)],
-                color_threshold=threshold,
-                ax=ax1,
-            )
-            ax1.set_title("Hierarchical Clustering Dendrogram")
-            ax1.set_xlabel("Structure Index")
-            ax1.set_ylabel("nRMSD Distance")
-            ax1.axhline(
-                y=threshold, color="r", linestyle="--", label=f"Threshold = {threshold}"
-            )
-            ax1.legend()
-
-            # Plot nRMSD distribution
-            nrmsd_values = distance_matrix[np.triu_indices_from(distance_matrix, k=1)]
-            ax2.hist(nrmsd_values, bins=20, alpha=0.7, edgecolor="black")
-            ax2.axvline(
-                x=threshold, color="r", linestyle="--", label=f"Threshold = {threshold}"
-            )
-            ax2.set_title("Distribution of nRMSD Values")
-            ax2.set_xlabel("nRMSD")
-            ax2.set_ylabel("Frequency")
-            ax2.legend()
-
-            plt.tight_layout()
-
-            # Always save the plot when --visualize is used
-            plt.savefig("dendrogram.png", dpi=300, bbox_inches="tight")
-            print("Dendrogram and nRMSD distribution saved to dendrogram.png")
-
-            # Try to show interactively, but don't fail if it doesn't work
-            try:
-                plt.show()
-            except Exception:
-                print("Note: Could not display plot interactively, but saved to file")
-
-        except ImportError:
-            print(
-                "Warning: matplotlib not available, skipping dendrogram visualization",
-                file=sys.stderr,
-            )
-
-    # Get cluster labels using the threshold
-    cluster_labels = fcluster(linkage_matrix, threshold, criterion="distance")
-
-    # Group structure indices by cluster
-    clusters: dict[int, list[int]] = {}
-    for i, label in enumerate(cluster_labels):
-        if label not in clusters:
-            clusters[label] = []
-        clusters[label].append(i)
-
-    # Return clusters and distance matrix
-    return list(clusters.values()), distance_matrix
 
 
 def main():
