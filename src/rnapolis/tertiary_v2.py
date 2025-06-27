@@ -465,6 +465,30 @@ class Residue:
         """Get a list of all atoms in this residue."""
         return [Atom(self.atoms.iloc[i], self.format) for i in range(len(self.atoms))]
 
+    @cached_property
+    def _atom_dict(self) -> dict[str, "Atom"]:
+        """Cache a dictionary of atom names to Atom instances."""
+        atom_dict = {}
+        
+        for i in range(len(self.atoms)):
+            atom_data = self.atoms.iloc[i]
+            atom = Atom(atom_data, self.format)
+            
+            # Get the atom name based on format
+            if self.format == "PDB":
+                atom_name = atom_data["name"]
+            elif self.format == "mmCIF":
+                if "auth_atom_id" in self.atoms.columns:
+                    atom_name = atom_data["auth_atom_id"]
+                else:
+                    atom_name = atom_data["label_atom_id"]
+            else:
+                continue
+                
+            atom_dict[atom_name] = atom
+            
+        return atom_dict
+
     def find_atom(self, atom_name: str) -> Optional["Atom"]:
         """
         Find an atom by name in this residue.
@@ -479,23 +503,7 @@ class Residue:
         Optional[Atom]
             The Atom object, or None if not found
         """
-        if self.format == "PDB":
-            mask = self.atoms["name"] == atom_name
-            atoms_df = self.atoms[mask]
-            if len(atoms_df) > 0:
-                return Atom(atoms_df.iloc[0], self.format)
-        elif self.format == "mmCIF":
-            if "auth_atom_id" in self.atoms.columns:
-                mask = self.atoms["auth_atom_id"] == atom_name
-                atoms_df = self.atoms[mask]
-                if len(atoms_df) > 0:
-                    return Atom(atoms_df.iloc[0], self.format)
-            else:
-                mask = self.atoms["label_atom_id"] == atom_name
-                atoms_df = self.atoms[mask]
-                if len(atoms_df) > 0:
-                    return Atom(atoms_df.iloc[0], self.format)
-        return None
+        return self._atom_dict.get(atom_name)
 
     @cached_property
     def is_nucleotide(self) -> bool:
