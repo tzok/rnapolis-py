@@ -141,7 +141,7 @@ def find_paired_coordinates(
             atoms_to_match = RESIDUE_ATOMS_MAP.get(res_name1)
         elif res_name1 in PURINES and res_name2 in PURINES:
             # For mixed RNA/DNA purines, use common backbone + purine core
-            if any(name.startswith('D') for name in [res_name1, res_name2]):
+            if any(name.startswith("D") for name in [res_name1, res_name2]):
                 # At least one is DNA, use deoxyribose backbone
                 atoms_to_match = BACKBONE_DEOXYRIBOSE_ATOMS | PURINE_CORE_ATOMS
             else:
@@ -149,7 +149,7 @@ def find_paired_coordinates(
                 atoms_to_match = BACKBONE_RIBOSE_ATOMS | PURINE_CORE_ATOMS
         elif res_name1 in PYRIMIDINES and res_name2 in PYRIMIDINES:
             # For mixed RNA/DNA pyrimidines, use common backbone + pyrimidine core
-            if any(name.startswith('D') for name in [res_name1, res_name2]):
+            if any(name.startswith("D") for name in [res_name1, res_name2]):
                 # At least one is DNA, use deoxyribose backbone
                 atoms_to_match = BACKBONE_DEOXYRIBOSE_ATOMS | PYRIMIDINE_CORE_ATOMS
             else:
@@ -157,7 +157,7 @@ def find_paired_coordinates(
                 atoms_to_match = BACKBONE_RIBOSE_ATOMS | PYRIMIDINE_CORE_ATOMS
         else:
             # Different types, use minimal common backbone
-            if any(name.startswith('D') for name in [res_name1, res_name2]):
+            if any(name.startswith("D") for name in [res_name1, res_name2]):
                 atoms_to_match = BACKBONE_DEOXYRIBOSE_ATOMS
             else:
                 atoms_to_match = BACKBONE_RIBOSE_ATOMS
