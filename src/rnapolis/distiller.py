@@ -28,7 +28,6 @@ try:
         CUDA_AVAILABLE = False
         print("Warning: CuPy is installed but CUDA is not available")
 except ImportError:
-    CUPY_AVAILABLE = False
     CUDA_AVAILABLE = False
 
 
@@ -272,45 +271,34 @@ def find_structure_clusters(
     if threshold is None:
         threshold = find_optimal_threshold(distance_matrix, linkage_matrix)
 
-    # Show dendrogram and nRMSD distribution if requested
+    # Show dendrogram if requested
     if visualize:
         try:
             import matplotlib.pyplot as plt
 
-            # Create subplots for dendrogram and histogram
-            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
+            # Create figure for dendrogram only
+            fig, ax = plt.subplots(1, 1, figsize=(12, 8))
 
             # Plot dendrogram
             dendrogram(
                 linkage_matrix,
                 labels=[f"Structure {i}" for i in range(n_structures)],
                 color_threshold=threshold,
-                ax=ax1,
+                ax=ax,
             )
-            ax1.set_title("Hierarchical Clustering Dendrogram")
-            ax1.set_xlabel("Structure Index")
-            ax1.set_ylabel("nRMSD Distance")
-            ax1.axhline(
+            ax.set_title("Hierarchical Clustering Dendrogram")
+            ax.set_xlabel("Structure Index")
+            ax.set_ylabel("nRMSD Distance")
+            ax.axhline(
                 y=threshold, color="r", linestyle="--", label=f"Threshold = {threshold}"
             )
-            ax1.legend()
-
-            # Plot nRMSD distribution
-            nrmsd_values = distance_matrix[np.triu_indices_from(distance_matrix, k=1)]
-            ax2.hist(nrmsd_values, bins=20, alpha=0.7, edgecolor="black")
-            ax2.axvline(
-                x=threshold, color="r", linestyle="--", label=f"Threshold = {threshold}"
-            )
-            ax2.set_title("Distribution of nRMSD Values")
-            ax2.set_xlabel("nRMSD")
-            ax2.set_ylabel("Frequency")
-            ax2.legend()
+            ax.legend()
 
             plt.tight_layout()
 
             # Always save the plot when --visualize is used
             plt.savefig("dendrogram.png", dpi=300, bbox_inches="tight")
-            print("Dendrogram and nRMSD distribution saved to dendrogram.png")
+            print("Dendrogram saved to dendrogram.png")
 
             # Try to show interactively, but don't fail if it doesn't work
             try:
