@@ -5,6 +5,8 @@ from typing import List, Optional, Tuple
 import numpy as np
 import pandas as pd
 
+from rnapolis.parser_v2 import parse_cif_atoms, write_cif
+
 # Constants
 AVERAGE_OXYGEN_PHOSPHORUS_DISTANCE_COVALENT = 1.6
 
@@ -21,8 +23,6 @@ BACKBONE_RIBOSE_ATOMS = {
     "O2'",
     "C1'",
 }
-PURINE_CORE_ATOMS = {"N9", "C8", "N7", "C5", "C6", "N1", "C2", "N3", "C4"}
-PYRIMIDINE_CORE_ATOMS = {"N1", "C2", "N3", "C4", "C5", "C6"}
 # DNA backbone atoms (no O2' compared to RNA)
 BACKBONE_DEOXYRIBOSE_ATOMS = {
     "P",
@@ -35,6 +35,8 @@ BACKBONE_DEOXYRIBOSE_ATOMS = {
     "C2'",
     "C1'",
 }
+PURINE_CORE_ATOMS = {"N9", "C8", "N7", "C5", "C6", "N1", "C2", "N3", "C4"}
+PYRIMIDINE_CORE_ATOMS = {"N1", "C2", "N3", "C4", "C5", "C6"}
 
 # RNA nucleotides
 ATOMS_A = BACKBONE_RIBOSE_ATOMS | PURINE_CORE_ATOMS | {"N6"}
@@ -127,8 +129,6 @@ def find_paired_coordinates(
     Tuple[np.ndarray, np.ndarray]
         Tuple of two numpy arrays containing coordinates of matching atom pairs
     """
-    from rnapolis.parser_v2 import parse_cif_atoms, write_cif
-
     all_paired_dfs = []
 
     for residue1, residue2 in zip(residues1, residues2):
@@ -191,13 +191,18 @@ def find_paired_coordinates(
     return coords_1, coords_2
 
 
-def rmsd_quaternions(residues1: List["Residue"], residues2: List["Residue"]) -> float:
+def rmsd_quaternions(coords1: np.ndarray, coords2: np.ndarray) -> float:
     """
     Calculates RMSD using the Quaternion method.
-    residues1 and residues2 are lists of Residue objects.
+    
+    Parameters:
+    -----------
+    coords1 : np.ndarray
+        Nx3 array of coordinates for the first structure
+    coords2 : np.ndarray
+        Nx3 array of coordinates for the second structure
     """
-    # Get paired coordinates
-    P, Q = find_paired_coordinates(residues1, residues2)
+    P, Q = coords1, coords2
 
     # 1. Center coordinates using vectorized operations
     centroid_P = np.mean(P, axis=0)
@@ -235,13 +240,18 @@ def rmsd_quaternions(residues1: List["Residue"], residues2: List["Residue"]) -> 
     return np.sqrt(max(0.0, rmsd_sq))
 
 
-def rmsd_svd(residues1: List["Residue"], residues2: List["Residue"]) -> float:
+def rmsd_svd(coords1: np.ndarray, coords2: np.ndarray) -> float:
     """
     Calculates RMSD using SVD decomposition (Kabsch algorithm).
-    residues1 and residues2 are lists of Residue objects.
+    
+    Parameters:
+    -----------
+    coords1 : np.ndarray
+        Nx3 array of coordinates for the first structure
+    coords2 : np.ndarray
+        Nx3 array of coordinates for the second structure
     """
-    # Get paired coordinates
-    P, Q = find_paired_coordinates(residues1, residues2)
+    P, Q = coords1, coords2
 
     # 1. Center coordinates
     centroid_P = np.mean(P, axis=0)
@@ -273,15 +283,19 @@ def rmsd_svd(residues1: List["Residue"], residues2: List["Residue"]) -> float:
     return np.sqrt(rmsd_sq)
 
 
-def rmsd_qcp(residues1: List["Residue"], residues2: List["Residue"]) -> float:
+def rmsd_qcp(coords1: np.ndarray, coords2: np.ndarray) -> float:
     """
     Calculates RMSD using the QCP (Quaternion Characteristic Polynomial) method.
     This implementation follows the BioPython QCP algorithm but uses np.linalg.eigh
     instead of Newton-Raphson for simplicity.
-    residues1 and residues2 are lists of Residue objects.
+    
+    Parameters:
+    -----------
+    coords1 : np.ndarray
+        Nx3 array of coordinates for the first structure
+    coords2 : np.ndarray
+        Nx3 array of coordinates for the second structure
     """
-    # Get paired coordinates
-    coords1, coords2 = find_paired_coordinates(residues1, residues2)
 
     # Center coordinates at origin
     centroid1 = np.mean(coords1, axis=0)
@@ -349,8 +363,8 @@ def nrmsd_quaternions(residues1: List["Residue"], residues2: List["Residue"]) ->
     Calculates nRMSD using the Quaternion method.
     residues1 and residues2 are lists of Residue objects.
     """
-    rmsd = rmsd_quaternions(residues1, residues2)
     coords1, coords2 = find_paired_coordinates(residues1, residues2)
+    rmsd = rmsd_quaternions(coords1, coords2)
     return rmsd_to_nrmsd(rmsd, coords1.shape[0])
 
 
@@ -359,8 +373,8 @@ def nrmsd_svd(residues1: List["Residue"], residues2: List["Residue"]) -> float:
     Calculates nRMSD using SVD decomposition (Kabsch algorithm).
     residues1 and residues2 are lists of Residue objects.
     """
-    rmsd = rmsd_svd(residues1, residues2)
     coords1, coords2 = find_paired_coordinates(residues1, residues2)
+    rmsd = rmsd_svd(coords1, coords2)
     return rmsd_to_nrmsd(rmsd, coords1.shape[0])
 
 
@@ -369,8 +383,8 @@ def nrmsd_qcp(residues1: List["Residue"], residues2: List["Residue"]) -> float:
     Calculates nRMSD using the QCP (Quaternion Characteristic Polynomial) method.
     residues1 and residues2 are lists of Residue objects.
     """
-    rmsd = rmsd_qcp(residues1, residues2)
     coords1, coords2 = find_paired_coordinates(residues1, residues2)
+    rmsd = rmsd_qcp(coords1, coords2)
     return rmsd_to_nrmsd(rmsd, coords1.shape[0])
 
 
