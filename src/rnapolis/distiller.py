@@ -5,7 +5,6 @@ from multiprocessing import Pool, cpu_count
 from pathlib import Path
 from typing import List, Optional, Tuple
 
-import numba
 import numpy as np
 from scipy.cluster.hierarchy import dendrogram, fcluster, linkage
 from scipy.spatial.distance import squareform
@@ -14,6 +13,13 @@ from tqdm import tqdm
 
 from rnapolis.parser_v2 import parse_cif_atoms, parse_pdb_atoms
 from rnapolis.tertiary_v2 import Residue, Structure
+
+# Try to import Numba for JIT acceleration
+try:
+    import numba
+    NUMBA_AVAILABLE = True
+except ImportError:
+    NUMBA_AVAILABLE = False
 
 # Try to import CuPy for GPU acceleration
 try:
@@ -28,6 +34,7 @@ try:
         CUDA_AVAILABLE = False
         print("Warning: CuPy is installed but CUDA is not available")
 except ImportError:
+    CUPY_AVAILABLE = False
     CUDA_AVAILABLE = False
 
 
@@ -413,10 +420,11 @@ def rmsd_squared_numpy(P, Q):
     return max(0.0, rmsd_sq)
 
 
-@numba.jit(nopython=True, fastmath=True)
-def rmsd_squared_numba(P, Q):
-    # The *exact same code* as the numpy function goes here
-    # but using basic loops instead of numpy functions
+def rmsd_squared_numba_impl(P, Q):
+    """
+    Numba-optimized RMSD calculation using explicit loops.
+    This is the actual implementation that gets JIT compiled.
+    """
     N = P.shape[0]
     # 1. Center
     centroid_P = np.zeros(3)
@@ -466,6 +474,13 @@ def rmsd_squared_numba(P, Q):
 
     # Handle potential floating point inaccuracies
     return max(0.0, rmsd_sq)
+
+
+# Conditionally apply Numba JIT compilation
+if NUMBA_AVAILABLE:
+    rmsd_squared_numba = numba.jit(nopython=True, fastmath=True)(rmsd_squared_numba_impl)
+else:
+    rmsd_squared_numba = rmsd_squared_numba_impl
 
 
 def rmsd_squared_cupy(P, Q):
@@ -618,7 +633,11 @@ def compute_nrmsd(
 
     # Compute RMSD squared using the specified mode
     if rmsd_mode == "Numba":
-        rmsd_sq = rmsd_squared_numba(coords1, coords2)
+        if NUMBA_AVAILABLE:
+            rmsd_sq = rmsd_squared_numba(coords1, coords2)
+        else:
+            print("Warning: Numba not available, falling back to NumPy")
+            rmsd_sq = rmsd_squared_numpy(coords1, coords2)
     elif rmsd_mode == "CuPy":
         try:
             rmsd_sq = rmsd_squared_cupy(coords1, coords2)
