@@ -15,15 +15,6 @@ from tqdm import tqdm
 from rnapolis.parser_v2 import parse_cif_atoms, parse_pdb_atoms
 from rnapolis.tertiary_v2 import Residue, Structure
 
-# Try to import CuPy for GPU acceleration
-try:
-    import cupy as cp
-
-    CUPY_AVAILABLE = True
-    print("CuPy detected - GPU acceleration enabled")
-except ImportError:
-    CUPY_AVAILABLE = False
-    print("CuPy not available - using CPU computation")
 
 
 def parse_arguments():
@@ -199,6 +190,8 @@ def find_structure_clusters(
         Whether to show dendrogram visualization
     n_jobs : int
         Number of parallel jobs for nRMSD computation
+    rmsd_mode : str
+        RMSD calculation mode ("NumPy", "Numba", or "CuPy")
 
     Returns:
     --------
@@ -218,15 +211,8 @@ def find_structure_clusters(
         ]
         nucleotide_lists.append(nucleotides)
 
-    # Compute nRMSD distance matrix using batched computation
-    batch_size = 1000
-    use_gpu = (
-        CUPY_AVAILABLE and n_jobs != 1
-    )  # Use GPU unless explicitly requesting single-threaded
-
-    print(
-        f"Computing pairwise nRMSD distances using {'GPU' if use_gpu else 'CPU'} with batch size {batch_size}..."
-    )
+    # Compute nRMSD distance matrix
+    print(f"Computing pairwise nRMSD distances using {rmsd_mode} mode...")
     distance_matrix = np.zeros((n_structures, n_structures))
 
     # Prepare all pairs
@@ -237,36 +223,29 @@ def find_structure_clusters(
                 (i, j, nucleotide_lists[i], nucleotide_lists[j], rmsd_mode)
             )
 
-    # Process pairs in batches with progress bar
+    # Process pairs with progress bar
     total_pairs = len(all_pairs)
-    num_batches = (total_pairs + batch_size - 1) // batch_size
 
-    with tqdm(total=num_batches, desc="Processing batches", unit="batch") as pbar:
-        for batch_start in range(0, total_pairs, batch_size):
-            batch_end = min(batch_start + batch_size, total_pairs)
-            batch_pairs = all_pairs[batch_start:batch_end]
+    with tqdm(total=total_pairs, desc="Computing nRMSD", unit="pair") as pbar:
+        if n_jobs == 1:
+            # Single-threaded computation
+            results = []
+            for pair in all_pairs:
+                result = compute_nrmsd_pair(pair)
+                results.append(result)
+                pbar.update(1)
+        else:
+            # Multi-threaded computation
+            with Pool(processes=n_jobs) as pool:
+                results = []
+                for result in pool.imap(compute_nrmsd_pair, all_pairs):
+                    results.append(result)
+                    pbar.update(1)
 
-            if use_gpu:
-                # Use GPU batched computation
-                results = compute_nrmsd_batch(batch_pairs)
-            else:
-                # Use CPU computation (potentially parallel)
-                if n_jobs == 1:
-                    results = [compute_nrmsd_pair(pair) for pair in batch_pairs]
-                else:
-                    with Pool(processes=n_jobs) as pool:
-                        results = pool.map(compute_nrmsd_pair, batch_pairs)
-
-            # Fill the distance matrix
-            for i, j, nrmsd in results:
-                distance_matrix[i, j] = nrmsd
-                distance_matrix[j, i] = nrmsd
-
-            # Update progress bar
-            pbar.set_postfix(
-                {"pairs": f"{batch_end}/{total_pairs}", "batch_size": len(batch_pairs)}
-            )
-            pbar.update(1)
+        # Fill the distance matrix
+        for i, j, nrmsd in results:
+            distance_matrix[i, j] = nrmsd
+            distance_matrix[j, i] = nrmsd
 
     # Convert to condensed distance matrix for scipy
     condensed_distances = squareform(distance_matrix)
@@ -594,127 +573,6 @@ def compute_nrmsd(
     return nrmsd
 
 
-def compute_rmsd_batch_gpu(
-    coords1_batch: np.ndarray, coords2_batch: np.ndarray, atom_counts: np.ndarray
-) -> np.ndarray:
-    """
-    Compute RMSD for a batch of coordinate pairs using GPU acceleration.
-
-    Parameters:
-    -----------
-    coords1_batch : np.ndarray
-        Batch of first coordinate sets (batch_size, N, 3)
-    coords2_batch : np.ndarray
-        Batch of second coordinate sets (batch_size, N, 3)
-    atom_counts : np.ndarray
-        Number of actual atoms for each pair (batch_size,)
-
-    Returns:
-    --------
-    np.ndarray
-        Array of RMSD values for each pair in the batch
-    """
-    if not CUPY_AVAILABLE:
-        raise RuntimeError("CuPy not available for GPU computation")
-
-    # Transfer to GPU
-    coords1_gpu = cp.asarray(coords1_batch)
-    coords2_gpu = cp.asarray(coords2_batch)
-    atom_counts_gpu = cp.asarray(atom_counts)
-
-    batch_size = coords1_gpu.shape[0]
-    max_atoms = coords1_gpu.shape[1]
-
-    # Create masks for actual atoms (not padding)
-    atom_indices = cp.arange(max_atoms)[None, :]  # (1, max_atoms)
-    masks = atom_indices < atom_counts_gpu[:, None]  # (batch_size, max_atoms)
-    masks_3d = masks[:, :, None]  # (batch_size, max_atoms, 1)
-
-    # Apply masks to coordinates (set padded atoms to 0)
-    coords1_masked = coords1_gpu * masks_3d
-    coords2_masked = coords2_gpu * masks_3d
-
-    # Compute centroids using only actual atoms
-    sum_coords1 = cp.sum(coords1_masked, axis=1)  # (batch_size, 3)
-    sum_coords2 = cp.sum(coords2_masked, axis=1)  # (batch_size, 3)
-    centroid1 = sum_coords1 / atom_counts_gpu[:, None]  # (batch_size, 3)
-    centroid2 = sum_coords2 / atom_counts_gpu[:, None]  # (batch_size, 3)
-
-    # Center coordinates
-    centered1 = coords1_masked - centroid1[:, None, :]  # (batch_size, max_atoms, 3)
-    centered2 = coords2_masked - centroid2[:, None, :]  # (batch_size, max_atoms, 3)
-
-    # Apply masks again after centering (to ensure padded atoms remain 0)
-    centered1 = centered1 * masks_3d
-    centered2 = centered2 * masks_3d
-
-    # Compute cross-covariance matrices for all pairs
-    H = cp.matmul(centered1.transpose(0, 2, 1), centered2)  # (batch_size, 3, 3)
-
-    # SVD for each matrix in the batch
-    U, S, Vt = cp.linalg.svd(H)  # Each is (batch_size, 3, 3)
-
-    # Compute rotation matrices
-    R = cp.matmul(Vt.transpose(0, 2, 1), U.transpose(0, 2, 1))  # (batch_size, 3, 3)
-
-    # Ensure proper rotation (det(R) = 1) for each matrix
-    det_R = cp.linalg.det(R)  # (batch_size,)
-    flip_mask = det_R < 0
-
-    # Flip the last row of Vt for matrices with negative determinant
-    Vt_corrected = Vt.copy()
-    Vt_corrected[flip_mask, -1, :] *= -1
-    R_corrected = cp.matmul(Vt_corrected.transpose(0, 2, 1), U.transpose(0, 2, 1))
-
-    # Apply rotation to centered2
-    rotated2 = cp.matmul(
-        centered2, R_corrected.transpose(0, 2, 1)
-    )  # (batch_size, max_atoms, 3)
-
-    # Compute RMSD for each pair using only actual atoms
-    diff = centered1 - rotated2  # (batch_size, max_atoms, 3)
-    squared_diff = cp.sum(diff**2, axis=2)  # (batch_size, max_atoms)
-
-    # Apply mask to exclude padded atoms from RMSD calculation
-    masked_squared_diff = squared_diff * masks  # (batch_size, max_atoms)
-    sum_squared_diff = cp.sum(masked_squared_diff, axis=1)  # (batch_size,)
-    rmsd = cp.sqrt(sum_squared_diff / atom_counts_gpu)  # (batch_size,)
-
-    # Transfer back to CPU
-    return cp.asnumpy(rmsd)
-
-
-def compute_rmsd_batch_cpu(
-    coords1_batch: np.ndarray, coords2_batch: np.ndarray, atom_counts: np.ndarray
-) -> np.ndarray:
-    """
-    Compute RMSD for a batch of coordinate pairs using CPU.
-
-    Parameters:
-    -----------
-    coords1_batch : np.ndarray
-        Batch of first coordinate sets (batch_size, N, 3)
-    coords2_batch : np.ndarray
-        Batch of second coordinate sets (batch_size, N, 3)
-    atom_counts : np.ndarray
-        Number of actual atoms for each pair (batch_size,)
-
-    Returns:
-    --------
-    np.ndarray
-        Array of RMSD values for each pair in the batch
-    """
-    batch_size = coords1_batch.shape[0]
-    rmsd_values = np.zeros(batch_size)
-
-    for i in range(batch_size):
-        # Extract only the actual atoms (not padding)
-        n_atoms = atom_counts[i]
-        coords1 = coords1_batch[i, :n_atoms]
-        coords2 = coords2_batch[i, :n_atoms]
-        rmsd_values[i] = compute_rmsd_with_superposition(coords1, coords2)
-
-    return rmsd_values
 
 
 def find_optimal_threshold(
@@ -778,182 +636,6 @@ def compute_nrmsd_pair(args):
     return i, j, nrmsd
 
 
-def extract_atom_coordinates(
-    residues1: List[Residue], residues2: List[Residue]
-) -> Tuple[np.ndarray, np.ndarray]:
-    """
-    Extract matching atom coordinates from two residue lists.
-
-    Parameters:
-    -----------
-    residues1 : List[Residue]
-        First list of residues
-    residues2 : List[Residue]
-        Second list of residues
-
-    Returns:
-    --------
-    Tuple[np.ndarray, np.ndarray]
-        Coordinate arrays for matching atoms (N, 3) each
-    """
-    # Define atom sets for different residue types
-    backbone_atoms = {
-        "P",
-        "OP1",
-        "OP2",
-        "O5'",
-        "C5'",
-        "C4'",
-        "C3'",
-        "C2'",
-        "C1'",
-        "O4'",
-        "O3'",
-        "O2'",
-    }
-    ribose_atoms = {"C1'", "C2'", "C3'", "C4'", "O4'", "O2'", "O3'"}
-    purine_ring_atoms = {"N9", "C8", "N7", "C5", "C6", "N1", "C2", "N3", "C4"}
-    pyrimidine_ring_atoms = {"N1", "C2", "N3", "C4", "C5", "C6"}
-
-    purines = {"A", "G", "DA", "DG"}
-    pyrimidines = {"C", "U", "T", "DC", "DT"}
-
-    coords1_list = []
-    coords2_list = []
-
-    for res1, res2 in zip(residues1, residues2):
-        res1_name = res1.residue_name
-        res2_name = res2.residue_name
-
-        if res1_name == res2_name:
-            # Same residue type - collect all matching atom pairs
-            for atom1 in res1.atoms_list:
-                atom2 = res2.find_atom(atom1.name)
-                if atom2 is not None:
-                    coords1_list.append(atom1.coordinates)
-                    coords2_list.append(atom2.coordinates)
-        elif res1_name in purines and res2_name in purines:
-            # Both purines
-            target_atoms = backbone_atoms | ribose_atoms | purine_ring_atoms
-            for atom_name in target_atoms:
-                atom1 = res1.find_atom(atom_name)
-                atom2 = res2.find_atom(atom_name)
-                if atom1 is not None and atom2 is not None:
-                    coords1_list.append(atom1.coordinates)
-                    coords2_list.append(atom2.coordinates)
-        elif res1_name in pyrimidines and res2_name in pyrimidines:
-            # Both pyrimidines
-            target_atoms = backbone_atoms | ribose_atoms | pyrimidine_ring_atoms
-            for atom_name in target_atoms:
-                atom1 = res1.find_atom(atom_name)
-                atom2 = res2.find_atom(atom_name)
-                if atom1 is not None and atom2 is not None:
-                    coords1_list.append(atom1.coordinates)
-                    coords2_list.append(atom2.coordinates)
-        else:
-            # Purine-pyrimidine or other combinations
-            target_atoms = backbone_atoms | ribose_atoms
-            for atom_name in target_atoms:
-                atom1 = res1.find_atom(atom_name)
-                atom2 = res2.find_atom(atom_name)
-                if atom1 is not None and atom2 is not None:
-                    coords1_list.append(atom1.coordinates)
-                    coords2_list.append(atom2.coordinates)
-
-    if not coords1_list:
-        return np.array([]).reshape(0, 3), np.array([]).reshape(0, 3)
-
-    return np.array(coords1_list), np.array(coords2_list)
-
-
-def compute_nrmsd_batch(
-    pairs_data: List[Tuple[int, int, List[Residue], List[Residue]]],
-) -> List[Tuple[int, int, float]]:
-    """
-    Compute nRMSD for a batch of structure pairs using GPU acceleration if available.
-
-    Parameters:
-    -----------
-    pairs_data : List[Tuple[int, int, List[Residue], List[Residue]]]
-        List of (i, j, residues_i, residues_j) tuples
-
-    Returns:
-    --------
-    List[Tuple[int, int, float]]
-        List of (i, j, nrmsd) results
-    """
-    if not pairs_data:
-        return []
-
-    # Extract coordinates for all pairs
-    coords1_batch = []
-    coords2_batch = []
-    atom_counts = []
-    valid_pairs = []
-
-    for i, j, residues_i, residues_j in pairs_data:
-        coords1, coords2 = extract_atom_coordinates(residues_i, residues_j)
-
-        if len(coords1) == 0:
-            # No matching atoms - return infinite nRMSD
-            valid_pairs.append((i, j, float("inf")))
-            continue
-
-        coords1_batch.append(coords1)
-        coords2_batch.append(coords2)
-        atom_counts.append(len(coords1))
-        valid_pairs.append((i, j, None))  # Placeholder for nRMSD
-
-    if not coords1_batch:
-        return valid_pairs
-
-    # Pad coordinates to same length for batching
-    max_atoms = max(atom_counts)
-    coords1_padded = np.zeros((len(coords1_batch), max_atoms, 3))
-    coords2_padded = np.zeros((len(coords2_batch), max_atoms, 3))
-
-    for idx, (coords1, coords2, n_atoms) in enumerate(
-        zip(coords1_batch, coords2_batch, atom_counts)
-    ):
-        coords1_padded[idx, :n_atoms] = coords1
-        coords2_padded[idx, :n_atoms] = coords2
-
-    # Convert atom_counts to numpy array
-    atom_counts_array = np.array(atom_counts)
-
-    # Compute RMSD using GPU or CPU
-    if CUPY_AVAILABLE:
-        try:
-            rmsd_values = compute_rmsd_batch_gpu(
-                coords1_padded, coords2_padded, atom_counts_array
-            )
-        except Exception as e:
-            print(f"GPU computation failed, falling back to CPU: {e}")
-            rmsd_values = compute_rmsd_batch_cpu(
-                coords1_padded, coords2_padded, atom_counts_array
-            )
-    else:
-        rmsd_values = compute_rmsd_batch_cpu(
-            coords1_padded, coords2_padded, atom_counts_array
-        )
-
-    # Convert to nRMSD and update results
-    results = []
-    batch_idx = 0
-
-    for i, j, nrmsd_placeholder in valid_pairs:
-        if nrmsd_placeholder is None:
-            # This was a valid pair that we computed
-            rmsd = rmsd_values[batch_idx]
-            n_atoms = atom_counts[batch_idx]
-            nrmsd = rmsd / np.sqrt(n_atoms)
-            results.append((i, j, nrmsd))
-            batch_idx += 1
-        else:
-            # This was an invalid pair (infinite nRMSD)
-            results.append((i, j, nrmsd_placeholder))
-
-    return results
 
 
 def main():
