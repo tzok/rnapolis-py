@@ -373,7 +373,7 @@ def nrmsd_qcp(residues1, residues2):
     rmsd_sq = 2.0 * (E0 - mxEigenV) / N
     rmsd = np.sqrt(abs(rmsd_sq))
 
-    return rmsd / np.sqrt(N)
+    return rmsd
 
 
 def nrmsd_validate(residues1, residues2):
