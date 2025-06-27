@@ -103,7 +103,7 @@ def find_paired_coordinates(
         Tuple of two numpy arrays containing coordinates of matching atom pairs
     """
     from rnapolis.parser_v2 import parse_cif_atoms, write_cif
-    
+
     all_paired_dfs = []
 
     for residue1, residue2 in zip(residues1, residues2):

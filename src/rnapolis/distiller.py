@@ -170,7 +170,6 @@ def validate_nucleotide_counts(
     print(f"All structures have {first_count} nucleotides")
 
 
-
 def find_optimal_threshold(
     distance_matrix: np.ndarray, linkage_matrix: np.ndarray
 ) -> float:
@@ -223,7 +222,6 @@ def find_optimal_threshold(
         f"Optimal threshold: {best_threshold:.4f} (silhouette score: {best_score:.4f})"
     )
     return best_threshold
-
 
 
 def find_structure_clusters(
