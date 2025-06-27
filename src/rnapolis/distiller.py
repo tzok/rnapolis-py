@@ -192,192 +192,6 @@ def validate_nucleotide_counts(
     print(f"All structures have {first_count} nucleotides")
 
 
-def find_structure_clusters(
-    structures: List[Structure],
-    threshold: Optional[float] = None,
-    visualize: bool = False,
-    n_jobs: Optional[int] = None,
-    rmsd_mode: str = "NumPy",
-) -> Tuple[List[List[int]], np.ndarray]:
-    """
-    Find clusters of almost identical structures using hierarchical clustering.
-
-    Parameters:
-    -----------
-    structures : List[Structure]
-        List of parsed structures to analyze
-    threshold : float
-        nRMSD threshold for clustering
-    visualize : bool
-        Whether to show dendrogram visualization
-    n_jobs : int
-        Number of parallel jobs for nRMSD computation
-    rmsd_mode : str
-        RMSD calculation mode ("NumPy", "Numba", or "CuPy")
-
-    Returns:
-    --------
-    List[List[int]]
-        List of clusters, where each cluster is a list of structure indices
-    """
-    n_structures = len(structures)
-
-    if n_structures == 1:
-        return [[0]], np.zeros((1, 1))
-
-    # Get nucleotide residues for each structure
-    nucleotide_lists = []
-    for structure in structures:
-        nucleotides = [
-            residue for residue in structure.residues if residue.is_nucleotide
-        ]
-        nucleotide_lists.append(nucleotides)
-
-    # Compute nRMSD distance matrix
-    print(f"Computing pairwise nRMSD distances using {rmsd_mode} mode...")
-    distance_matrix = np.zeros((n_structures, n_structures))
-
-    # Prepare all pairs
-    all_pairs = []
-    for i in range(n_structures):
-        for j in range(i + 1, n_structures):
-            all_pairs.append(
-                (i, j, nucleotide_lists[i], nucleotide_lists[j], rmsd_mode)
-            )
-
-    # Process pairs with progress bar
-    total_pairs = len(all_pairs)
-
-    with tqdm(total=total_pairs, desc="Computing nRMSD", unit="pair") as pbar:
-        if n_jobs == 1:
-            # Single-threaded computation
-            results = []
-            for pair in all_pairs:
-                result = compute_nrmsd_pair(pair)
-                results.append(result)
-                pbar.update(1)
-        else:
-            # Multi-threaded computation
-            with Pool(processes=n_jobs) as pool:
-                results = []
-                for result in pool.imap(compute_nrmsd_pair, all_pairs):
-                    results.append(result)
-                    pbar.update(1)
-
-        # Fill the distance matrix
-        for i, j, nrmsd in results:
-            distance_matrix[i, j] = nrmsd
-            distance_matrix[j, i] = nrmsd
-
-    # Convert to condensed distance matrix for scipy
-    condensed_distances = squareform(distance_matrix)
-
-    # Perform hierarchical clustering with complete linkage
-    linkage_matrix = linkage(condensed_distances, method="complete")
-
-    # Find optimal threshold if not provided
-    if threshold is None:
-        threshold = find_optimal_threshold(distance_matrix, linkage_matrix)
-
-    # Show dendrogram if requested
-    if visualize:
-        try:
-            import matplotlib.pyplot as plt
-
-            # Create figure for dendrogram only
-            fig, ax = plt.subplots(1, 1, figsize=(12, 8))
-
-            # Plot dendrogram
-            dendrogram(
-                linkage_matrix,
-                labels=[f"Structure {i}" for i in range(n_structures)],
-                color_threshold=threshold,
-                ax=ax,
-            )
-            ax.set_title("Hierarchical Clustering Dendrogram")
-            ax.set_xlabel("Structure Index")
-            ax.set_ylabel("nRMSD Distance")
-            ax.axhline(
-                y=threshold, color="r", linestyle="--", label=f"Threshold = {threshold}"
-            )
-            ax.legend()
-
-            plt.tight_layout()
-
-            # Always save the plot when --visualize is used
-            plt.savefig("dendrogram.png", dpi=300, bbox_inches="tight")
-            print("Dendrogram saved to dendrogram.png")
-
-            # Try to show interactively, but don't fail if it doesn't work
-            try:
-                plt.show()
-            except Exception:
-                print("Note: Could not display plot interactively, but saved to file")
-
-        except ImportError:
-            print(
-                "Warning: matplotlib not available, skipping dendrogram visualization",
-                file=sys.stderr,
-            )
-
-    # Get cluster labels using the threshold
-    cluster_labels = fcluster(linkage_matrix, threshold, criterion="distance")
-
-    # Group structure indices by cluster
-    clusters: dict[int, list[int]] = {}
-    for i, label in enumerate(cluster_labels):
-        if label not in clusters:
-            clusters[label] = []
-        clusters[label].append(i)
-
-    # Return clusters and distance matrix
-    return list(clusters.values()), distance_matrix
-
-
-def find_cluster_medoids(
-    clusters: List[List[int]], distance_matrix: np.ndarray
-) -> List[int]:
-    """
-    Find the medoid (representative) for each cluster.
-
-    Parameters:
-    -----------
-    clusters : List[List[int]]
-        List of clusters, where each cluster is a list of structure indices
-    distance_matrix : np.ndarray
-        Square distance matrix between all structures
-
-    Returns:
-    --------
-    List[int]
-        List of medoid indices, one for each cluster
-    """
-    medoids = []
-
-    for cluster in clusters:
-        if len(cluster) == 1:
-            # Single element cluster - it's its own medoid
-            medoids.append(cluster[0])
-        else:
-            # Find the element with minimum sum of distances to all other elements in cluster
-            min_sum_distance = float("inf")
-            medoid = cluster[0]
-
-            for candidate in cluster:
-                sum_distance = sum(
-                    distance_matrix[candidate, other]
-                    for other in cluster
-                    if other != candidate
-                )
-                if sum_distance < min_sum_distance:
-                    min_sum_distance = sum_distance
-                    medoid = candidate
-
-            medoids.append(medoid)
-
-    return medoids
-
-
 def rmsd_squared_numpy(P, Q):
     """
     Calculates RMSD using the Quaternion method.
@@ -656,6 +470,13 @@ def compute_nrmsd(
     return nrmsd
 
 
+def compute_nrmsd_pair(args):
+    """Helper function for parallel nRMSD computation."""
+    i, j, nucleotides_i, nucleotides_j, rmsd_mode = args
+    nrmsd = compute_nrmsd(nucleotides_i, nucleotides_j, rmsd_mode)
+    return i, j, nrmsd
+
+
 def find_optimal_threshold(
     distance_matrix: np.ndarray, linkage_matrix: np.ndarray
 ) -> float:
@@ -710,11 +531,190 @@ def find_optimal_threshold(
     return best_threshold
 
 
-def compute_nrmsd_pair(args):
-    """Helper function for parallel nRMSD computation."""
-    i, j, nucleotides_i, nucleotides_j, rmsd_mode = args
-    nrmsd = compute_nrmsd(nucleotides_i, nucleotides_j, rmsd_mode)
-    return i, j, nrmsd
+def find_structure_clusters(
+    structures: List[Structure],
+    threshold: Optional[float] = None,
+    visualize: bool = False,
+    n_jobs: Optional[int] = None,
+    rmsd_mode: str = "NumPy",
+) -> Tuple[List[List[int]], np.ndarray]:
+    """
+    Find clusters of almost identical structures using hierarchical clustering.
+
+    Parameters:
+    -----------
+    structures : List[Structure]
+        List of parsed structures to analyze
+    threshold : float
+        nRMSD threshold for clustering
+    visualize : bool
+        Whether to show dendrogram visualization
+    n_jobs : int
+        Number of parallel jobs for nRMSD computation
+    rmsd_mode : str
+        RMSD calculation mode ("NumPy", "Numba", or "CuPy")
+
+    Returns:
+    --------
+    List[List[int]]
+        List of clusters, where each cluster is a list of structure indices
+    """
+    n_structures = len(structures)
+
+    if n_structures == 1:
+        return [[0]], np.zeros((1, 1))
+
+    # Get nucleotide residues for each structure
+    nucleotide_lists = []
+    for structure in structures:
+        nucleotides = [
+            residue for residue in structure.residues if residue.is_nucleotide
+        ]
+        nucleotide_lists.append(nucleotides)
+
+    # Compute nRMSD distance matrix
+    print(f"Computing pairwise nRMSD distances using {rmsd_mode} mode...")
+    distance_matrix = np.zeros((n_structures, n_structures))
+
+    # Prepare all pairs
+    all_pairs = []
+    for i in range(n_structures):
+        for j in range(i + 1, n_structures):
+            all_pairs.append(
+                (i, j, nucleotide_lists[i], nucleotide_lists[j], rmsd_mode)
+            )
+
+    # Process pairs with progress bar
+    total_pairs = len(all_pairs)
+
+    with tqdm(total=total_pairs, desc="Computing nRMSD", unit="pair") as pbar:
+        if n_jobs == 1:
+            # Single-threaded computation
+            results = []
+            for pair in all_pairs:
+                result = compute_nrmsd_pair(pair)
+                results.append(result)
+                pbar.update(1)
+        else:
+            # Multi-threaded computation
+            with Pool(processes=n_jobs) as pool:
+                results = []
+                for result in pool.imap(compute_nrmsd_pair, all_pairs):
+                    results.append(result)
+                    pbar.update(1)
+
+        # Fill the distance matrix
+        for i, j, nrmsd in results:
+            distance_matrix[i, j] = nrmsd
+            distance_matrix[j, i] = nrmsd
+
+    # Convert to condensed distance matrix for scipy
+    condensed_distances = squareform(distance_matrix)
+
+    # Perform hierarchical clustering with complete linkage
+    linkage_matrix = linkage(condensed_distances, method="complete")
+
+    # Find optimal threshold if not provided
+    if threshold is None:
+        threshold = find_optimal_threshold(distance_matrix, linkage_matrix)
+
+    # Show dendrogram if requested
+    if visualize:
+        try:
+            import matplotlib.pyplot as plt
+
+            # Create figure for dendrogram only
+            fig, ax = plt.subplots(1, 1, figsize=(12, 8))
+
+            # Plot dendrogram
+            dendrogram(
+                linkage_matrix,
+                labels=[f"Structure {i}" for i in range(n_structures)],
+                color_threshold=threshold,
+                ax=ax,
+            )
+            ax.set_title("Hierarchical Clustering Dendrogram")
+            ax.set_xlabel("Structure Index")
+            ax.set_ylabel("nRMSD Distance")
+            ax.axhline(
+                y=threshold, color="r", linestyle="--", label=f"Threshold = {threshold}"
+            )
+            ax.legend()
+
+            plt.tight_layout()
+
+            # Always save the plot when --visualize is used
+            plt.savefig("dendrogram.png", dpi=300, bbox_inches="tight")
+            print("Dendrogram saved to dendrogram.png")
+
+            # Try to show interactively, but don't fail if it doesn't work
+            try:
+                plt.show()
+            except Exception:
+                print("Note: Could not display plot interactively, but saved to file")
+
+        except ImportError:
+            print(
+                "Warning: matplotlib not available, skipping dendrogram visualization",
+                file=sys.stderr,
+            )
+
+    # Get cluster labels using the threshold
+    cluster_labels = fcluster(linkage_matrix, threshold, criterion="distance")
+
+    # Group structure indices by cluster
+    clusters: dict[int, list[int]] = {}
+    for i, label in enumerate(cluster_labels):
+        if label not in clusters:
+            clusters[label] = []
+        clusters[label].append(i)
+
+    # Return clusters and distance matrix
+    return list(clusters.values()), distance_matrix
+
+
+def find_cluster_medoids(
+    clusters: List[List[int]], distance_matrix: np.ndarray
+) -> List[int]:
+    """
+    Find the medoid (representative) for each cluster.
+
+    Parameters:
+    -----------
+    clusters : List[List[int]]
+        List of clusters, where each cluster is a list of structure indices
+    distance_matrix : np.ndarray
+        Square distance matrix between all structures
+
+    Returns:
+    --------
+    List[int]
+        List of medoid indices, one for each cluster
+    """
+    medoids = []
+
+    for cluster in clusters:
+        if len(cluster) == 1:
+            # Single element cluster - it's its own medoid
+            medoids.append(cluster[0])
+        else:
+            # Find the element with minimum sum of distances to all other elements in cluster
+            min_sum_distance = float("inf")
+            medoid = cluster[0]
+
+            for candidate in cluster:
+                sum_distance = sum(
+                    distance_matrix[candidate, other]
+                    for other in cluster
+                    if other != candidate
+                )
+                if sum_distance < min_sum_distance:
+                    min_sum_distance = sum_distance
+                    medoid = candidate
+
+            medoids.append(medoid)
+
+    return medoids
 
 
 def main():
