@@ -226,7 +226,9 @@ def parse_structure_file(file_path: Path) -> Structure:
         raise
 
 
-def compute_nrmsd(residues1: List[Residue], residues2: List[Residue], rmsd_mode: str = "NumPy") -> float:
+def compute_nrmsd(
+    residues1: List[Residue], residues2: List[Residue], rmsd_mode: str = "NumPy"
+) -> float:
     """
     Compute normalized RMSD between two lists of residues.
 
@@ -843,7 +845,9 @@ def find_structure_clusters(
     all_pairs = []
     for i in range(n_structures):
         for j in range(i + 1, n_structures):
-            all_pairs.append((i, j, nucleotide_lists[i], nucleotide_lists[j], rmsd_mode))
+            all_pairs.append(
+                (i, j, nucleotide_lists[i], nucleotide_lists[j], rmsd_mode)
+            )
 
     # Process pairs in batches with progress bar
     total_pairs = len(all_pairs)
