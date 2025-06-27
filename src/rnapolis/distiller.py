@@ -26,7 +26,7 @@ except ImportError:
     print("CuPy not available - using CPU computation")
 
 
-def rmsd_numpy(P, Q):
+def rmsd_squared_numpy(P, Q):
     """
     Calculates RMSD using the Quaternion method.
     P and Q are Nx3 numpy arrays.
@@ -66,11 +66,11 @@ def rmsd_numpy(P, Q):
     rmsd_sq = (E0 - 2 * np.max(eigenvalues)) / N
 
     # Handle potential floating point inaccuracies
-    return np.sqrt(max(0.0, rmsd_sq))
+    return max(0.0, rmsd_sq)
 
 
 @numba.jit(nopython=True, fastmath=True)
-def rmsd_numba(P, Q):
+def rmsd_squared_numba(P, Q):
     # The *exact same code* as the numpy function goes here
     # but using basic loops instead of numpy functions
     N = P.shape[0]
@@ -121,7 +121,7 @@ def rmsd_numba(P, Q):
     rmsd_sq = (E0 - 2 * np.max(eigenvalues)) / N
 
     # Handle potential floating point inaccuracies
-    return np.sqrt(max(0.0, rmsd_sq))
+    return max(0.0, rmsd_sq)
 
 
 def parse_arguments():
@@ -226,7 +226,7 @@ def parse_structure_file(file_path: Path) -> Structure:
         raise
 
 
-def compute_nrmsd(residues1: List[Residue], residues2: List[Residue]) -> float:
+def compute_nrmsd(residues1: List[Residue], residues2: List[Residue], rmsd_mode: str = "NumPy") -> float:
     """
     Compute normalized RMSD between two lists of residues.
 
@@ -236,6 +236,8 @@ def compute_nrmsd(residues1: List[Residue], residues2: List[Residue]) -> float:
         First list of residues
     residues2 : List[Residue]
         Second list of residues (must have same length as residues1)
+    rmsd_mode : str
+        RMSD calculation mode ("NumPy", "Numba", or "CuPy")
 
     Returns:
     --------
@@ -319,59 +321,15 @@ def compute_nrmsd(residues1: List[Residue], residues2: List[Residue]) -> float:
     coords1 = np.array([pair[0] for pair in atom_pairs])
     coords2 = np.array([pair[1] for pair in atom_pairs])
 
-    # Compute optimal superposition using Kabsch algorithm
-    rmsd = compute_rmsd_with_superposition(coords1, coords2)
+    # Compute RMSD squared using the specified mode
+    if rmsd_mode == "Numba":
+        rmsd_sq = rmsd_squared_numba(coords1, coords2)
+    else:  # Default to NumPy for both "NumPy" and "CuPy" modes (CuPy not implemented here yet)
+        rmsd_sq = rmsd_squared_numpy(coords1, coords2)
 
     # Return normalized RMSD
-    nrmsd = rmsd / np.sqrt(len(atom_pairs))
+    nrmsd = np.sqrt(rmsd_sq / len(atom_pairs))
     return nrmsd
-
-
-def compute_rmsd_with_superposition(coords1: np.ndarray, coords2: np.ndarray) -> float:
-    """
-    Compute RMSD between two sets of coordinates after optimal superposition.
-
-    Parameters:
-    -----------
-    coords1 : np.ndarray
-        First set of coordinates (N x 3)
-    coords2 : np.ndarray
-        Second set of coordinates (N x 3)
-
-    Returns:
-    --------
-    float
-        RMSD after optimal superposition
-    """
-    # Center the coordinates
-    centroid1 = np.mean(coords1, axis=0)
-    centroid2 = np.mean(coords2, axis=0)
-
-    centered1 = coords1 - centroid1
-    centered2 = coords2 - centroid2
-
-    # Compute the cross-covariance matrix
-    H = centered1.T @ centered2
-
-    # Singular value decomposition
-    U, S, Vt = np.linalg.svd(H)
-
-    # Compute rotation matrix
-    R = Vt.T @ U.T
-
-    # Ensure proper rotation (det(R) = 1)
-    if np.linalg.det(R) < 0:
-        Vt[-1, :] *= -1
-        R = Vt.T @ U.T
-
-    # Apply rotation to centered2
-    rotated2 = centered2 @ R.T
-
-    # Compute RMSD
-    diff = centered1 - rotated2
-    rmsd = np.sqrt(np.mean(np.sum(diff**2, axis=1)))
-
-    return rmsd
 
 
 def compute_rmsd_batch_gpu(
@@ -648,8 +606,8 @@ def find_cluster_medoids(
 
 def compute_nrmsd_pair(args):
     """Helper function for parallel nRMSD computation."""
-    i, j, nucleotides_i, nucleotides_j = args
-    nrmsd = compute_nrmsd(nucleotides_i, nucleotides_j)
+    i, j, nucleotides_i, nucleotides_j, rmsd_mode = args
+    nrmsd = compute_nrmsd(nucleotides_i, nucleotides_j, rmsd_mode)
     return i, j, nrmsd
 
 
@@ -836,6 +794,7 @@ def find_structure_clusters(
     threshold: float,
     visualize: bool = False,
     n_jobs: Optional[int] = None,
+    rmsd_mode: str = "NumPy",
 ) -> Tuple[List[List[int]], np.ndarray]:
     """
     Find clusters of almost identical structures using hierarchical clustering.
@@ -884,7 +843,7 @@ def find_structure_clusters(
     all_pairs = []
     for i in range(n_structures):
         for j in range(i + 1, n_structures):
-            all_pairs.append((i, j, nucleotide_lists[i], nucleotide_lists[j]))
+            all_pairs.append((i, j, nucleotide_lists[i], nucleotide_lists[j], rmsd_mode))
 
     # Process pairs in batches with progress bar
     total_pairs = len(all_pairs)
@@ -1033,7 +992,7 @@ def main():
     # Find clusters
     print("\nFinding structure clusters...")
     clusters, distance_matrix = find_structure_clusters(
-        structures, args.threshold, args.visualize, args.jobs
+        structures, args.threshold, args.visualize, args.jobs, args.rmsd_mode
     )
 
     # Find medoids for each cluster
