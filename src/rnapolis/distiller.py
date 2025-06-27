@@ -281,16 +281,16 @@ def nrmsd_qcp(residues1, residues2):
     """
     # Get paired coordinates
     P, Q = find_paired_coordinates(residues1, residues2)
-    
+
     # 1. Center coordinates
     centroid_P = np.mean(P, axis=0)
     centroid_Q = np.mean(Q, axis=0)
     P_centered = P - centroid_P
     Q_centered = Q - centroid_Q
-    
+
     # 2. Calculate the inner product matrix elements
     N = P.shape[0]
-    
+
     # Calculate Sxx, Sxy, Sxz, Syy, Syz, Szz
     Sxx = np.sum(P_centered[:, 0] * Q_centered[:, 0])
     Sxy = np.sum(P_centered[:, 0] * Q_centered[:, 1])
@@ -301,7 +301,7 @@ def nrmsd_qcp(residues1, residues2):
     Szx = np.sum(P_centered[:, 2] * Q_centered[:, 0])
     Szy = np.sum(P_centered[:, 2] * Q_centered[:, 1])
     Szz = np.sum(P_centered[:, 2] * Q_centered[:, 2])
-    
+
     # 3. Calculate the coefficients of the characteristic polynomial
     SxxpSyy = Sxx + Syy
     SxxmSyy = Sxx - Syy
@@ -311,42 +311,47 @@ def nrmsd_qcp(residues1, residues2):
     SxzmSzx = Sxz - Szx
     SyzpSzy = Syz + Szy
     SyzmSzy = Syz - Szy
-    
+
     # Coefficients for the characteristic polynomial
     C2 = -2.0 * (Sxx * Syy + Sxx * Szz + Syy * Szz - Sxy * Sxy - Sxz * Sxz - Syz * Syz)
-    C1 = -8.0 * (Sxx * Syz * Syz + Syy * Sxz * Sxz + Szz * Sxy * Sxy - Sxy * Sxz * Syz * 2.0)
-    C0 = (Sxy * Sxy + Sxz * Sxz - Sxx * Sxx) * (Syz * Syz + Sxy * Sxy - Syy * Syy) + \
-         (Sxz * Sxz + Syz * Syz - Szz * Szz) * (Sxy * Sxy + Syy * Syy - Sxx * Sxx) + \
-         2.0 * (Sxy * Sxz * (Syz - Syy) + Sxy * Syz * (Sxz - Szz) + Sxz * Syz * (Sxy - Sxx))
-    
+    C1 = -8.0 * (
+        Sxx * Syz * Syz + Syy * Sxz * Sxz + Szz * Sxy * Sxy - Sxy * Sxz * Syz * 2.0
+    )
+    C0 = (
+        (Sxy * Sxy + Sxz * Sxz - Sxx * Sxx) * (Syz * Syz + Sxy * Sxy - Syy * Syy)
+        + (Sxz * Sxz + Syz * Syz - Szz * Szz) * (Sxy * Sxy + Syy * Syy - Sxx * Sxx)
+        + 2.0
+        * (Sxy * Sxz * (Syz - Syy) + Sxy * Syz * (Sxz - Szz) + Sxz * Syz * (Sxy - Sxx))
+    )
+
     # 4. Calculate E0 (sum of squared distances from centroids)
     E0 = np.sum(P_centered**2) + np.sum(Q_centered**2)
-    
+
     # 5. Find the largest eigenvalue using Newton-Raphson method
     # Initial guess for the largest eigenvalue
-    lambda_max = (Sxx + Syy + Szz)
-    
+    lambda_max = Sxx + Syy + Szz
+
     # Newton-Raphson iterations
     for _ in range(50):  # Maximum 50 iterations
         lambda2 = lambda_max * lambda_max
         lambda3 = lambda2 * lambda_max
-        
+
         # Polynomial and its derivative
         p = lambda3 + C2 * lambda_max + C1 * lambda_max + C0
         dp = 3.0 * lambda2 + 2.0 * C2 * lambda_max + C1
-        
+
         if abs(dp) < 1e-14:
             break
-            
+
         delta = p / dp
         lambda_max -= delta
-        
+
         if abs(delta) < 1e-14:
             break
-    
+
     # 6. Calculate RMSD
     rmsd_sq = (E0 - 2.0 * lambda_max) / N
-    
+
     # Handle potential floating point inaccuracies
     return np.sqrt(max(0.0, rmsd_sq) / N)
 
@@ -380,21 +385,21 @@ def nrmsd_validate(residues1, residues2):
 
     # Check if results are approximately equal (within 1e-6 tolerance)
     tolerance = 1e-6
-    
+
     # Check quaternions vs SVD
     if abs(result_quaternions - result_svd) > tolerance:
         raise ValueError(
             f"RMSD methods disagree: quaternions={result_quaternions:.8f}, "
             f"svd={result_svd:.8f}, difference={abs(result_quaternions - result_svd):.8f}"
         )
-    
+
     # Check quaternions vs QCP
     if abs(result_quaternions - result_qcp) > tolerance:
         raise ValueError(
             f"RMSD methods disagree: quaternions={result_quaternions:.8f}, "
             f"qcp={result_qcp:.8f}, difference={abs(result_quaternions - result_qcp):.8f}"
         )
-    
+
     # Check SVD vs QCP
     if abs(result_svd - result_qcp) > tolerance:
         raise ValueError(
