@@ -198,62 +198,16 @@ def rmsd_squared_numpy(P, Q):
     P and Q are Nx3 numpy arrays.
     """
     # 1. Center coordinates
-    centroid_P = np.mean(P, axis=0)
-    centroid_Q = np.mean(Q, axis=0)
-    P_centered = P - centroid_P
-    Q_centered = Q - centroid_Q
-
-    # 2. Covariance matrix
-    C = P_centered.T @ Q_centered
-
-    # 3. K matrix
-    K = np.zeros((4, 4))
-    K[0, 0] = C[0, 0] + C[1, 1] + C[2, 2]
-    K[0, 1] = K[1, 0] = C[1, 2] - C[2, 1]
-    K[0, 2] = K[2, 0] = C[2, 0] - C[0, 2]
-    K[0, 3] = K[3, 0] = C[0, 1] - C[1, 0]
-    K[1, 1] = C[0, 0] - C[1, 1] - C[2, 2]
-    K[1, 2] = K[2, 1] = C[0, 1] + C[1, 0]
-    K[1, 3] = K[3, 1] = C[0, 2] + C[2, 0]
-    K[2, 2] = -C[0, 0] + C[1, 1] - C[2, 2]
-    K[2, 3] = K[3, 2] = C[1, 2] + C[2, 1]
-    K[3, 3] = -C[0, 0] - C[1, 1] + C[2, 2]
-
-    # 4. Eigenvalue/vector
-    # numpy's eigh is highly optimized for symmetric matrices
-    eigenvalues, _ = np.linalg.eigh(K)
-
-    # We don't even need the rotation matrix for the RMSD value
-    # E0 = sum(|P_i-cP|^2) + sum(|Q_i-cQ|^2)
-    E0 = np.sum(np.sum(P_centered**2, axis=1)) + np.sum(np.sum(Q_centered**2, axis=1))
-
-    # The min RMSD squared is (E0 - 2*max_eigenvalue) / N
-    N = P.shape[0]
-    rmsd_sq = (E0 - 2 * np.max(eigenvalues)) / N
-
-    # Handle potential floating point inaccuracies
-    return max(0.0, rmsd_sq)
-
-
-def rmsd_squared_numba_impl(P, Q):
-    """
-    Numba-optimized RMSD calculation using explicit loops.
-    This is the actual implementation that gets JIT compiled.
-    """
-    N = P.shape[0]
-    # 1. Center
     centroid_P = np.zeros(3)
     centroid_Q = np.zeros(3)
     for i in range(3):
         centroid_P[i] = np.mean(P[:, i])
         centroid_Q[i] = np.mean(Q[:, i])
-
     P_centered = P - centroid_P
     Q_centered = Q - centroid_Q
 
-    # 2. Covariance matrix implemented with explicit loops
-    # and array access, which numba is great at optimizing.
-    # C = P_centered.T @ Q_centered becomes:
+    # 2. Covariance matrix
+    N = P.shape[0]
     C = np.zeros((3, 3))
     for i in range(3):
         for j in range(3):
@@ -293,11 +247,11 @@ def rmsd_squared_numba_impl(P, Q):
 
 # Conditionally apply Numba JIT compilation
 if NUMBA_AVAILABLE:
-    rmsd_squared_numba = numba.jit(nopython=True, fastmath=True)(
-        rmsd_squared_numba_impl
+    rmsd_squared_numba = numba.jit(nopython=True, fastmath=True, cache=True)(
+        rmsd_squared_numpy
     )
 else:
-    rmsd_squared_numba = rmsd_squared_numba_impl
+    rmsd_squared_numba = rmsd_squared_numpy
 
 
 def rmsd_squared_cupy(P, Q):
