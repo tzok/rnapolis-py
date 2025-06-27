@@ -74,6 +74,14 @@ def parse_arguments():
         help="Output JSON file to save clustering results",
     )
 
+    parser.add_argument(
+        "--rmsd-method",
+        type=str,
+        choices=["quaternions", "svd"],
+        default="quaternions",
+        help="RMSD calculation method (default: quaternions)",
+    )
+
     return parser.parse_args()
 
 
@@ -183,7 +191,7 @@ def validate_nucleotide_counts(
     print(f"All structures have {first_count} nucleotides")
 
 
-def nrmsd_numpy(P, Q):
+def nrmsd_quaternions(P, Q):
     """
     Calculates nRMSD using the Quaternion method.
     P and Q are Nx3 numpy arrays.
@@ -222,6 +230,41 @@ def nrmsd_numpy(P, Q):
 
     # Handle potential floating point inaccuracies
     return np.sqrt(max(0.0, rmsd_sq) / N)
+
+
+def nrmsd_svd(P, Q):
+    """
+    Calculates nRMSD using SVD decomposition (Kabsch algorithm).
+    P and Q are Nx3 numpy arrays.
+    """
+    # 1. Center coordinates
+    centroid_P = np.mean(P, axis=0)
+    centroid_Q = np.mean(Q, axis=0)
+    P_centered = P - centroid_P
+    Q_centered = Q - centroid_Q
+
+    # 2. Compute cross-covariance matrix
+    H = P_centered.T @ Q_centered
+
+    # 3. SVD decomposition
+    U, S, Vt = np.linalg.svd(H)
+
+    # 4. Compute optimal rotation matrix
+    R = Vt.T @ U.T
+
+    # Ensure proper rotation (det(R) = 1)
+    if np.linalg.det(R) < 0:
+        Vt[-1, :] *= -1
+        R = Vt.T @ U.T
+
+    # 5. Apply rotation to P_centered
+    P_rotated = P_centered @ R.T
+
+    # 6. Calculate RMSD
+    diff = P_rotated - Q_centered
+    rmsd_sq = np.sum(diff**2) / P.shape[0]
+
+    return np.sqrt(rmsd_sq) / np.sqrt(P.shape[0])
 
 
 def find_optimal_threshold(
@@ -415,6 +458,7 @@ def find_structure_clusters(
     structures: List[Structure],
     threshold: Optional[float] = None,
     visualize: bool = False,
+    rmsd_method: str = "quaternions",
 ) -> Tuple[List[List[int]], np.ndarray]:
     """
     Find clusters of almost identical structures using hierarchical clustering.
@@ -427,6 +471,8 @@ def find_structure_clusters(
         nRMSD threshold for clustering
     visualize : bool
         Whether to show dendrogram visualization
+    rmsd_method : str
+        RMSD calculation method ("quaternions" or "svd")
 
     Returns:
     --------
@@ -445,8 +491,16 @@ def find_structure_clusters(
             [residue for residue in structure.residues if residue.is_nucleotide]
         )
 
-    # Compute nRMSD distance matrix
-    print("Computing pairwise nRMSD distances...")
+    # Select RMSD function based on method
+    if rmsd_method == "quaternions":
+        rmsd_func = nrmsd_quaternions
+        print("Computing pairwise nRMSD distances using quaternion method...")
+    elif rmsd_method == "svd":
+        rmsd_func = nrmsd_svd
+        print("Computing pairwise nRMSD distances using SVD method...")
+    else:
+        raise ValueError(f"Unknown RMSD method: {rmsd_method}")
+
     distance_matrix = np.zeros((n_structures, n_structures))
 
     # Prepare all pairs
@@ -471,7 +525,7 @@ def find_structure_clusters(
     # Process pairs with progress bar
     with ProcessPoolExecutor() as executor:
         futures_dict = {
-            executor.submit(nrmsd_numpy, coords_i, coords_j): (i, j)
+            executor.submit(rmsd_func, coords_i, coords_j): (i, j)
             for i, j, coords_i, coords_j in all_pairs
         }
         results = []
@@ -639,7 +693,7 @@ def main():
     # Find clusters
     print("\nFinding structure clusters...")
     clusters, distance_matrix = find_structure_clusters(
-        structures, args.threshold, args.visualize
+        structures, args.threshold, args.visualize, args.rmsd_method
     )
 
     # Find medoids for each cluster
