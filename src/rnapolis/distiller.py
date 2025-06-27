@@ -198,7 +198,7 @@ def nrmsd_quaternions(residues1, residues2):
     """
     # Get paired coordinates
     P, Q = find_paired_coordinates(residues1, residues2)
-    
+
     # 1. Center coordinates using vectorized operations
     centroid_P = np.mean(P, axis=0)
     centroid_Q = np.mean(Q, axis=0)
@@ -242,7 +242,7 @@ def nrmsd_svd(residues1, residues2):
     """
     # Get paired coordinates
     P, Q = find_paired_coordinates(residues1, residues2)
-    
+
     # 1. Center coordinates
     centroid_P = np.mean(P, axis=0)
     centroid_Q = np.mean(Q, axis=0)
