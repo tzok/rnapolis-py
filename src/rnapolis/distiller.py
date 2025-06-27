@@ -188,24 +188,14 @@ def nrmsd_numpy(P, Q):
     Calculates nRMSD using the Quaternion method.
     P and Q are Nx3 numpy arrays.
     """
-    # 1. Center coordinates
-    centroid_P = np.zeros(3)
-    centroid_Q = np.zeros(3)
-    for i in range(3):
-        centroid_P[i] = np.mean(P[:, i])
-        centroid_Q[i] = np.mean(Q[:, i])
+    # 1. Center coordinates using vectorized operations
+    centroid_P = np.mean(P, axis=0)
+    centroid_Q = np.mean(Q, axis=0)
     P_centered = P - centroid_P
     Q_centered = Q - centroid_Q
 
-    # 2. Covariance matrix
-    N = P.shape[0]
-    C = np.zeros((3, 3))
-    for i in range(3):
-        for j in range(3):
-            sum_val = 0.0
-            for k in range(N):
-                sum_val += P_centered[k, i] * Q_centered[k, j]
-            C[i, j] = sum_val
+    # 2. Covariance matrix using matrix multiplication
+    C = P_centered.T @ Q_centered
 
     # 3. K matrix
     K = np.zeros((4, 4))
@@ -221,12 +211,10 @@ def nrmsd_numpy(P, Q):
     K[3, 3] = -C[0, 0] - C[1, 1] + C[2, 2]
 
     # 4. Eigenvalue/vector
-    # numpy's eigh is highly optimized for symmetric matrices
     eigenvalues, _ = np.linalg.eigh(K)
 
-    # We don't even need the rotation matrix for the RMSD value
-    # E0 = sum(|P_i-cP|^2) + sum(|Q_i-cQ|^2)
-    E0 = np.sum(np.sum(P_centered**2, axis=1)) + np.sum(np.sum(Q_centered**2, axis=1))
+    # E0 = sum of squared distances from centroids
+    E0 = np.sum(P_centered**2) + np.sum(Q_centered**2)
 
     # The min RMSD squared is (E0 - 2*max_eigenvalue) / N
     N = P.shape[0]
