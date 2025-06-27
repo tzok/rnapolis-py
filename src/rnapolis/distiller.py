@@ -15,6 +15,21 @@ from tqdm import tqdm
 from rnapolis.parser_v2 import parse_cif_atoms, parse_pdb_atoms
 from rnapolis.tertiary_v2 import Residue, Structure
 
+# Try to import CuPy for GPU acceleration
+try:
+    import cupy as cp
+    CUPY_AVAILABLE = True
+    # Check if CUDA is actually available
+    try:
+        cp.cuda.Device(0).compute_capability
+        CUDA_AVAILABLE = True
+    except cp.cuda.runtime.CUDARuntimeError:
+        CUDA_AVAILABLE = False
+        print("Warning: CuPy is installed but CUDA is not available")
+except ImportError:
+    CUPY_AVAILABLE = False
+    CUDA_AVAILABLE = False
+
 
 def parse_arguments():
     """Parse command line arguments."""
@@ -464,6 +479,57 @@ def rmsd_squared_numba(P, Q):
     return max(0.0, rmsd_sq)
 
 
+def rmsd_squared_cupy(P, Q):
+    """
+    Calculates RMSD using the Quaternion method with CuPy for GPU acceleration.
+    P and Q are Nx3 numpy arrays that will be transferred to GPU.
+    """
+    if not CUPY_AVAILABLE or not CUDA_AVAILABLE:
+        raise RuntimeError("CuPy or CUDA not available for GPU computation")
+    
+    # Transfer to GPU
+    P_gpu = cp.asarray(P)
+    Q_gpu = cp.asarray(Q)
+    
+    # 1. Center coordinates
+    centroid_P = cp.mean(P_gpu, axis=0)
+    centroid_Q = cp.mean(Q_gpu, axis=0)
+    P_centered = P_gpu - centroid_P
+    Q_centered = Q_gpu - centroid_Q
+
+    # 2. Covariance matrix
+    C = P_centered.T @ Q_centered
+
+    # 3. K matrix
+    K = cp.zeros((4, 4))
+    K[0, 0] = C[0, 0] + C[1, 1] + C[2, 2]
+    K[0, 1] = K[1, 0] = C[1, 2] - C[2, 1]
+    K[0, 2] = K[2, 0] = C[2, 0] - C[0, 2]
+    K[0, 3] = K[3, 0] = C[0, 1] - C[1, 0]
+    K[1, 1] = C[0, 0] - C[1, 1] - C[2, 2]
+    K[1, 2] = K[2, 1] = C[0, 1] + C[1, 0]
+    K[1, 3] = K[3, 1] = C[0, 2] + C[2, 0]
+    K[2, 2] = -C[0, 0] + C[1, 1] - C[2, 2]
+    K[2, 3] = K[3, 2] = C[1, 2] + C[2, 1]
+    K[3, 3] = -C[0, 0] - C[1, 1] + C[2, 2]
+
+    # 4. Eigenvalue/vector
+    # CuPy's eigh is optimized for symmetric matrices on GPU
+    eigenvalues, _ = cp.linalg.eigh(K)
+
+    # We don't even need the rotation matrix for the RMSD value
+    # E0 = sum(|P_i-cP|^2) + sum(|Q_i-cQ|^2)
+    E0 = cp.sum(cp.sum(P_centered**2, axis=1)) + cp.sum(cp.sum(Q_centered**2, axis=1))
+
+    # The min RMSD squared is (E0 - 2*max_eigenvalue) / N
+    N = P_gpu.shape[0]
+    rmsd_sq = (E0 - 2 * cp.max(eigenvalues)) / N
+
+    # Handle potential floating point inaccuracies and transfer back to CPU
+    result = float(cp.asnumpy(cp.maximum(0.0, rmsd_sq)))
+    return result
+
+
 def compute_nrmsd(
     residues1: List[Residue], residues2: List[Residue], rmsd_mode: str = "NumPy"
 ) -> float:
@@ -564,7 +630,14 @@ def compute_nrmsd(
     # Compute RMSD squared using the specified mode
     if rmsd_mode == "Numba":
         rmsd_sq = rmsd_squared_numba(coords1, coords2)
-    else:  # Default to NumPy for both "NumPy" and "CuPy" modes (CuPy not implemented here yet)
+    elif rmsd_mode == "CuPy":
+        try:
+            rmsd_sq = rmsd_squared_cupy(coords1, coords2)
+        except (RuntimeError, Exception) as e:
+            # Fall back to NumPy if CuPy fails
+            print(f"Warning: CuPy computation failed ({e}), falling back to NumPy")
+            rmsd_sq = rmsd_squared_numpy(coords1, coords2)
+    else:  # Default to NumPy
         rmsd_sq = rmsd_squared_numpy(coords1, coords2)
 
     # Return normalized RMSD
