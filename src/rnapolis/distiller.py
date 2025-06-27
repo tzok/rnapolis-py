@@ -276,7 +276,7 @@ def nrmsd_svd(residues1, residues2):
 def nrmsd_qcp(residues1, residues2):
     """
     Calculates nRMSD using the QCP (Quaternion Characteristic Polynomial) method.
-    This is often more numerically stable and efficient than the standard quaternion method.
+    This implementation follows the BioJava QCP algorithm.
     residues1 and residues2 are lists of Residue objects.
     """
     # Get paired coordinates
@@ -288,85 +288,83 @@ def nrmsd_qcp(residues1, residues2):
     P_centered = P - centroid_P
     Q_centered = Q - centroid_Q
 
-    # 2. Calculate the inner product matrix elements (cross-covariance matrix)
-    C = P_centered.T @ Q_centered
+    # 2. Calculate inner product matrix elements
+    N = P.shape[0]
+    
+    # Calculate cross-covariance matrix elements
+    Sxx = np.sum(P_centered[:, 0] * Q_centered[:, 0])
+    Sxy = np.sum(P_centered[:, 0] * Q_centered[:, 1])
+    Sxz = np.sum(P_centered[:, 0] * Q_centered[:, 2])
+    Syx = np.sum(P_centered[:, 1] * Q_centered[:, 0])
+    Syy = np.sum(P_centered[:, 1] * Q_centered[:, 1])
+    Syz = np.sum(P_centered[:, 1] * Q_centered[:, 2])
+    Szx = np.sum(P_centered[:, 2] * Q_centered[:, 0])
+    Szy = np.sum(P_centered[:, 2] * Q_centered[:, 1])
+    Szz = np.sum(P_centered[:, 2] * Q_centered[:, 2])
 
-    # Extract elements
-    Sxx, Sxy, Sxz = C[0, 0], C[0, 1], C[0, 2]
-    Syx, Syy, Syz = C[1, 0], C[1, 1], C[1, 2]
-    Szx, Szy, Szz = C[2, 0], C[2, 1], C[2, 2]
-
-    # 3. Calculate the coefficients of the characteristic polynomial
-    # For the K matrix eigenvalue problem: det(K - λI) = 0
-    # This gives us: λ^4 + C2*λ^2 + C1*λ + C0 = 0
-
-    # Coefficients (corrected formulation)
-    C2 = -2.0 * (
-        Sxx * Sxx
-        + Sxy * Sxy
-        + Sxz * Sxz
-        + Syx * Syx
-        + Syy * Syy
-        + Syz * Syz
-        + Szx * Szx
-        + Szy * Szy
-        + Szz * Szz
-    )
-
-    C1 = 8.0 * (
-        Sxx * Syz * Szy
-        + Syy * Szx * Sxz
-        + Szz * Sxy * Syx
-        - Sxx * Syy * Szz
-        - Sxy * Syz * Szx
-        - Sxz * Syx * Szy
-    )
-
-    C0 = (
-        -8.0
-        * (
-            Sxx * Syy * Szz
-            + Sxy * Syz * Szx
-            + Sxz * Syx * Szy
-            - Sxx * Syz * Szy
-            - Syy * Szx * Sxz
-            - Szz * Sxy * Syx
-        )
-        ** 2
-    )
-
-    # 4. Calculate E0 (sum of squared distances from centroids)
+    # 3. Calculate E0 (sum of squared distances from centroids)
     E0 = np.sum(P_centered**2) + np.sum(Q_centered**2)
 
+    # 4. Calculate coefficients for the characteristic polynomial (following BioJava)
+    Sxx2 = Sxx * Sxx
+    Syy2 = Syy * Syy
+    Szz2 = Szz * Szz
+    Sxy2 = Sxy * Sxy
+    Syz2 = Syz * Syz
+    Sxz2 = Sxz * Sxz
+    Syx2 = Syx * Syx
+    Szy2 = Szy * Szy
+    Szx2 = Szx * Szx
+
+    SyzSzymSyySzz2 = 2.0 * (Syz * Szy - Syy * Szz)
+    Sxx2Syy2Szz2Syz2Szy2 = Syy2 + Szz2 - Sxx2 + Syz2 + Szy2
+
+    c2 = -2.0 * (Sxx2 + Syy2 + Szz2 + Sxy2 + Syx2 + Sxz2 + Szx2 + Syz2 + Szy2)
+    c1 = 8.0 * (Sxx * Syz * Szy + Syy * Szx * Sxz + Szz * Sxy * Syx - 
+                Sxx * Syy * Szz - Syz * Szx * Sxy - Szy * Syx * Sxz)
+
+    SxzpSzx = Sxz + Szx
+    SyzpSzy = Syz + Szy
+    SxypSyx = Sxy + Syx
+    SyzmSzy = Syz - Szy
+    SxzmSzx = Sxz - Szx
+    SxymSyx = Sxy - Syx
+    SxxpSyy = Sxx + Syy
+    SxxmSyy = Sxx - Syy
+
+    Sxy2Sxz2Syx2Szx2 = Sxy2 + Sxz2 - Syx2 - Szx2
+
+    c0 = (Sxy2Sxz2Syx2Szx2 * Sxy2Sxz2Syx2Szx2 +
+          (Sxx2Syy2Szz2Syz2Szy2 + SyzSzymSyySzz2) * (Sxx2Syy2Szz2Syz2Szy2 - SyzSzymSyySzz2) +
+          (-(SxzpSzx) * (SyzmSzy) + (SxymSyx) * (SxxmSyy - Szz)) *
+          (-(SxzmSzx) * (SyzpSzy) + (SxymSyx) * (SxxmSyy + Szz)) +
+          (-(SxzpSzx) * (SyzpSzy) - (SxypSyx) * (SxxpSyy - Szz)) *
+          (-(SxzmSzx) * (SyzmSzy) - (SxypSyx) * (SxxpSyy + Szz)) +
+          (+(SxypSyx) * (SyzpSzy) + (SxzpSzx) * (SxxmSyy + Szz)) *
+          (-(SxymSyx) * (SyzmSzy) + (SxzpSzx) * (SxxpSyy + Szz)) +
+          (+(SxypSyx) * (SyzmSzy) + (SxzmSzx) * (SxxmSyy - Szz)) *
+          (-(SxymSyx) * (SyzpSzy) + (SxzmSzx) * (SxxpSyy - Szz)))
+
     # 5. Find the largest eigenvalue using Newton-Raphson method
-    # Initial guess for the largest eigenvalue
-    lambda_max = Sxx + Syy + Szz
+    mxEigenV = E0
 
-    # Newton-Raphson iterations
-    for _ in range(50):  # Maximum 50 iterations
-        lambda2 = lambda_max * lambda_max
-        lambda3 = lambda2 * lambda_max
-        lambda4 = lambda3 * lambda_max
+    eval_prec = 1e-11
+    for i in range(50):
+        oldg = mxEigenV
+        x2 = mxEigenV * mxEigenV
+        b = (x2 + c2) * mxEigenV
+        a = b + c1
+        delta = ((a * mxEigenV + c0) / (2.0 * x2 * mxEigenV + b + a))
+        mxEigenV -= delta
 
-        # Polynomial: λ^4 + C2*λ^2 + C1*λ + C0 = 0
-        # Derivative: 4*λ^3 + 2*C2*λ + C1
-        p = lambda4 + C2 * lambda2 + C1 * lambda_max + C0
-        dp = 4.0 * lambda3 + 2.0 * C2 * lambda_max + C1
-
-        if abs(dp) < 1e-14:
-            break
-
-        delta = p / dp
-        lambda_max -= delta
-
-        if abs(delta) < 1e-14:
+        if abs(mxEigenV - oldg) < abs(eval_prec * mxEigenV):
             break
 
     # 6. Calculate RMSD
-    rmsd_sq = (E0 - 2.0 * lambda_max) / P.shape[0]
+    rmsd_sq = 2.0 * (E0 - mxEigenV) / N
+    rmsd = np.sqrt(abs(rmsd_sq))
 
-    # Handle potential floating point inaccuracies
-    return np.sqrt(max(0.0, rmsd_sq) / P.shape[0])
+    return rmsd / np.sqrt(N)
 
 
 def nrmsd_validate(residues1, residues2):
