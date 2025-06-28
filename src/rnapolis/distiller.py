@@ -189,17 +189,19 @@ def find_optimal_threshold(
         Default threshold value (0.1) for backward compatibility
     """
     print("Finding all threshold values where cluster assignments change...")
-    
+
     # Extract merge distances from linkage matrix (column 2)
     # These are the exact thresholds where cluster assignments change
     merge_distances = linkage_matrix[:, 2]
-    
+
     # Filter to the range we're interested in (0.05 to 0.3)
-    valid_thresholds = merge_distances[(merge_distances >= 0.05) & (merge_distances <= 0.3)]
-    
+    valid_thresholds = merge_distances[
+        (merge_distances >= 0.05) & (merge_distances <= 0.3)
+    ]
+
     # Sort thresholds in ascending order
     valid_thresholds = np.sort(valid_thresholds)
-    
+
     # Add boundary values if they're not already included
     boundary_thresholds = []
     if len(valid_thresholds) == 0 or valid_thresholds[0] > 0.05:
@@ -207,34 +209,42 @@ def find_optimal_threshold(
     boundary_thresholds.extend(valid_thresholds)
     if len(valid_thresholds) == 0 or valid_thresholds[-1] < 0.3:
         boundary_thresholds.append(0.3)
-    
+
     thresholds_to_test = np.array(boundary_thresholds)
-    
-    print(f"Testing {len(thresholds_to_test)} threshold values where clustering changes:")
-    
+
+    print(
+        f"Testing {len(thresholds_to_test)} threshold values where clustering changes:"
+    )
+
     for threshold in thresholds_to_test:
         labels = fcluster(linkage_matrix, threshold, criterion="distance")
         n_clusters = len(np.unique(labels))
-        
+
         # Group structure indices by cluster
         clusters = {}
         for i, label in enumerate(labels):
             if label not in clusters:
                 clusters[label] = []
             clusters[label].append(i)
-        
+
         cluster_sizes = [len(cluster) for cluster in clusters.values()]
         cluster_sizes.sort(reverse=True)  # Sort by size, largest first
-        
-        print(f"  Threshold {threshold:.4f}: {n_clusters} clusters, sizes: {cluster_sizes}")
-    
+
+        print(
+            f"  Threshold {threshold:.4f}: {n_clusters} clusters, sizes: {cluster_sizes}"
+        )
+
     # Return a reasonable default threshold for backward compatibility
     # Choose the middle value from our range
     if len(valid_thresholds) > 0:
-        default_threshold = valid_thresholds[len(valid_thresholds) // 2] if len(valid_thresholds) > 1 else valid_thresholds[0]
+        default_threshold = (
+            valid_thresholds[len(valid_thresholds) // 2]
+            if len(valid_thresholds) > 1
+            else valid_thresholds[0]
+        )
     else:
         default_threshold = 0.1
-    
+
     print(f"\nUsing default threshold: {default_threshold:.4f}")
     return default_threshold
 
