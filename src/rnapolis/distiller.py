@@ -54,6 +54,13 @@ def parse_arguments():
         help="RMSD calculation method (default: quaternions). Use 'validate' to check all methods agree.",
     )
 
+    parser.add_argument(
+        "--max-subcluster-size",
+        type=int,
+        default=2,
+        help="Maximum subcluster size to merge (default: 2). Find the first merge event where one subcluster exceeds this size.",
+    )
+
     return parser.parse_args()
 
 
@@ -165,7 +172,7 @@ def validate_nucleotide_counts(
 
 def find_all_thresholds_and_clusters(
     distance_matrix: np.ndarray, linkage_matrix: np.ndarray, file_paths: List[Path]
-) -> List[dict]:
+) -> Tuple[List[dict], Optional[dict]]:
     """
     Find all threshold values where cluster assignments change and generate cluster data.
 
@@ -180,8 +187,8 @@ def find_all_thresholds_and_clusters(
 
     Returns:
     --------
-    List[dict]
-        List of threshold cluster data
+    Tuple[List[dict], Optional[dict]]
+        Tuple of (list of threshold cluster data, max subcluster merge info)
     """
     print("Finding all threshold values where cluster assignments change...")
 
@@ -232,7 +239,7 @@ def find_all_thresholds_and_clusters(
 
         threshold_data.append(threshold_entry)
 
-    return threshold_data
+    return threshold_data, None
 
 
 def find_structure_clusters(
@@ -327,6 +334,108 @@ def find_structure_clusters(
     return distance_matrix
 
 
+def find_max_subcluster_merge(
+    linkage_matrix: np.ndarray, 
+    distance_matrix: np.ndarray, 
+    file_paths: List[Path], 
+    max_subcluster_size: int
+) -> Optional[dict]:
+    """
+    Find the first merge event where one subcluster exceeds the maximum size limit.
+
+    Parameters:
+    -----------
+    linkage_matrix : np.ndarray
+        Linkage matrix from hierarchical clustering
+    distance_matrix : np.ndarray
+        Square distance matrix
+    file_paths : List[Path]
+        List of file paths corresponding to structures
+    max_subcluster_size : int
+        Maximum allowed subcluster size for merging
+
+    Returns:
+    --------
+    Optional[dict]
+        Dictionary with merge information, or None if no such merge is found
+    """
+    n_structures = len(file_paths)
+    
+    # Track cluster sizes at each merge step
+    # Initially, each structure is its own cluster of size 1
+    cluster_sizes = [1] * n_structures
+    
+    # Process merge events in order (from smallest to largest distance)
+    for i, merge in enumerate(linkage_matrix):
+        left_idx, right_idx, distance, new_cluster_size = merge
+        left_idx, right_idx = int(left_idx), int(right_idx)
+        
+        # Get sizes of the two clusters being merged
+        if left_idx < n_structures:
+            left_size = 1  # Original structure
+        else:
+            left_size = cluster_sizes[left_idx]
+            
+        if right_idx < n_structures:
+            right_size = 1  # Original structure
+        else:
+            right_size = cluster_sizes[right_idx]
+        
+        # Check if either cluster exceeds the maximum size
+        if left_size > max_subcluster_size or right_size > max_subcluster_size:
+            # This is the first merge where a subcluster exceeds the limit
+            threshold = distance
+            
+            # Get cluster assignments at this threshold
+            labels = fcluster(linkage_matrix, threshold, criterion="distance")
+            n_clusters = len(np.unique(labels))
+            
+            # Group structure indices by cluster
+            clusters = {}
+            for j, label in enumerate(labels):
+                if label not in clusters:
+                    clusters[label] = []
+                clusters[label].append(j)
+            
+            cluster_sizes_list = [len(cluster) for cluster in clusters.values()]
+            cluster_sizes_list.sort(reverse=True)
+            
+            # Find medoids for each cluster
+            medoids = find_cluster_medoids(list(clusters.values()), distance_matrix)
+            
+            # Create result data
+            result = {
+                "nrmsd_threshold": float(threshold),
+                "merge_info": {
+                    "left_subcluster_size": left_size,
+                    "right_subcluster_size": right_size,
+                    "max_subcluster_size_limit": max_subcluster_size,
+                    "merge_step": i + 1,
+                },
+                "clusters": []
+            }
+            
+            for cluster_indices, medoid_idx in zip(clusters.values(), medoids):
+                representative = str(file_paths[medoid_idx])
+                members = [
+                    str(file_paths[idx]) for idx in cluster_indices if idx != medoid_idx
+                ]
+                
+                result["clusters"].append({
+                    "representative": representative,
+                    "members": members
+                })
+            
+            return result
+        
+        # Update cluster size for the new merged cluster
+        new_cluster_idx = n_structures + i
+        cluster_sizes.append(left_size + right_size)
+    
+    # No merge exceeded the limit
+    return None
+
+
 def find_cluster_medoids(
     clusters: List[List[int]], distance_matrix: np.ndarray
 ) -> List[int]:
@@ -413,10 +522,15 @@ def main():
         structures, args.visualize, args.rmsd_method
     )
 
-    # Get all threshold data
+    # Get all threshold data and max subcluster merge info
     linkage_matrix = linkage(squareform(distance_matrix), method="complete")
-    all_threshold_data = find_all_thresholds_and_clusters(
+    all_threshold_data, max_subcluster_merge = find_all_thresholds_and_clusters(
         distance_matrix, linkage_matrix, valid_files
+    )
+    
+    # Find the first merge event that exceeds max subcluster size
+    max_subcluster_merge = find_max_subcluster_merge(
+        linkage_matrix, distance_matrix, valid_files, args.max_subcluster_size
     )
 
     # Show visualizations if requested
@@ -473,11 +587,31 @@ def main():
     print(
         f"Cluster count range: {len(all_threshold_data[-1]['clusters'])} to {len(all_threshold_data[0]['clusters'])}"
     )
+    
+    # Print max subcluster merge information
+    if max_subcluster_merge:
+        merge_info = max_subcluster_merge["merge_info"]
+        print(f"\nFirst merge exceeding max subcluster size ({args.max_subcluster_size}):")
+        print(f"  Threshold: {max_subcluster_merge['nrmsd_threshold']:.6f}")
+        print(f"  Merge step: {merge_info['merge_step']}")
+        print(f"  Subcluster sizes: {merge_info['left_subcluster_size']} + {merge_info['right_subcluster_size']}")
+        print(f"  Resulting clusters: {len(max_subcluster_merge['clusters'])}")
+    else:
+        print(f"\nNo merge events exceeded max subcluster size ({args.max_subcluster_size})")
 
-    # Save comprehensive JSON with all thresholds
+    # Save comprehensive JSON with all thresholds and max subcluster merge info
     if args.output_json:
+        output_data = {
+            "all_thresholds": all_threshold_data,
+            "max_subcluster_merge": max_subcluster_merge,
+            "parameters": {
+                "max_subcluster_size": args.max_subcluster_size,
+                "rmsd_method": args.rmsd_method
+            }
+        }
+        
         with open(args.output_json, "w") as f:
-            json.dump(all_threshold_data, f, indent=2)
+            json.dump(output_data, f, indent=2)
 
         print(f"\nComprehensive clustering results saved to {args.output_json}")
     else:
