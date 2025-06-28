@@ -170,11 +170,11 @@ def validate_nucleotide_counts(
     print(f"All structures have {first_count} nucleotides")
 
 
-def find_optimal_threshold(
-    distance_matrix: np.ndarray, linkage_matrix: np.ndarray
-) -> float:
+def find_all_thresholds_and_clusters(
+    distance_matrix: np.ndarray, linkage_matrix: np.ndarray, file_paths: List[Path]
+) -> Tuple[float, List[dict]]:
     """
-    Find all threshold values where cluster assignments change and display them.
+    Find all threshold values where cluster assignments change and generate cluster data.
 
     Parameters:
     -----------
@@ -182,11 +182,13 @@ def find_optimal_threshold(
         Square distance matrix
     linkage_matrix : np.ndarray
         Linkage matrix from hierarchical clustering
+    file_paths : List[Path]
+        List of file paths corresponding to structures
 
     Returns:
     --------
-    float
-        Default threshold value (0.1) for backward compatibility
+    Tuple[float, List[dict]]
+        Default threshold value and list of threshold cluster data
     """
     print("Finding all threshold values where cluster assignments change...")
 
@@ -194,29 +196,16 @@ def find_optimal_threshold(
     # These are the exact thresholds where cluster assignments change
     merge_distances = linkage_matrix[:, 2]
 
-    # Filter to the range we're interested in (0.05 to 0.3)
-    valid_thresholds = merge_distances[
-        (merge_distances >= 0.05) & (merge_distances <= 0.3)
-    ]
-
-    # Sort thresholds in ascending order
-    valid_thresholds = np.sort(valid_thresholds)
-
-    # Add boundary values if they're not already included
-    boundary_thresholds = []
-    if len(valid_thresholds) == 0 or valid_thresholds[0] > 0.05:
-        boundary_thresholds.append(0.05)
-    boundary_thresholds.extend(valid_thresholds)
-    if len(valid_thresholds) == 0 or valid_thresholds[-1] < 0.3:
-        boundary_thresholds.append(0.3)
-
-    thresholds_to_test = np.array(boundary_thresholds)
+    # Sort thresholds in ascending order (all thresholds, no range filtering)
+    valid_thresholds = np.sort(merge_distances)
 
     print(
-        f"Testing {len(thresholds_to_test)} threshold values where clustering changes:"
+        f"Testing {len(valid_thresholds)} threshold values where clustering changes:"
     )
 
-    for threshold in thresholds_to_test:
+    threshold_data = []
+
+    for threshold in valid_thresholds:
         labels = fcluster(linkage_matrix, threshold, criterion="distance")
         n_clusters = len(np.unique(labels))
 
@@ -231,8 +220,28 @@ def find_optimal_threshold(
         cluster_sizes.sort(reverse=True)  # Sort by size, largest first
 
         print(
-            f"  Threshold {threshold:.4f}: {n_clusters} clusters, sizes: {cluster_sizes}"
+            f"  Threshold {threshold:.6f}: {n_clusters} clusters, sizes: {cluster_sizes}"
         )
+
+        # Find medoids for each cluster
+        medoids = find_cluster_medoids(list(clusters.values()), distance_matrix)
+
+        # Create threshold data entry
+        threshold_entry = {
+            "nrmsd_threshold": float(threshold),
+            "clusters": []
+        }
+
+        for cluster_indices, medoid_idx in zip(clusters.values(), medoids):
+            representative = str(file_paths[medoid_idx])
+            members = [str(file_paths[idx]) for idx in cluster_indices if idx != medoid_idx]
+            
+            threshold_entry["clusters"].append({
+                "representative": representative,
+                "members": members
+            })
+
+        threshold_data.append(threshold_entry)
 
     # Return a reasonable default threshold for backward compatibility
     # Choose the middle value from our range
@@ -245,8 +254,8 @@ def find_optimal_threshold(
     else:
         default_threshold = 0.1
 
-    print(f"\nUsing default threshold: {default_threshold:.4f}")
-    return default_threshold
+    print(f"\nUsing default threshold: {default_threshold:.6f}")
+    return default_threshold, threshold_data
 
 
 def find_structure_clusters(
@@ -340,9 +349,8 @@ def find_structure_clusters(
     # Perform hierarchical clustering with complete linkage
     linkage_matrix = linkage(condensed_distances, method="complete")
 
-    # Find optimal threshold if not provided
-    if threshold is None:
-        threshold = find_optimal_threshold(distance_matrix, linkage_matrix)
+    # This will be handled in main() now
+    pass
 
     # Show dendrogram if requested
     if visualize:
@@ -486,36 +494,46 @@ def main():
         structures, args.threshold, args.visualize, args.rmsd_method
     )
 
-    # Find medoids for each cluster
-    medoids = find_cluster_medoids(clusters, distance_matrix)
+    # Get all threshold data and default threshold
+    default_threshold, all_threshold_data = find_all_thresholds_and_clusters(
+        distance_matrix, 
+        linkage(squareform(distance_matrix), method="complete"),
+        valid_files
+    )
 
-    # Output results
-    print(f"\nFound {len(clusters)} clusters:")
-    for i, (cluster, medoid_idx) in enumerate(zip(clusters, medoids), 1):
+    # Use provided threshold or default
+    final_threshold = args.threshold if args.threshold is not None else default_threshold
+
+    # Get clusters for the final threshold
+    linkage_matrix = linkage(squareform(distance_matrix), method="complete")
+    cluster_labels = fcluster(linkage_matrix, final_threshold, criterion="distance")
+    
+    # Group structure indices by cluster for final results
+    final_clusters: dict[int, list[int]] = {}
+    for i, label in enumerate(cluster_labels):
+        if label not in final_clusters:
+            final_clusters[label] = []
+        final_clusters[label].append(i)
+    
+    final_clusters_list = list(final_clusters.values())
+    medoids = find_cluster_medoids(final_clusters_list, distance_matrix)
+
+    # Output results for the final threshold
+    print(f"\nUsing threshold {final_threshold:.6f}")
+    print(f"Found {len(final_clusters_list)} clusters:")
+    for i, (cluster, medoid_idx) in enumerate(zip(final_clusters_list, medoids), 1):
         print(f"Cluster {i}: {len(cluster)} structures")
         print(f"  Representative (medoid): {valid_files[medoid_idx]}")
         for structure_idx in cluster:
             if structure_idx != medoid_idx:
                 print(f"  - {valid_files[structure_idx]}")
 
-    # Save to JSON if requested
+    # Save comprehensive JSON with all thresholds
     if args.output_json:
-        json_data = {"clusters": []}
-
-        for i, (cluster, medoid_idx) in enumerate(zip(clusters, medoids), 1):
-            cluster_data = {
-                "cluster_id": i,
-                "representative": str(valid_files[medoid_idx]),
-                "members": [
-                    str(valid_files[idx]) for idx in cluster if idx != medoid_idx
-                ],
-            }
-            json_data["clusters"].append(cluster_data)
-
         with open(args.output_json, "w") as f:
-            json.dump(json_data, f, indent=2)
+            json.dump(all_threshold_data, f, indent=2)
 
-        print(f"\nClustering results saved to {args.output_json}")
+        print(f"\nComprehensive clustering results for all thresholds saved to {args.output_json}")
 
 
 if __name__ == "__main__":
