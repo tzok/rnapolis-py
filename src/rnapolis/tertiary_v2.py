@@ -162,6 +162,11 @@ def find_paired_coordinates(
             else:
                 atoms_to_match = BACKBONE_RIBOSE_ATOMS
 
+        # Ensure atoms_to_match is not None
+        if atoms_to_match is None:
+            # Fallback to minimal backbone atoms
+            atoms_to_match = BACKBONE_DEOXYRIBOSE_ATOMS
+
         if residue1.format == "mmCIF":
             df1 = residue1.atoms
         else:
