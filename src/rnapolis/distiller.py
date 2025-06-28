@@ -174,7 +174,7 @@ def find_optimal_threshold(
     distance_matrix: np.ndarray, linkage_matrix: np.ndarray
 ) -> float:
     """
-    Find optimal clustering threshold using silhouette analysis.
+    Find all threshold values where cluster assignments change and display them.
 
     Parameters:
     -----------
@@ -186,42 +186,57 @@ def find_optimal_threshold(
     Returns:
     --------
     float
-        Optimal threshold value
+        Default threshold value (0.1) for backward compatibility
     """
-    print("Finding optimal threshold using silhouette analysis...")
-
-    # Candidate distance thresholds
-    grid = np.linspace(0.05, 0.30, 60)
-    best_score, best_threshold = -1.0, None
-
-    for threshold in grid:
+    print("Finding all threshold values where cluster assignments change...")
+    
+    # Extract merge distances from linkage matrix (column 2)
+    # These are the exact thresholds where cluster assignments change
+    merge_distances = linkage_matrix[:, 2]
+    
+    # Filter to the range we're interested in (0.05 to 0.3)
+    valid_thresholds = merge_distances[(merge_distances >= 0.05) & (merge_distances <= 0.3)]
+    
+    # Sort thresholds in ascending order
+    valid_thresholds = np.sort(valid_thresholds)
+    
+    # Add boundary values if they're not already included
+    boundary_thresholds = []
+    if len(valid_thresholds) == 0 or valid_thresholds[0] > 0.05:
+        boundary_thresholds.append(0.05)
+    boundary_thresholds.extend(valid_thresholds)
+    if len(valid_thresholds) == 0 or valid_thresholds[-1] < 0.3:
+        boundary_thresholds.append(0.3)
+    
+    thresholds_to_test = np.array(boundary_thresholds)
+    
+    print(f"Testing {len(thresholds_to_test)} threshold values where clustering changes:")
+    
+    for threshold in thresholds_to_test:
         labels = fcluster(linkage_matrix, threshold, criterion="distance")
-
-        # Silhouette analysis needs at least 2 clusters
-        if labels.max() < 2:
-            continue
-
-        # Skip if all points are in one cluster
-        if len(np.unique(labels)) < 2:
-            continue
-
-        try:
-            score = silhouette_score(distance_matrix, labels, metric="precomputed")
-            if score > best_score:
-                best_score, best_threshold = score, threshold
-        except ValueError:
-            # Skip invalid configurations
-            continue
-
-    if best_threshold is None:
-        # Fallback to a reasonable default if silhouette analysis fails
-        print("Warning: Silhouette analysis failed, using default threshold 0.1")
-        return 0.1
-
-    print(
-        f"Optimal threshold: {best_threshold:.4f} (silhouette score: {best_score:.4f})"
-    )
-    return best_threshold
+        n_clusters = len(np.unique(labels))
+        
+        # Group structure indices by cluster
+        clusters = {}
+        for i, label in enumerate(labels):
+            if label not in clusters:
+                clusters[label] = []
+            clusters[label].append(i)
+        
+        cluster_sizes = [len(cluster) for cluster in clusters.values()]
+        cluster_sizes.sort(reverse=True)  # Sort by size, largest first
+        
+        print(f"  Threshold {threshold:.4f}: {n_clusters} clusters, sizes: {cluster_sizes}")
+    
+    # Return a reasonable default threshold for backward compatibility
+    # Choose the middle value from our range
+    if len(valid_thresholds) > 0:
+        default_threshold = valid_thresholds[len(valid_thresholds) // 2] if len(valid_thresholds) > 1 else valid_thresholds[0]
+    else:
+        default_threshold = 0.1
+    
+    print(f"\nUsing default threshold: {default_threshold:.4f}")
+    return default_threshold
 
 
 def find_structure_clusters(
