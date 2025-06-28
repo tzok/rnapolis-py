@@ -199,9 +199,7 @@ def find_all_thresholds_and_clusters(
     # Sort thresholds in ascending order (all thresholds, no range filtering)
     valid_thresholds = np.sort(merge_distances)
 
-    print(
-        f"Testing {len(valid_thresholds)} threshold values where clustering changes:"
-    )
+    print(f"Testing {len(valid_thresholds)} threshold values where clustering changes:")
 
     threshold_data = []
 
@@ -227,19 +225,17 @@ def find_all_thresholds_and_clusters(
         medoids = find_cluster_medoids(list(clusters.values()), distance_matrix)
 
         # Create threshold data entry
-        threshold_entry = {
-            "nrmsd_threshold": float(threshold),
-            "clusters": []
-        }
+        threshold_entry = {"nrmsd_threshold": float(threshold), "clusters": []}
 
         for cluster_indices, medoid_idx in zip(clusters.values(), medoids):
             representative = str(file_paths[medoid_idx])
-            members = [str(file_paths[idx]) for idx in cluster_indices if idx != medoid_idx]
-            
-            threshold_entry["clusters"].append({
-                "representative": representative,
-                "members": members
-            })
+            members = [
+                str(file_paths[idx]) for idx in cluster_indices if idx != medoid_idx
+            ]
+
+            threshold_entry["clusters"].append(
+                {"representative": representative, "members": members}
+            )
 
         threshold_data.append(threshold_entry)
 
@@ -496,25 +492,27 @@ def main():
 
     # Get all threshold data and default threshold
     default_threshold, all_threshold_data = find_all_thresholds_and_clusters(
-        distance_matrix, 
+        distance_matrix,
         linkage(squareform(distance_matrix), method="complete"),
-        valid_files
+        valid_files,
     )
 
     # Use provided threshold or default
-    final_threshold = args.threshold if args.threshold is not None else default_threshold
+    final_threshold = (
+        args.threshold if args.threshold is not None else default_threshold
+    )
 
     # Get clusters for the final threshold
     linkage_matrix = linkage(squareform(distance_matrix), method="complete")
     cluster_labels = fcluster(linkage_matrix, final_threshold, criterion="distance")
-    
+
     # Group structure indices by cluster for final results
     final_clusters: dict[int, list[int]] = {}
     for i, label in enumerate(cluster_labels):
         if label not in final_clusters:
             final_clusters[label] = []
         final_clusters[label].append(i)
-    
+
     final_clusters_list = list(final_clusters.values())
     medoids = find_cluster_medoids(final_clusters_list, distance_matrix)
 
@@ -533,7 +531,9 @@ def main():
         with open(args.output_json, "w") as f:
             json.dump(all_threshold_data, f, indent=2)
 
-        print(f"\nComprehensive clustering results for all thresholds saved to {args.output_json}")
+        print(
+            f"\nComprehensive clustering results for all thresholds saved to {args.output_json}"
+        )
 
 
 if __name__ == "__main__":
