@@ -34,12 +34,6 @@ def parse_arguments():
         "files", nargs="+", type=Path, help="Input mmCIF or PDB files to analyze"
     )
 
-    parser.add_argument(
-        "--threshold",
-        type=float,
-        default=None,
-        help="nRMSD threshold for clustering (default: auto-select using silhouette analysis)",
-    )
 
     parser.add_argument(
         "--visualize",
@@ -172,7 +166,7 @@ def validate_nucleotide_counts(
 
 def find_all_thresholds_and_clusters(
     distance_matrix: np.ndarray, linkage_matrix: np.ndarray, file_paths: List[Path]
-) -> Tuple[float, List[dict]]:
+) -> List[dict]:
     """
     Find all threshold values where cluster assignments change and generate cluster data.
 
@@ -187,8 +181,8 @@ def find_all_thresholds_and_clusters(
 
     Returns:
     --------
-    Tuple[float, List[dict]]
-        Default threshold value and list of threshold cluster data
+    List[dict]
+        List of threshold cluster data
     """
     print("Finding all threshold values where cluster assignments change...")
 
@@ -239,27 +233,14 @@ def find_all_thresholds_and_clusters(
 
         threshold_data.append(threshold_entry)
 
-    # Return a reasonable default threshold for backward compatibility
-    # Choose the middle value from our range
-    if len(valid_thresholds) > 0:
-        default_threshold = (
-            valid_thresholds[len(valid_thresholds) // 2]
-            if len(valid_thresholds) > 1
-            else valid_thresholds[0]
-        )
-    else:
-        default_threshold = 0.1
-
-    print(f"\nUsing default threshold: {default_threshold:.6f}")
-    return default_threshold, threshold_data
+    return threshold_data
 
 
 def find_structure_clusters(
     structures: List[Structure],
-    threshold: Optional[float] = None,
     visualize: bool = False,
     rmsd_method: str = "quaternions",
-) -> Tuple[List[List[int]], np.ndarray]:
+) -> np.ndarray:
     """
     Find clusters of almost identical structures using hierarchical clustering.
 
@@ -267,17 +248,15 @@ def find_structure_clusters(
     -----------
     structures : List[Structure]
         List of parsed structures to analyze
-    threshold : float
-        nRMSD threshold for clustering
     visualize : bool
-        Whether to show dendrogram visualization
+        Whether to show dendrogram and scatter plot visualization
     rmsd_method : str
         RMSD calculation method ("quaternions" or "svd")
 
     Returns:
     --------
-    List[List[int]]
-        List of clusters, where each cluster is a list of structure indices
+    np.ndarray
+        Distance matrix between all structures
     """
     n_structures = len(structures)
 
@@ -345,62 +324,8 @@ def find_structure_clusters(
     # Perform hierarchical clustering with complete linkage
     linkage_matrix = linkage(condensed_distances, method="complete")
 
-    # This will be handled in main() now
-    pass
-
-    # Show dendrogram if requested
-    if visualize:
-        try:
-            import matplotlib.pyplot as plt
-
-            # Create figure for dendrogram only
-            fig, ax = plt.subplots(1, 1, figsize=(12, 8))
-
-            # Plot dendrogram
-            dendrogram(
-                linkage_matrix,
-                labels=[f"Structure {i}" for i in range(n_structures)],
-                color_threshold=threshold,
-                ax=ax,
-            )
-            ax.set_title("Hierarchical Clustering Dendrogram")
-            ax.set_xlabel("Structure Index")
-            ax.set_ylabel("nRMSD Distance")
-            ax.axhline(
-                y=threshold, color="r", linestyle="--", label=f"Threshold = {threshold}"
-            )
-            ax.legend()
-
-            plt.tight_layout()
-
-            # Always save the plot when --visualize is used
-            plt.savefig("dendrogram.png", dpi=300, bbox_inches="tight")
-            print("Dendrogram saved to dendrogram.png")
-
-            # Try to show interactively, but don't fail if it doesn't work
-            try:
-                plt.show()
-            except Exception:
-                print("Note: Could not display plot interactively, but saved to file")
-
-        except ImportError:
-            print(
-                "Warning: matplotlib not available, skipping dendrogram visualization",
-                file=sys.stderr,
-            )
-
-    # Get cluster labels using the threshold
-    cluster_labels = fcluster(linkage_matrix, threshold, criterion="distance")
-
-    # Group structure indices by cluster
-    clusters: dict[int, list[int]] = {}
-    for i, label in enumerate(cluster_labels):
-        if label not in clusters:
-            clusters[label] = []
-        clusters[label].append(i)
-
-    # Return clusters and distance matrix
-    return list(clusters.values()), distance_matrix
+    # Return distance matrix for further processing
+    return distance_matrix
 
 
 def find_cluster_medoids(
@@ -458,8 +383,7 @@ def main():
         print("Error: No valid input files found", file=sys.stderr)
         sys.exit(1)
 
-    threshold_msg = "auto-selected" if args.threshold is None else f"{args.threshold}"
-    print(f"Processing {len(valid_files)} files with nRMSD threshold {threshold_msg}")
+    print(f"Processing {len(valid_files)} files")
 
     # Parse all structure files
     print("Parsing structure files...")
@@ -484,56 +408,77 @@ def main():
     print("\nValidating nucleotide counts...")
     validate_nucleotide_counts(structures, valid_files)
 
-    # Find clusters
-    print("\nFinding structure clusters...")
-    clusters, distance_matrix = find_structure_clusters(
-        structures, args.threshold, args.visualize, args.rmsd_method
+    # Compute distance matrix
+    print("\nComputing distance matrix...")
+    distance_matrix = find_structure_clusters(
+        structures, args.visualize, args.rmsd_method
     )
 
-    # Get all threshold data and default threshold
-    default_threshold, all_threshold_data = find_all_thresholds_and_clusters(
-        distance_matrix,
-        linkage(squareform(distance_matrix), method="complete"),
-        valid_files,
-    )
-
-    # Use provided threshold or default
-    final_threshold = (
-        args.threshold if args.threshold is not None else default_threshold
-    )
-
-    # Get clusters for the final threshold
+    # Get all threshold data
     linkage_matrix = linkage(squareform(distance_matrix), method="complete")
-    cluster_labels = fcluster(linkage_matrix, final_threshold, criterion="distance")
+    all_threshold_data = find_all_thresholds_and_clusters(
+        distance_matrix, linkage_matrix, valid_files
+    )
 
-    # Group structure indices by cluster for final results
-    final_clusters: dict[int, list[int]] = {}
-    for i, label in enumerate(cluster_labels):
-        if label not in final_clusters:
-            final_clusters[label] = []
-        final_clusters[label].append(i)
+    # Show visualizations if requested
+    if args.visualize:
+        try:
+            import matplotlib.pyplot as plt
 
-    final_clusters_list = list(final_clusters.values())
-    medoids = find_cluster_medoids(final_clusters_list, distance_matrix)
+            # Create figure with subplots
+            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 6))
 
-    # Output results for the final threshold
-    print(f"\nUsing threshold {final_threshold:.6f}")
-    print(f"Found {len(final_clusters_list)} clusters:")
-    for i, (cluster, medoid_idx) in enumerate(zip(final_clusters_list, medoids), 1):
-        print(f"Cluster {i}: {len(cluster)} structures")
-        print(f"  Representative (medoid): {valid_files[medoid_idx]}")
-        for structure_idx in cluster:
-            if structure_idx != medoid_idx:
-                print(f"  - {valid_files[structure_idx]}")
+            # Plot dendrogram
+            dendrogram(
+                linkage_matrix,
+                labels=[f"Structure {i}" for i in range(len(structures))],
+                ax=ax1,
+            )
+            ax1.set_title("Hierarchical Clustering Dendrogram")
+            ax1.set_xlabel("Structure Index")
+            ax1.set_ylabel("nRMSD Distance")
+
+            # Plot threshold vs cluster count scatter plot
+            thresholds = [entry["nrmsd_threshold"] for entry in all_threshold_data]
+            cluster_counts = [len(entry["clusters"]) for entry in all_threshold_data]
+            
+            ax2.scatter(thresholds, cluster_counts, alpha=0.7, s=30)
+            ax2.set_xlabel("nRMSD Threshold")
+            ax2.set_ylabel("Number of Clusters")
+            ax2.set_title("Threshold vs Cluster Count")
+            ax2.grid(True, alpha=0.3)
+
+            plt.tight_layout()
+
+            # Always save the plot when --visualize is used
+            plt.savefig("clustering_analysis.png", dpi=300, bbox_inches="tight")
+            print("Clustering analysis plots saved to clustering_analysis.png")
+
+            # Try to show interactively, but don't fail if it doesn't work
+            try:
+                plt.show()
+            except Exception:
+                print("Note: Could not display plot interactively, but saved to file")
+
+        except ImportError:
+            print(
+                "Warning: matplotlib not available, skipping visualization",
+                file=sys.stderr,
+            )
+
+    # Print summary
+    print(f"\nFound {len(all_threshold_data)} different clustering configurations")
+    print(f"Threshold range: {all_threshold_data[0]['nrmsd_threshold']:.6f} to {all_threshold_data[-1]['nrmsd_threshold']:.6f}")
+    print(f"Cluster count range: {len(all_threshold_data[-1]['clusters'])} to {len(all_threshold_data[0]['clusters'])}")
 
     # Save comprehensive JSON with all thresholds
     if args.output_json:
         with open(args.output_json, "w") as f:
             json.dump(all_threshold_data, f, indent=2)
 
-        print(
-            f"\nComprehensive clustering results for all thresholds saved to {args.output_json}"
-        )
+        print(f"\nComprehensive clustering results saved to {args.output_json}")
+    else:
+        print("\nUse --output-json to save clustering results to a file")
 
 
 if __name__ == "__main__":
