@@ -34,7 +34,6 @@ def parse_arguments():
         "files", nargs="+", type=Path, help="Input mmCIF or PDB files to analyze"
     )
 
-
     parser.add_argument(
         "--visualize",
         action="store_true",
@@ -441,7 +440,7 @@ def main():
             # Plot threshold vs cluster count scatter plot
             thresholds = [entry["nrmsd_threshold"] for entry in all_threshold_data]
             cluster_counts = [len(entry["clusters"]) for entry in all_threshold_data]
-            
+
             ax2.scatter(thresholds, cluster_counts, alpha=0.7, s=30)
             ax2.set_xlabel("nRMSD Threshold")
             ax2.set_ylabel("Number of Clusters")
@@ -468,8 +467,12 @@ def main():
 
     # Print summary
     print(f"\nFound {len(all_threshold_data)} different clustering configurations")
-    print(f"Threshold range: {all_threshold_data[0]['nrmsd_threshold']:.6f} to {all_threshold_data[-1]['nrmsd_threshold']:.6f}")
-    print(f"Cluster count range: {len(all_threshold_data[-1]['clusters'])} to {len(all_threshold_data[0]['clusters'])}")
+    print(
+        f"Threshold range: {all_threshold_data[0]['nrmsd_threshold']:.6f} to {all_threshold_data[-1]['nrmsd_threshold']:.6f}"
+    )
+    print(
+        f"Cluster count range: {len(all_threshold_data[-1]['clusters'])} to {len(all_threshold_data[0]['clusters'])}"
+    )
 
     # Save comprehensive JSON with all thresholds
     if args.output_json:
