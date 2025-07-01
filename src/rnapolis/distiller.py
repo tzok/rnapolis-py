@@ -11,7 +11,6 @@ from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 from scipy.cluster.hierarchy import dendrogram, fcluster, linkage
-from scipy.interpolate import UnivariateSpline
 from scipy.optimize import curve_fit
 from scipy.spatial.distance import squareform
 from tqdm import tqdm
@@ -59,8 +58,8 @@ def parse_arguments():
     parser.add_argument(
         "--threshold",
         type=float,
-        default=0.1,
-        help="nRMSD threshold for clustering (default: 0.1)",
+        default=None,
+        help="nRMSD threshold for clustering (default: auto-detect from exponential decay inflection point)",
     )
 
     parser.add_argument(
@@ -75,14 +74,6 @@ def parse_arguments():
         type=int,
         default=100,
         help="Save cache to disk every N computations (default: 100)",
-    )
-
-    parser.add_argument(
-        "--fit-method",
-        type=str,
-        choices=["bspline", "exponential"],
-        default="bspline",
-        help="Curve fitting method for threshold vs cluster count (default: bspline)",
     )
 
     return parser.parse_args()
@@ -659,116 +650,51 @@ def fit_exponential_decay(
         return x, y, np.array([])
 
 
-def find_inflection_points_bspline(
-    x: np.ndarray, y: np.ndarray, smoothing: float = None
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+def determine_optimal_threshold(
+    distance_matrix: np.ndarray, linkage_matrix: np.ndarray
+) -> float:
     """
-    Fit a B-spline to the data and find inflection points.
+    Determine optimal threshold from exponential decay inflection point.
 
     Parameters:
     -----------
-    x : np.ndarray
-        X coordinates (thresholds)
-    y : np.ndarray
-        Y coordinates (cluster counts)
-    smoothing : float, optional
-        Smoothing parameter for spline fitting
+    distance_matrix : np.ndarray
+        Square distance matrix
+    linkage_matrix : np.ndarray
+        Linkage matrix from hierarchical clustering
 
     Returns:
     --------
-    Tuple[np.ndarray, np.ndarray, np.ndarray]
-        Tuple of (x_smooth, y_smooth, inflection_x) where:
-        - x_smooth: smooth x values for plotting the spline
-        - y_smooth: smooth y values for plotting the spline
-        - inflection_x: x coordinates of inflection points
+    float
+        Optimal threshold value
     """
-    if len(x) < 4:
-        # Not enough points for spline fitting
-        return x, y, np.array([])
+    # Extract merge distances from linkage matrix
+    merge_distances = linkage_matrix[:, 2]
+    valid_thresholds = np.sort(merge_distances)
 
-    # Sort data by x values
-    sort_idx = np.argsort(x)
-    x_sorted = x[sort_idx]
-    y_sorted = y[sort_idx]
+    # Calculate cluster counts for each threshold
+    cluster_counts = []
+    for threshold in valid_thresholds:
+        labels = fcluster(linkage_matrix, threshold, criterion="distance")
+        n_clusters = len(np.unique(labels))
+        cluster_counts.append(n_clusters)
 
-    # Fit B-spline with automatic smoothing if not specified
-    if smoothing is None:
-        # Use a reasonable default smoothing based on data size
-        smoothing = len(x) * 0.1
+    thresholds = np.array(valid_thresholds)
+    cluster_counts = np.array(cluster_counts)
 
-    try:
-        spline = UnivariateSpline(x_sorted, y_sorted, s=smoothing, k=3)
-    except Exception:
-        # Fallback to linear interpolation if spline fails
-        return x, y, np.array([])
+    # Fit exponential decay and find inflection points
+    x_smooth, y_smooth, inflection_x = fit_exponential_decay(thresholds, cluster_counts)
 
-    # Generate smooth curve for plotting
-    x_smooth = np.linspace(x_sorted.min(), x_sorted.max(), 200)
-    y_smooth = spline(x_smooth)
-
-    # Find inflection points by looking for sign changes in second derivative
-    second_deriv = spline.derivative(n=2)
-
-    # Evaluate second derivative on a fine grid
-    x_fine = np.linspace(x_sorted.min(), x_sorted.max(), 1000)
-    second_deriv_vals = second_deriv(x_fine)
-
-    # Find sign changes (inflection points), excluding edge regions
-    edge_margin = int(0.1 * len(x_fine))
-    if edge_margin < 10:
-        edge_margin = 10
-
-    inflection_indices = []
-    for i in range(edge_margin, len(second_deriv_vals) - edge_margin - 1):
-        if second_deriv_vals[i] * second_deriv_vals[i + 1] < 0:
-            # Sign change detected, refine the location
-            x_left = x_fine[i]
-            x_right = x_fine[i + 1]
-
-            # Use bisection to find more precise inflection point
-            for _ in range(10):  # 10 iterations should be enough
-                x_mid = (x_left + x_right) / 2
-                if second_deriv(x_left) * second_deriv(x_mid) < 0:
-                    x_right = x_mid
-                else:
-                    x_left = x_mid
-
-            inflection_indices.append((x_left + x_right) / 2)
-
-    inflection_x = np.array(inflection_indices)
-
-    return x_smooth, y_smooth, inflection_x
-
-
-def find_inflection_points(
-    x: np.ndarray, y: np.ndarray, method: str = "bspline", smoothing: float = None
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """
-    Fit a curve to the data and find inflection points using the specified method.
-
-    Parameters:
-    -----------
-    x : np.ndarray
-        X coordinates (thresholds)
-    y : np.ndarray
-        Y coordinates (cluster counts)
-    method : str
-        Fitting method ("bspline" or "exponential")
-    smoothing : float, optional
-        Smoothing parameter for spline fitting (only used for bspline method)
-
-    Returns:
-    --------
-    Tuple[np.ndarray, np.ndarray, np.ndarray]
-        Tuple of (x_smooth, y_smooth, inflection_x) where:
-        - x_smooth: smooth x values for plotting the curve
-        - y_smooth: smooth y values for plotting the curve
-        - inflection_x: x coordinates of inflection points
-    """
-    if method == "exponential":
-        return fit_exponential_decay(x, y)
-    else:  # bspline
-        return find_inflection_points_bspline(x, y, smoothing)
+    if len(inflection_x) > 0:
+        # Use the first inflection point as the optimal threshold
+        optimal_threshold = inflection_x[0]
+        print(f"Auto-detected optimal threshold: {optimal_threshold:.6f}")
+        return optimal_threshold
+    else:
+        # Fallback to a reasonable default if no inflection points found
+        fallback_threshold = 0.1
+        print(f"No inflection points found, using fallback threshold: {fallback_threshold}")
+        return fallback_threshold
 
 
 def find_cluster_medoids(
@@ -861,15 +787,23 @@ def main():
         structures, valid_files, cache, args.visualize, args.rmsd_method
     )
 
-    # Get all threshold data and clustering at specified threshold
+    # Get all threshold data and determine optimal threshold if not provided
     linkage_matrix = linkage(squareform(distance_matrix), method="complete")
+    
+    # Determine threshold (either user-provided or auto-detected)
+    if args.threshold is None:
+        optimal_threshold = determine_optimal_threshold(distance_matrix, linkage_matrix)
+    else:
+        optimal_threshold = args.threshold
+        print(f"Using user-specified threshold: {optimal_threshold}")
+
     all_threshold_data = find_all_thresholds_and_clusters(
         distance_matrix, linkage_matrix, valid_files
     )
 
-    # Get clustering at the specified threshold
+    # Get clustering at the determined threshold
     threshold_clustering = get_clustering_at_threshold(
-        linkage_matrix, distance_matrix, valid_files, args.threshold
+        linkage_matrix, distance_matrix, valid_files, optimal_threshold
     )
 
     # Show visualizations if requested
@@ -885,14 +819,14 @@ def main():
                 linkage_matrix,
                 labels=[f"Structure {i}" for i in range(len(structures))],
                 ax=ax1,
-                color_threshold=args.threshold,
+                color_threshold=optimal_threshold,
             )
             ax1.axhline(
-                y=args.threshold,
+                y=optimal_threshold,
                 color="red",
                 linestyle="--",
                 linewidth=2,
-                label=f"Threshold = {args.threshold}",
+                label=f"Threshold = {optimal_threshold:.6f}",
             )
             ax1.set_title("Hierarchical Clustering Dendrogram")
             ax1.set_xlabel("Structure Index")
@@ -907,9 +841,9 @@ def main():
                 [len(entry["clusters"]) for entry in all_threshold_data]
             )
 
-            # Fit curve and find inflection points
-            x_smooth, y_smooth, inflection_x = find_inflection_points(
-                thresholds, cluster_counts, method=args.fit_method
+            # Fit exponential decay curve and find inflection points
+            x_smooth, y_smooth, inflection_x = fit_exponential_decay(
+                thresholds, cluster_counts
             )
 
             # Plot original data points
@@ -917,41 +851,23 @@ def main():
                 thresholds, cluster_counts, alpha=0.7, s=30, label="Data points"
             )
 
-            # Plot fitted curve
+            # Plot exponential decay curve
             if len(x_smooth) > 0:
-                curve_label = (
-                    "B-spline fit"
-                    if args.fit_method == "bspline"
-                    else "Exponential decay fit"
-                )
                 ax2.plot(
                     x_smooth,
                     y_smooth,
                     "b-",
                     linewidth=2,
                     alpha=0.8,
-                    label=curve_label,
+                    label="Exponential decay fit",
                 )
 
             # Mark inflection points
             if len(inflection_x) > 0:
                 # Get y values for inflection points from the fitted curve
                 if len(x_smooth) > 0:
-                    if args.fit_method == "exponential":
-                        # For exponential, we need to interpolate from the fitted curve
-                        inflection_y = np.interp(inflection_x, x_smooth, y_smooth)
-                    else:
-                        # For B-spline, use the spline directly
-                        spline = UnivariateSpline(
-                            thresholds, cluster_counts, s=len(thresholds) * 0.1, k=3
-                        )
-                        inflection_y = spline(inflection_x)
+                    inflection_y = np.interp(inflection_x, x_smooth, y_smooth)
 
-                    point_label = (
-                        "Inflection points"
-                        if args.fit_method == "bspline"
-                        else "Key points"
-                    )
                     ax2.scatter(
                         inflection_x,
                         inflection_y,
@@ -959,11 +875,11 @@ def main():
                         s=100,
                         marker="*",
                         zorder=6,
-                        label=f"{point_label} ({len(inflection_x)})",
+                        label=f"Key points ({len(inflection_x)})",
                     )
 
                     # Print inflection points
-                    print(f"\nFound {len(inflection_x)} {point_label.lower()}:")
+                    print(f"\nFound {len(inflection_x)} key points:")
                     for i, (x_inf, y_inf) in enumerate(zip(inflection_x, inflection_y)):
                         print(
                             f"  Point {i + 1}: threshold = {x_inf:.6f}, clusters = {y_inf:.1f}"
@@ -971,14 +887,14 @@ def main():
 
             # Mark selected threshold
             ax2.axvline(
-                x=args.threshold,
+                x=optimal_threshold,
                 color="red",
                 linestyle="--",
                 linewidth=2,
-                label=f"Threshold = {args.threshold}",
+                label=f"Threshold = {optimal_threshold:.6f}",
             )
             ax2.scatter(
-                [args.threshold],
+                [optimal_threshold],
                 [threshold_clustering["n_clusters"]],
                 color="red",
                 s=100,
@@ -988,12 +904,7 @@ def main():
 
             ax2.set_xlabel("nRMSD Threshold")
             ax2.set_ylabel("Number of Clusters")
-            fit_title = (
-                "B-spline Fit"
-                if args.fit_method == "bspline"
-                else "Exponential Decay Fit"
-            )
-            ax2.set_title(f"Threshold vs Cluster Count with {fit_title}")
+            ax2.set_title("Threshold vs Cluster Count with Exponential Decay Fit")
             ax2.grid(True, alpha=0.3)
             ax2.legend()
 
@@ -1024,8 +935,8 @@ def main():
         f"Cluster count range: {len(all_threshold_data[-1]['clusters'])} to {len(all_threshold_data[0]['clusters'])}"
     )
 
-    # Print clustering at specified threshold
-    print(f"\nClustering at threshold {args.threshold}:")
+    # Print clustering at determined threshold
+    print(f"\nClustering at threshold {optimal_threshold:.6f}:")
     print(f"  Number of clusters: {threshold_clustering['n_clusters']}")
     print(f"  Cluster sizes: {threshold_clustering['cluster_sizes']}")
     for i, cluster in enumerate(threshold_clustering["clusters"]):
@@ -1039,7 +950,8 @@ def main():
             "all_thresholds": all_threshold_data,
             "threshold_clustering": threshold_clustering,
             "parameters": {
-                "threshold": args.threshold,
+                "threshold": optimal_threshold,
+                "threshold_source": "user-specified" if args.threshold is not None else "auto-detected",
                 "rmsd_method": args.rmsd_method,
             },
         }
