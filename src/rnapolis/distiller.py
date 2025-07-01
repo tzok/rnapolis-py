@@ -606,27 +606,37 @@ def fit_exponential_decay(
         # y' = -a*b*exp(-b*x), which is most negative at x = 0
         # But we'll look for the point where the rate of change is fastest within our data range
 
-        # Calculate first derivative values
-        first_deriv_vals = -a_fit * b_fit * np.exp(-b_fit * x_smooth)
-
-        # Find the point of steepest decline (most negative first derivative)
-        steepest_idx = np.argmin(first_deriv_vals)
-        steepest_x = x_smooth[steepest_idx]
-
-        # For exponential decay, we can also identify the "knee" point
-        # where the curve transitions from steep to gradual decline
+        # For exponential decay, identify the "knee" point where the curve
+        # transitions from steep to gradual decline
         # This is often around x = 1/b in the exponential decay
         knee_x = 1.0 / b_fit if b_fit > 0 else None
 
+        # Also find the point where the second derivative is maximum
+        # (point of maximum curvature, excluding edges)
+        second_deriv_vals = a_fit * (b_fit ** 2) * np.exp(-b_fit * x_smooth)
+        
+        # Exclude edge points (first and last 10% of data)
+        edge_margin = int(0.1 * len(x_smooth))
+        if edge_margin < 1:
+            edge_margin = 1
+            
+        # Find maximum curvature point excluding edges
+        max_curvature_idx = np.argmax(second_deriv_vals[edge_margin:-edge_margin]) + edge_margin
+        max_curvature_x = x_smooth[max_curvature_idx]
+
         inflection_points = []
-        if knee_x is not None and x_sorted.min() <= knee_x <= x_sorted.max():
+        
+        # Add knee point if it's within data range and not at edges
+        if (knee_x is not None and 
+            x_sorted.min() + 0.1 * (x_sorted.max() - x_sorted.min()) <= knee_x <= 
+            x_sorted.max() - 0.1 * (x_sorted.max() - x_sorted.min())):
             inflection_points.append(knee_x)
 
-        # Also add the steepest decline point if it's different and within range
-        if x_sorted.min() <= steepest_x <= x_sorted.max() and (
-            not inflection_points or abs(steepest_x - inflection_points[0]) > 0.01
-        ):
-            inflection_points.append(steepest_x)
+        # Add maximum curvature point if it's meaningful and different from knee
+        if (x_sorted.min() + 0.1 * (x_sorted.max() - x_sorted.min()) <= max_curvature_x <= 
+            x_sorted.max() - 0.1 * (x_sorted.max() - x_sorted.min()) and
+            (not inflection_points or abs(max_curvature_x - inflection_points[0]) > 0.05 * (x_sorted.max() - x_sorted.min()))):
+            inflection_points.append(max_curvature_x)
 
         inflection_x = np.array(inflection_points)
 
@@ -695,9 +705,13 @@ def find_inflection_points_bspline(
     x_fine = np.linspace(x_sorted.min(), x_sorted.max(), 1000)
     second_deriv_vals = second_deriv(x_fine)
 
-    # Find sign changes (inflection points)
+    # Find sign changes (inflection points), excluding edge regions
+    edge_margin = int(0.1 * len(x_fine))
+    if edge_margin < 10:
+        edge_margin = 10
+        
     inflection_indices = []
-    for i in range(len(second_deriv_vals) - 1):
+    for i in range(edge_margin, len(second_deriv_vals) - edge_margin - 1):
         if second_deriv_vals[i] * second_deriv_vals[i + 1] < 0:
             # Sign change detected, refine the location
             x_left = x_fine[i]
