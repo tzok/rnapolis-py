@@ -122,12 +122,13 @@ class NRMSDCache:
         else:
             print(f"No existing cache file found at {self.cache_file}")
 
-    def save_cache(self):
+    def save_cache(self, silent: bool = False):
         """Save cache to disk."""
         try:
             with open(self.cache_file, "w") as f:
                 json.dump(self.cache, f, indent=2)
-            print(f"Saved {len(self.cache)} cached values to {self.cache_file}")
+            if not silent:
+                print(f"Saved {len(self.cache)} cached values to {self.cache_file}")
         except Exception as e:
             print(
                 f"Warning: Could not save cache file {self.cache_file}: {e}",
@@ -145,9 +146,9 @@ class NRMSDCache:
         self.cache[key] = value
         self.computation_count += 1
 
-        # Save periodically
+        # Save periodically (silently to avoid disrupting progress bar)
         if self.computation_count % self.save_interval == 0:
-            self.save_cache()
+            self.save_cache(silent=True)
 
 
 def validate_input_files(files: List[Path]) -> List[Path]:
