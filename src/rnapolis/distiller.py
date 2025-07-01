@@ -516,10 +516,12 @@ def get_clustering_at_threshold(
     return result
 
 
-def find_inflection_points(x: np.ndarray, y: np.ndarray, smoothing: float = None) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+def find_inflection_points(
+    x: np.ndarray, y: np.ndarray, smoothing: float = None
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Fit a B-spline to the data and find inflection points.
-    
+
     Parameters:
     -----------
     x : np.ndarray
@@ -528,46 +530,46 @@ def find_inflection_points(x: np.ndarray, y: np.ndarray, smoothing: float = None
         Y coordinates (cluster counts)
     smoothing : float, optional
         Smoothing parameter for spline fitting
-        
+
     Returns:
     --------
     Tuple[np.ndarray, np.ndarray, np.ndarray]
         Tuple of (x_smooth, y_smooth, inflection_x) where:
         - x_smooth: smooth x values for plotting the spline
-        - y_smooth: smooth y values for plotting the spline  
+        - y_smooth: smooth y values for plotting the spline
         - inflection_x: x coordinates of inflection points
     """
     if len(x) < 4:
         # Not enough points for spline fitting
         return x, y, np.array([])
-    
+
     # Sort data by x values
     sort_idx = np.argsort(x)
     x_sorted = x[sort_idx]
     y_sorted = y[sort_idx]
-    
+
     # Fit B-spline with automatic smoothing if not specified
     if smoothing is None:
         # Use a reasonable default smoothing based on data size
         smoothing = len(x) * 0.1
-    
+
     try:
         spline = UnivariateSpline(x_sorted, y_sorted, s=smoothing, k=3)
     except Exception:
         # Fallback to linear interpolation if spline fails
         return x, y, np.array([])
-    
+
     # Generate smooth curve for plotting
     x_smooth = np.linspace(x_sorted.min(), x_sorted.max(), 200)
     y_smooth = spline(x_smooth)
-    
+
     # Find inflection points by looking for sign changes in second derivative
     second_deriv = spline.derivative(n=2)
-    
+
     # Evaluate second derivative on a fine grid
     x_fine = np.linspace(x_sorted.min(), x_sorted.max(), 1000)
     second_deriv_vals = second_deriv(x_fine)
-    
+
     # Find sign changes (inflection points)
     inflection_indices = []
     for i in range(len(second_deriv_vals) - 1):
@@ -575,7 +577,7 @@ def find_inflection_points(x: np.ndarray, y: np.ndarray, smoothing: float = None
             # Sign change detected, refine the location
             x_left = x_fine[i]
             x_right = x_fine[i + 1]
-            
+
             # Use bisection to find more precise inflection point
             for _ in range(10):  # 10 iterations should be enough
                 x_mid = (x_left + x_right) / 2
@@ -583,11 +585,11 @@ def find_inflection_points(x: np.ndarray, y: np.ndarray, smoothing: float = None
                     x_right = x_mid
                 else:
                     x_left = x_mid
-            
+
             inflection_indices.append((x_left + x_right) / 2)
-    
+
     inflection_x = np.array(inflection_indices)
-    
+
     return x_smooth, y_smooth, inflection_x
 
 
@@ -720,33 +722,59 @@ def main():
             ax1.legend()
 
             # Plot threshold vs cluster count scatter plot with B-spline and inflection points
-            thresholds = np.array([entry["nrmsd_threshold"] for entry in all_threshold_data])
-            cluster_counts = np.array([len(entry["clusters"]) for entry in all_threshold_data])
+            thresholds = np.array(
+                [entry["nrmsd_threshold"] for entry in all_threshold_data]
+            )
+            cluster_counts = np.array(
+                [len(entry["clusters"]) for entry in all_threshold_data]
+            )
 
             # Fit B-spline and find inflection points
-            x_smooth, y_smooth, inflection_x = find_inflection_points(thresholds, cluster_counts)
-            
+            x_smooth, y_smooth, inflection_x = find_inflection_points(
+                thresholds, cluster_counts
+            )
+
             # Plot original data points
-            ax2.scatter(thresholds, cluster_counts, alpha=0.7, s=30, label="Data points")
-            
+            ax2.scatter(
+                thresholds, cluster_counts, alpha=0.7, s=30, label="Data points"
+            )
+
             # Plot B-spline curve
             if len(x_smooth) > 0:
-                ax2.plot(x_smooth, y_smooth, 'b-', linewidth=2, alpha=0.8, label="B-spline fit")
-            
+                ax2.plot(
+                    x_smooth,
+                    y_smooth,
+                    "b-",
+                    linewidth=2,
+                    alpha=0.8,
+                    label="B-spline fit",
+                )
+
             # Mark inflection points
             if len(inflection_x) > 0:
                 # Get y values for inflection points from the spline
                 if len(x_smooth) > 0:
-                    spline = UnivariateSpline(thresholds, cluster_counts, s=len(thresholds) * 0.1, k=3)
+                    spline = UnivariateSpline(
+                        thresholds, cluster_counts, s=len(thresholds) * 0.1, k=3
+                    )
                     inflection_y = spline(inflection_x)
-                    ax2.scatter(inflection_x, inflection_y, color='orange', s=100, marker='*', 
-                              zorder=6, label=f"Inflection points ({len(inflection_x)})")
-                    
+                    ax2.scatter(
+                        inflection_x,
+                        inflection_y,
+                        color="orange",
+                        s=100,
+                        marker="*",
+                        zorder=6,
+                        label=f"Inflection points ({len(inflection_x)})",
+                    )
+
                     # Print inflection points
                     print(f"\nFound {len(inflection_x)} inflection points:")
                     for i, (x_inf, y_inf) in enumerate(zip(inflection_x, inflection_y)):
-                        print(f"  Inflection point {i+1}: threshold = {x_inf:.6f}, clusters = {y_inf:.1f}")
-            
+                        print(
+                            f"  Inflection point {i + 1}: threshold = {x_inf:.6f}, clusters = {y_inf:.1f}"
+                        )
+
             # Mark selected threshold
             ax2.axvline(
                 x=args.threshold,
@@ -763,7 +791,7 @@ def main():
                 zorder=5,
                 label=f"Selected ({threshold_clustering['n_clusters']} clusters)",
             )
-            
+
             ax2.set_xlabel("nRMSD Threshold")
             ax2.set_ylabel("Number of Clusters")
             ax2.set_title("Threshold vs Cluster Count with B-spline Fit")
