@@ -528,7 +528,7 @@ def get_clustering_at_threshold(
 def exponential_decay(x: np.ndarray, a: float, b: float, c: float) -> np.ndarray:
     """
     Exponential decay function: y = a * exp(-b * x) + c
-    
+
     Parameters:
     -----------
     x : np.ndarray
@@ -539,7 +539,7 @@ def exponential_decay(x: np.ndarray, a: float, b: float, c: float) -> np.ndarray
         Decay rate parameter
     c : float
         Offset parameter
-        
+
     Returns:
     --------
     np.ndarray
@@ -548,17 +548,19 @@ def exponential_decay(x: np.ndarray, a: float, b: float, c: float) -> np.ndarray
     return a * np.exp(-b * x) + c
 
 
-def fit_exponential_decay(x: np.ndarray, y: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+def fit_exponential_decay(
+    x: np.ndarray, y: np.ndarray
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Fit exponential decay function to data and find inflection points.
-    
+
     Parameters:
     -----------
     x : np.ndarray
         X coordinates (thresholds)
     y : np.ndarray
         Y coordinates (cluster counts)
-        
+
     Returns:
     --------
     Tuple[np.ndarray, np.ndarray, np.ndarray]
@@ -569,33 +571,33 @@ def fit_exponential_decay(x: np.ndarray, y: np.ndarray) -> Tuple[np.ndarray, np.
     """
     if len(x) < 4:
         return x, y, np.array([])
-    
+
     # Sort data by x values
     sort_idx = np.argsort(x)
     x_sorted = x[sort_idx]
     y_sorted = y[sort_idx]
-    
+
     try:
         # Initial parameter guess
         a_guess = y_sorted.max() - y_sorted.min()
         b_guess = 1.0
         c_guess = y_sorted.min()
-        
+
         # Fit exponential decay
         popt, _ = curve_fit(
-            exponential_decay, 
-            x_sorted, 
-            y_sorted, 
+            exponential_decay,
+            x_sorted,
+            y_sorted,
             p0=[a_guess, b_guess, c_guess],
-            maxfev=5000
+            maxfev=5000,
         )
-        
+
         a_fit, b_fit, c_fit = popt
-        
+
         # Generate smooth curve for plotting
         x_smooth = np.linspace(x_sorted.min(), x_sorted.max(), 200)
         y_smooth = exponential_decay(x_smooth, a_fit, b_fit, c_fit)
-        
+
         # For exponential decay y = a*exp(-b*x) + c, the second derivative is:
         # y'' = a*b^2*exp(-b*x)
         # Since a > 0 and b > 0 for decay, y'' > 0 always, so no inflection points
@@ -603,34 +605,37 @@ def fit_exponential_decay(x: np.ndarray, y: np.ndarray) -> Tuple[np.ndarray, np.
         # This occurs where the first derivative is most negative
         # y' = -a*b*exp(-b*x), which is most negative at x = 0
         # But we'll look for the point where the rate of change is fastest within our data range
-        
+
         # Calculate first derivative values
         first_deriv_vals = -a_fit * b_fit * np.exp(-b_fit * x_smooth)
-        
+
         # Find the point of steepest decline (most negative first derivative)
         steepest_idx = np.argmin(first_deriv_vals)
         steepest_x = x_smooth[steepest_idx]
-        
+
         # For exponential decay, we can also identify the "knee" point
         # where the curve transitions from steep to gradual decline
         # This is often around x = 1/b in the exponential decay
         knee_x = 1.0 / b_fit if b_fit > 0 else None
-        
+
         inflection_points = []
         if knee_x is not None and x_sorted.min() <= knee_x <= x_sorted.max():
             inflection_points.append(knee_x)
-        
+
         # Also add the steepest decline point if it's different and within range
-        if (x_sorted.min() <= steepest_x <= x_sorted.max() and 
-            (not inflection_points or abs(steepest_x - inflection_points[0]) > 0.01)):
+        if x_sorted.min() <= steepest_x <= x_sorted.max() and (
+            not inflection_points or abs(steepest_x - inflection_points[0]) > 0.01
+        ):
             inflection_points.append(steepest_x)
-        
+
         inflection_x = np.array(inflection_points)
-        
-        print(f"Exponential decay fit: y = {a_fit:.3f} * exp(-{b_fit:.3f} * x) + {c_fit:.3f}")
-        
+
+        print(
+            f"Exponential decay fit: y = {a_fit:.3f} * exp(-{b_fit:.3f} * x) + {c_fit:.3f}"
+        )
+
         return x_smooth, y_smooth, inflection_x
-        
+
     except Exception as e:
         print(f"Warning: Exponential decay fitting failed: {e}")
         return x, y, np.array([])
@@ -892,7 +897,11 @@ def main():
 
             # Plot fitted curve
             if len(x_smooth) > 0:
-                curve_label = "B-spline fit" if args.fit_method == "bspline" else "Exponential decay fit"
+                curve_label = (
+                    "B-spline fit"
+                    if args.fit_method == "bspline"
+                    else "Exponential decay fit"
+                )
                 ax2.plot(
                     x_smooth,
                     y_smooth,
@@ -915,8 +924,12 @@ def main():
                             thresholds, cluster_counts, s=len(thresholds) * 0.1, k=3
                         )
                         inflection_y = spline(inflection_x)
-                    
-                    point_label = "Inflection points" if args.fit_method == "bspline" else "Key points"
+
+                    point_label = (
+                        "Inflection points"
+                        if args.fit_method == "bspline"
+                        else "Key points"
+                    )
                     ax2.scatter(
                         inflection_x,
                         inflection_y,
@@ -953,7 +966,11 @@ def main():
 
             ax2.set_xlabel("nRMSD Threshold")
             ax2.set_ylabel("Number of Clusters")
-            fit_title = "B-spline Fit" if args.fit_method == "bspline" else "Exponential Decay Fit"
+            fit_title = (
+                "B-spline Fit"
+                if args.fit_method == "bspline"
+                else "Exponential Decay Fit"
+            )
             ax2.set_title(f"Threshold vs Cluster Count with {fit_title}")
             ax2.grid(True, alpha=0.3)
             ax2.legend()
