@@ -1,11 +1,13 @@
 import argparse
+import hashlib
 import itertools
 import json
+import os
 import sys
 import time
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 from scipy.cluster.hierarchy import dendrogram, fcluster, linkage
@@ -59,7 +61,85 @@ def parse_arguments():
         help="nRMSD threshold for clustering (default: 0.1)",
     )
 
+    parser.add_argument(
+        "--cache-file",
+        type=str,
+        default="nrmsd_cache.json",
+        help="Cache file for storing computed nRMSD values (default: nrmsd_cache.json)",
+    )
+
+    parser.add_argument(
+        "--cache-save-interval",
+        type=int,
+        default=100,
+        help="Save cache to disk every N computations (default: 100)",
+    )
+
     return parser.parse_args()
+
+
+class NRMSDCache:
+    """Cache for storing computed nRMSD values with file metadata."""
+    
+    def __init__(self, cache_file: str, save_interval: int = 100):
+        self.cache_file = cache_file
+        self.save_interval = save_interval
+        self.cache: Dict[str, float] = {}
+        self.computation_count = 0
+        self.load_cache()
+    
+    def _get_file_key(self, file_path: Path) -> str:
+        """Generate a unique key for a file based on path and modification time."""
+        stat = file_path.stat()
+        return f"{file_path.absolute()}:{stat.st_mtime}:{stat.st_size}"
+    
+    def _get_pair_key(self, file1: Path, file2: Path, rmsd_method: str) -> str:
+        """Generate a unique key for a file pair and method."""
+        key1 = self._get_file_key(file1)
+        key2 = self._get_file_key(file2)
+        # Ensure consistent ordering
+        if key1 > key2:
+            key1, key2 = key2, key1
+        combined = f"{key1}|{key2}|{rmsd_method}"
+        # Use hash to keep keys manageable
+        return hashlib.md5(combined.encode()).hexdigest()
+    
+    def load_cache(self):
+        """Load cache from disk if it exists."""
+        if os.path.exists(self.cache_file):
+            try:
+                with open(self.cache_file, 'r') as f:
+                    self.cache = json.load(f)
+                print(f"Loaded {len(self.cache)} cached nRMSD values from {self.cache_file}")
+            except Exception as e:
+                print(f"Warning: Could not load cache file {self.cache_file}: {e}", file=sys.stderr)
+                self.cache = {}
+        else:
+            print(f"No existing cache file found at {self.cache_file}")
+    
+    def save_cache(self):
+        """Save cache to disk."""
+        try:
+            with open(self.cache_file, 'w') as f:
+                json.dump(self.cache, f, indent=2)
+            print(f"Saved {len(self.cache)} cached values to {self.cache_file}")
+        except Exception as e:
+            print(f"Warning: Could not save cache file {self.cache_file}: {e}", file=sys.stderr)
+    
+    def get(self, file1: Path, file2: Path, rmsd_method: str) -> Optional[float]:
+        """Get cached nRMSD value if available."""
+        key = self._get_pair_key(file1, file2, rmsd_method)
+        return self.cache.get(key)
+    
+    def set(self, file1: Path, file2: Path, rmsd_method: str, value: float):
+        """Store nRMSD value in cache."""
+        key = self._get_pair_key(file1, file2, rmsd_method)
+        self.cache[key] = value
+        self.computation_count += 1
+        
+        # Save periodically
+        if self.computation_count % self.save_interval == 0:
+            self.save_cache()
 
 
 def validate_input_files(files: List[Path]) -> List[Path]:
@@ -242,6 +322,8 @@ def find_all_thresholds_and_clusters(
 
 def find_structure_clusters(
     structures: List[Structure],
+    file_paths: List[Path],
+    cache: NRMSDCache,
     visualize: bool = False,
     rmsd_method: str = "quaternions",
 ) -> np.ndarray:
@@ -294,43 +376,62 @@ def find_structure_clusters(
 
     distance_matrix = np.zeros((n_structures, n_structures))
 
-    # Prepare all pairs
-    all_pairs = [
-        (i, j, nucleotide_lists[i], nucleotide_lists[j])
-        for i, j in itertools.combinations(range(n_structures), 2)
-    ]
+    # Prepare all pairs, checking cache first
+    cached_pairs = []
+    compute_pairs = []
+    
+    for i, j in itertools.combinations(range(n_structures), 2):
+        cached_value = cache.get(file_paths[i], file_paths[j], rmsd_method)
+        if cached_value is not None:
+            cached_pairs.append((i, j, cached_value))
+        else:
+            compute_pairs.append((i, j, nucleotide_lists[i], nucleotide_lists[j]))
+    
+    print(f"Found {len(cached_pairs)} cached values, computing {len(compute_pairs)} new values")
+    
+    # Fill distance matrix with cached values
+    for i, j, nrmsd_value in cached_pairs:
+        distance_matrix[i, j] = nrmsd_value
+        distance_matrix[j, i] = nrmsd_value
 
-    # Process pairs with progress bar and timing
-    start_time = time.time()
-    with ProcessPoolExecutor() as executor:
-        futures_dict = {
-            executor.submit(nrmsd_func, nucleotides_i, nucleotides_j): (i, j)
-            for i, j, nucleotides_i, nucleotides_j in all_pairs
-        }
-        results = []
-        for future in tqdm(
-            futures_dict,
-            total=len(futures_dict),
-            desc="Computing nRMSD",
-            unit="pair",
-        ):
-            i, j = futures_dict[future]
-            nrmsd_value = future.result()
-            results.append((i, j, nrmsd_value))
+    # Process remaining pairs with progress bar and timing
+    if compute_pairs:
+        start_time = time.time()
+        with ProcessPoolExecutor() as executor:
+            futures_dict = {
+                executor.submit(nrmsd_func, nucleotides_i, nucleotides_j): (i, j)
+                for i, j, nucleotides_i, nucleotides_j in compute_pairs
+            }
+            results = []
+            for future in tqdm(
+                futures_dict,
+                total=len(futures_dict),
+                desc="Computing nRMSD",
+                unit="pair",
+            ):
+                i, j = futures_dict[future]
+                nrmsd_value = future.result()
+                results.append((i, j, nrmsd_value))
+                
+                # Cache the computed value
+                cache.set(file_paths[i], file_paths[j], rmsd_method, nrmsd_value)
 
-    end_time = time.time()
-    computation_time = end_time - start_time
+        end_time = time.time()
+        computation_time = end_time - start_time
 
-    print(f"RMSD computation completed in {computation_time:.2f} seconds")
-    if rmsd_method == "validate":
-        print(
-            "Note: Validation mode tests all methods, so timing includes overhead from multiple calculations"
-        )
+        print(f"RMSD computation completed in {computation_time:.2f} seconds")
+        if rmsd_method == "validate":
+            print(
+                "Note: Validation mode tests all methods, so timing includes overhead from multiple calculations"
+            )
 
-    # Fill the distance matrix
-    for i, j, nrmsd in results:
-        distance_matrix[i, j] = nrmsd
-        distance_matrix[j, i] = nrmsd
+        # Fill the distance matrix with computed values
+        for i, j, nrmsd in results:
+            distance_matrix[i, j] = nrmsd
+            distance_matrix[j, i] = nrmsd
+    
+    # Save cache after all computations
+    cache.save_cache()
 
     # Convert to condensed distance matrix for scipy
     condensed_distances = squareform(distance_matrix)
@@ -483,10 +584,14 @@ def main():
     print("\nValidating nucleotide counts...")
     validate_nucleotide_counts(structures, valid_files)
 
+    # Initialize cache
+    print(f"\nInitializing nRMSD cache...")
+    cache = NRMSDCache(args.cache_file, args.cache_save_interval)
+
     # Compute distance matrix
     print("\nComputing distance matrix...")
     distance_matrix = find_structure_clusters(
-        structures, args.visualize, args.rmsd_method
+        structures, valid_files, cache, args.visualize, args.rmsd_method
     )
 
     # Get all threshold data and clustering at specified threshold
