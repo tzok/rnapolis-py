@@ -394,9 +394,7 @@ def get_clustering_at_threshold(
 
     for cluster_indices, medoid_idx in zip(clusters.values(), medoids):
         representative = str(file_paths[medoid_idx])
-        members = [
-            str(file_paths[idx]) for idx in cluster_indices if idx != medoid_idx
-        ]
+        members = [str(file_paths[idx]) for idx in cluster_indices if idx != medoid_idx]
 
         result["clusters"].append(
             {"representative": representative, "members": members}
@@ -517,8 +515,13 @@ def main():
                 ax=ax1,
                 color_threshold=args.threshold,
             )
-            ax1.axhline(y=args.threshold, color='red', linestyle='--', linewidth=2, 
-                       label=f'Threshold = {args.threshold}')
+            ax1.axhline(
+                y=args.threshold,
+                color="red",
+                linestyle="--",
+                linewidth=2,
+                label=f"Threshold = {args.threshold}",
+            )
             ax1.set_title("Hierarchical Clustering Dendrogram")
             ax1.set_xlabel("Structure Index")
             ax1.set_ylabel("nRMSD Distance")
@@ -529,10 +532,21 @@ def main():
             cluster_counts = [len(entry["clusters"]) for entry in all_threshold_data]
 
             ax2.scatter(thresholds, cluster_counts, alpha=0.7, s=30)
-            ax2.axvline(x=args.threshold, color='red', linestyle='--', linewidth=2,
-                       label=f'Threshold = {args.threshold}')
-            ax2.scatter([args.threshold], [threshold_clustering["n_clusters"]], 
-                       color='red', s=100, zorder=5, label=f'Selected ({threshold_clustering["n_clusters"]} clusters)')
+            ax2.axvline(
+                x=args.threshold,
+                color="red",
+                linestyle="--",
+                linewidth=2,
+                label=f"Threshold = {args.threshold}",
+            )
+            ax2.scatter(
+                [args.threshold],
+                [threshold_clustering["n_clusters"]],
+                color="red",
+                s=100,
+                zorder=5,
+                label=f"Selected ({threshold_clustering['n_clusters']} clusters)",
+            )
             ax2.set_xlabel("nRMSD Threshold")
             ax2.set_ylabel("Number of Clusters")
             ax2.set_title("Threshold vs Cluster Count")
@@ -570,8 +584,10 @@ def main():
     print(f"\nClustering at threshold {args.threshold}:")
     print(f"  Number of clusters: {threshold_clustering['n_clusters']}")
     print(f"  Cluster sizes: {threshold_clustering['cluster_sizes']}")
-    for i, cluster in enumerate(threshold_clustering['clusters']):
-        print(f"  Cluster {i+1}: {cluster['representative']} + {len(cluster['members'])} members")
+    for i, cluster in enumerate(threshold_clustering["clusters"]):
+        print(
+            f"  Cluster {i + 1}: {cluster['representative']} + {len(cluster['members'])} members"
+        )
 
     # Save comprehensive JSON with all thresholds and threshold clustering
     if args.output_json:
