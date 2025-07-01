@@ -2,6 +2,7 @@ import argparse
 import itertools
 import json
 import sys
+import time
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 from typing import List, Optional, Tuple
@@ -299,7 +300,8 @@ def find_structure_clusters(
         for i, j in itertools.combinations(range(n_structures), 2)
     ]
 
-    # Process pairs with progress bar
+    # Process pairs with progress bar and timing
+    start_time = time.time()
     with ProcessPoolExecutor() as executor:
         futures_dict = {
             executor.submit(nrmsd_func, nucleotides_i, nucleotides_j): (i, j)
@@ -315,6 +317,13 @@ def find_structure_clusters(
             i, j = futures_dict[future]
             nrmsd_value = future.result()
             results.append((i, j, nrmsd_value))
+    
+    end_time = time.time()
+    computation_time = end_time - start_time
+    
+    print(f"RMSD computation completed in {computation_time:.2f} seconds")
+    if rmsd_method == "validate":
+        print("Note: Validation mode tests all methods, so timing includes overhead from multiple calculations")
 
     # Fill the distance matrix
     for i, j, nrmsd in results:
