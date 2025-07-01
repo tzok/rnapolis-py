@@ -613,29 +613,37 @@ def fit_exponential_decay(
 
         # Also find the point where the second derivative is maximum
         # (point of maximum curvature, excluding edges)
-        second_deriv_vals = a_fit * (b_fit ** 2) * np.exp(-b_fit * x_smooth)
-        
+        second_deriv_vals = a_fit * (b_fit**2) * np.exp(-b_fit * x_smooth)
+
         # Exclude edge points (first and last 10% of data)
         edge_margin = int(0.1 * len(x_smooth))
         if edge_margin < 1:
             edge_margin = 1
-            
+
         # Find maximum curvature point excluding edges
-        max_curvature_idx = np.argmax(second_deriv_vals[edge_margin:-edge_margin]) + edge_margin
+        max_curvature_idx = (
+            np.argmax(second_deriv_vals[edge_margin:-edge_margin]) + edge_margin
+        )
         max_curvature_x = x_smooth[max_curvature_idx]
 
         inflection_points = []
-        
+
         # Add knee point if it's within data range and not at edges
-        if (knee_x is not None and 
-            x_sorted.min() + 0.1 * (x_sorted.max() - x_sorted.min()) <= knee_x <= 
-            x_sorted.max() - 0.1 * (x_sorted.max() - x_sorted.min())):
+        if knee_x is not None and x_sorted.min() + 0.1 * (
+            x_sorted.max() - x_sorted.min()
+        ) <= knee_x <= x_sorted.max() - 0.1 * (x_sorted.max() - x_sorted.min()):
             inflection_points.append(knee_x)
 
         # Add maximum curvature point if it's meaningful and different from knee
-        if (x_sorted.min() + 0.1 * (x_sorted.max() - x_sorted.min()) <= max_curvature_x <= 
-            x_sorted.max() - 0.1 * (x_sorted.max() - x_sorted.min()) and
-            (not inflection_points or abs(max_curvature_x - inflection_points[0]) > 0.05 * (x_sorted.max() - x_sorted.min()))):
+        if x_sorted.min() + 0.1 * (
+            x_sorted.max() - x_sorted.min()
+        ) <= max_curvature_x <= x_sorted.max() - 0.1 * (
+            x_sorted.max() - x_sorted.min()
+        ) and (
+            not inflection_points
+            or abs(max_curvature_x - inflection_points[0])
+            > 0.05 * (x_sorted.max() - x_sorted.min())
+        ):
             inflection_points.append(max_curvature_x)
 
         inflection_x = np.array(inflection_points)
@@ -709,7 +717,7 @@ def find_inflection_points_bspline(
     edge_margin = int(0.1 * len(x_fine))
     if edge_margin < 10:
         edge_margin = 10
-        
+
     inflection_indices = []
     for i in range(edge_margin, len(second_deriv_vals) - edge_margin - 1):
         if second_deriv_vals[i] * second_deriv_vals[i + 1] < 0:
