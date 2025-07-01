@@ -693,7 +693,9 @@ def determine_optimal_threshold(
     else:
         # Fallback to a reasonable default if no inflection points found
         fallback_threshold = 0.1
-        print(f"No inflection points found, using fallback threshold: {fallback_threshold}")
+        print(
+            f"No inflection points found, using fallback threshold: {fallback_threshold}"
+        )
         return fallback_threshold
 
 
@@ -789,7 +791,7 @@ def main():
 
     # Get all threshold data and determine optimal threshold if not provided
     linkage_matrix = linkage(squareform(distance_matrix), method="complete")
-    
+
     # Determine threshold (either user-provided or auto-detected)
     if args.threshold is None:
         optimal_threshold = determine_optimal_threshold(distance_matrix, linkage_matrix)
@@ -951,7 +953,9 @@ def main():
             "threshold_clustering": threshold_clustering,
             "parameters": {
                 "threshold": optimal_threshold,
-                "threshold_source": "user-specified" if args.threshold is not None else "auto-detected",
+                "threshold_source": "user-specified"
+                if args.threshold is not None
+                else "auto-detected",
                 "rmsd_method": args.rmsd_method,
             },
         }
