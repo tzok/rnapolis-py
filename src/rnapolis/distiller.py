@@ -7,19 +7,16 @@ from pathlib import Path
 from typing import List, Optional, Tuple
 
 import numpy as np
-import pandas as pd
 from scipy.cluster.hierarchy import dendrogram, fcluster, linkage
 from scipy.spatial.distance import squareform
-from sklearn.metrics import silhouette_score
 from tqdm import tqdm
 
-from rnapolis.parser_v2 import parse_cif_atoms, parse_pdb_atoms, write_cif
+from rnapolis.parser_v2 import parse_cif_atoms, parse_pdb_atoms
 from rnapolis.tertiary_v2 import (
-    Residue,
     Structure,
+    nrmsd_qcp_residues,
     nrmsd_quaternions_residues,
     nrmsd_svd_residues,
-    nrmsd_qcp_residues,
     nrmsd_validate_residues,
 )
 
