@@ -12,6 +12,7 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 from scipy.cluster.hierarchy import dendrogram, fcluster, linkage
 from scipy.interpolate import UnivariateSpline
+from scipy.optimize import curve_fit
 from scipy.spatial.distance import squareform
 from tqdm import tqdm
 
@@ -74,6 +75,14 @@ def parse_arguments():
         type=int,
         default=100,
         help="Save cache to disk every N computations (default: 100)",
+    )
+
+    parser.add_argument(
+        "--fit-method",
+        type=str,
+        choices=["bspline", "exponential"],
+        default="bspline",
+        help="Curve fitting method for threshold vs cluster count (default: bspline)",
     )
 
     return parser.parse_args()
@@ -516,7 +525,118 @@ def get_clustering_at_threshold(
     return result
 
 
-def find_inflection_points(
+def exponential_decay(x: np.ndarray, a: float, b: float, c: float) -> np.ndarray:
+    """
+    Exponential decay function: y = a * exp(-b * x) + c
+    
+    Parameters:
+    -----------
+    x : np.ndarray
+        Input values
+    a : float
+        Amplitude parameter
+    b : float
+        Decay rate parameter
+    c : float
+        Offset parameter
+        
+    Returns:
+    --------
+    np.ndarray
+        Function values
+    """
+    return a * np.exp(-b * x) + c
+
+
+def fit_exponential_decay(x: np.ndarray, y: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Fit exponential decay function to data and find inflection points.
+    
+    Parameters:
+    -----------
+    x : np.ndarray
+        X coordinates (thresholds)
+    y : np.ndarray
+        Y coordinates (cluster counts)
+        
+    Returns:
+    --------
+    Tuple[np.ndarray, np.ndarray, np.ndarray]
+        Tuple of (x_smooth, y_smooth, inflection_x) where:
+        - x_smooth: smooth x values for plotting the fitted curve
+        - y_smooth: smooth y values for plotting the fitted curve
+        - inflection_x: x coordinates of inflection points
+    """
+    if len(x) < 4:
+        return x, y, np.array([])
+    
+    # Sort data by x values
+    sort_idx = np.argsort(x)
+    x_sorted = x[sort_idx]
+    y_sorted = y[sort_idx]
+    
+    try:
+        # Initial parameter guess
+        a_guess = y_sorted.max() - y_sorted.min()
+        b_guess = 1.0
+        c_guess = y_sorted.min()
+        
+        # Fit exponential decay
+        popt, _ = curve_fit(
+            exponential_decay, 
+            x_sorted, 
+            y_sorted, 
+            p0=[a_guess, b_guess, c_guess],
+            maxfev=5000
+        )
+        
+        a_fit, b_fit, c_fit = popt
+        
+        # Generate smooth curve for plotting
+        x_smooth = np.linspace(x_sorted.min(), x_sorted.max(), 200)
+        y_smooth = exponential_decay(x_smooth, a_fit, b_fit, c_fit)
+        
+        # For exponential decay y = a*exp(-b*x) + c, the second derivative is:
+        # y'' = a*b^2*exp(-b*x)
+        # Since a > 0 and b > 0 for decay, y'' > 0 always, so no inflection points
+        # However, we can find the point of maximum curvature (steepest decline)
+        # This occurs where the first derivative is most negative
+        # y' = -a*b*exp(-b*x), which is most negative at x = 0
+        # But we'll look for the point where the rate of change is fastest within our data range
+        
+        # Calculate first derivative values
+        first_deriv_vals = -a_fit * b_fit * np.exp(-b_fit * x_smooth)
+        
+        # Find the point of steepest decline (most negative first derivative)
+        steepest_idx = np.argmin(first_deriv_vals)
+        steepest_x = x_smooth[steepest_idx]
+        
+        # For exponential decay, we can also identify the "knee" point
+        # where the curve transitions from steep to gradual decline
+        # This is often around x = 1/b in the exponential decay
+        knee_x = 1.0 / b_fit if b_fit > 0 else None
+        
+        inflection_points = []
+        if knee_x is not None and x_sorted.min() <= knee_x <= x_sorted.max():
+            inflection_points.append(knee_x)
+        
+        # Also add the steepest decline point if it's different and within range
+        if (x_sorted.min() <= steepest_x <= x_sorted.max() and 
+            (not inflection_points or abs(steepest_x - inflection_points[0]) > 0.01)):
+            inflection_points.append(steepest_x)
+        
+        inflection_x = np.array(inflection_points)
+        
+        print(f"Exponential decay fit: y = {a_fit:.3f} * exp(-{b_fit:.3f} * x) + {c_fit:.3f}")
+        
+        return x_smooth, y_smooth, inflection_x
+        
+    except Exception as e:
+        print(f"Warning: Exponential decay fitting failed: {e}")
+        return x, y, np.array([])
+
+
+def find_inflection_points_bspline(
     x: np.ndarray, y: np.ndarray, smoothing: float = None
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
@@ -591,6 +711,37 @@ def find_inflection_points(
     inflection_x = np.array(inflection_indices)
 
     return x_smooth, y_smooth, inflection_x
+
+
+def find_inflection_points(
+    x: np.ndarray, y: np.ndarray, method: str = "bspline", smoothing: float = None
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Fit a curve to the data and find inflection points using the specified method.
+
+    Parameters:
+    -----------
+    x : np.ndarray
+        X coordinates (thresholds)
+    y : np.ndarray
+        Y coordinates (cluster counts)
+    method : str
+        Fitting method ("bspline" or "exponential")
+    smoothing : float, optional
+        Smoothing parameter for spline fitting (only used for bspline method)
+
+    Returns:
+    --------
+    Tuple[np.ndarray, np.ndarray, np.ndarray]
+        Tuple of (x_smooth, y_smooth, inflection_x) where:
+        - x_smooth: smooth x values for plotting the curve
+        - y_smooth: smooth y values for plotting the curve
+        - inflection_x: x coordinates of inflection points
+    """
+    if method == "exponential":
+        return fit_exponential_decay(x, y)
+    else:  # bspline
+        return find_inflection_points_bspline(x, y, smoothing)
 
 
 def find_cluster_medoids(
@@ -729,9 +880,9 @@ def main():
                 [len(entry["clusters"]) for entry in all_threshold_data]
             )
 
-            # Fit B-spline and find inflection points
+            # Fit curve and find inflection points
             x_smooth, y_smooth, inflection_x = find_inflection_points(
-                thresholds, cluster_counts
+                thresholds, cluster_counts, method=args.fit_method
             )
 
             # Plot original data points
@@ -739,25 +890,33 @@ def main():
                 thresholds, cluster_counts, alpha=0.7, s=30, label="Data points"
             )
 
-            # Plot B-spline curve
+            # Plot fitted curve
             if len(x_smooth) > 0:
+                curve_label = "B-spline fit" if args.fit_method == "bspline" else "Exponential decay fit"
                 ax2.plot(
                     x_smooth,
                     y_smooth,
                     "b-",
                     linewidth=2,
                     alpha=0.8,
-                    label="B-spline fit",
+                    label=curve_label,
                 )
 
             # Mark inflection points
             if len(inflection_x) > 0:
-                # Get y values for inflection points from the spline
+                # Get y values for inflection points from the fitted curve
                 if len(x_smooth) > 0:
-                    spline = UnivariateSpline(
-                        thresholds, cluster_counts, s=len(thresholds) * 0.1, k=3
-                    )
-                    inflection_y = spline(inflection_x)
+                    if args.fit_method == "exponential":
+                        # For exponential, we need to interpolate from the fitted curve
+                        inflection_y = np.interp(inflection_x, x_smooth, y_smooth)
+                    else:
+                        # For B-spline, use the spline directly
+                        spline = UnivariateSpline(
+                            thresholds, cluster_counts, s=len(thresholds) * 0.1, k=3
+                        )
+                        inflection_y = spline(inflection_x)
+                    
+                    point_label = "Inflection points" if args.fit_method == "bspline" else "Key points"
                     ax2.scatter(
                         inflection_x,
                         inflection_y,
@@ -765,14 +924,14 @@ def main():
                         s=100,
                         marker="*",
                         zorder=6,
-                        label=f"Inflection points ({len(inflection_x)})",
+                        label=f"{point_label} ({len(inflection_x)})",
                     )
 
                     # Print inflection points
-                    print(f"\nFound {len(inflection_x)} inflection points:")
+                    print(f"\nFound {len(inflection_x)} {point_label.lower()}:")
                     for i, (x_inf, y_inf) in enumerate(zip(inflection_x, inflection_y)):
                         print(
-                            f"  Inflection point {i + 1}: threshold = {x_inf:.6f}, clusters = {y_inf:.1f}"
+                            f"  Point {i + 1}: threshold = {x_inf:.6f}, clusters = {y_inf:.1f}"
                         )
 
             # Mark selected threshold
@@ -794,7 +953,8 @@ def main():
 
             ax2.set_xlabel("nRMSD Threshold")
             ax2.set_ylabel("Number of Clusters")
-            ax2.set_title("Threshold vs Cluster Count with B-spline Fit")
+            fit_title = "B-spline Fit" if args.fit_method == "bspline" else "Exponential Decay Fit"
+            ax2.set_title(f"Threshold vs Cluster Count with {fit_title}")
             ax2.grid(True, alpha=0.3)
             ax2.legend()
 
