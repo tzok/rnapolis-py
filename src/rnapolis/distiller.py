@@ -606,19 +606,6 @@ def run_approximate(
             json.dump(out, f, indent=2)
         print(f"\nApproximate clustering saved to {out_path}")
 
-    if output_json and results_for_json:
-        combined = {
-            "parameters": {
-                "mode": "approximate",
-                "radii": radii,
-                "n_structures": len(structures),
-            },
-            "results": results_for_json,
-        }
-        with open(output_json, "w") as f:
-            json.dump(combined, f, indent=2)
-        print(f"\nApproximate clustering for all radii saved to {output_json}")
-
     return
 
 
@@ -706,6 +693,20 @@ def run_approximate_multiple(
                     ],
                 }
             )
+
+    # Write combined JSON once after processing all radii
+    if output_json and results_for_json:
+        combined = {
+            "parameters": {
+                "mode": "approximate",
+                "radii": radii,
+                "n_structures": len(structures),
+            },
+            "results": results_for_json,
+        }
+        with open(output_json, "w") as f:
+            json.dump(combined, f, indent=2)
+        print(f"\nApproximate clustering for all radii saved to {output_json}")
 
     return
 
