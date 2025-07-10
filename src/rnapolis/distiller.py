@@ -645,7 +645,7 @@ def run_approximate_multiple(
     # 4. Cluster for each radius
     # ------------------------------------------------------------------
     for radius in radii:
-        radius_sq = radius ** 2
+        radius_sq = radius**2
         visited: set[int] = set()
         clusters: List[List[int]] = []
 
@@ -1224,9 +1224,7 @@ def main():
 
     # Switch workflow based on requested mode
     if args.mode == "approximate":
-        run_approximate_multiple(
-            structures, valid_files, args.radius, args.output_json
-        )
+        run_approximate_multiple(structures, valid_files, args.radius, args.output_json)
         return
     else:
         run_exact(structures, valid_files, args)
