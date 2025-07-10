@@ -14,6 +14,8 @@ from scipy.cluster.hierarchy import dendrogram, fcluster, linkage
 from scipy.optimize import curve_fit
 from scipy.spatial.distance import squareform
 from tqdm import tqdm
+from sklearn.decomposition import PCA
+import faiss
 
 from rnapolis.parser_v2 import parse_cif_atoms, parse_pdb_atoms
 from rnapolis.tertiary_v2 import (
@@ -22,6 +24,7 @@ from rnapolis.tertiary_v2 import (
     nrmsd_quaternions_residues,
     nrmsd_svd_residues,
     nrmsd_validate_residues,
+    calculate_torsion_angle,
 )
 
 
@@ -74,6 +77,20 @@ def parse_arguments():
         type=int,
         default=100,
         help="Save cache to disk every N computations (default: 100)",
+    )
+
+    parser.add_argument(
+        "--mode",
+        choices=["exact", "approximate"],
+        default="exact",
+        help="Clustering mode: 'exact' (nRMSD clustering) or 'approximate' (feature-based PCA+FAISS)",
+    )
+
+    parser.add_argument(
+        "--radius",
+        type=float,
+        default=0.5,
+        help="Radius in PCA space for redundancy detection in approximate mode (default: 0.5)",
     )
 
     return parser.parse_args()
@@ -256,6 +273,130 @@ def validate_nucleotide_counts(
         sys.exit(1)
 
     print(f"All structures have {first_count} nucleotides")
+
+
+# ----------------------------------------------------------------------
+# Approximate mode helper functions and workflow
+# ----------------------------------------------------------------------
+def _select_base_atoms(residue) -> List[Optional[np.ndarray]]:
+    """
+    Select four canonical base atoms for a nucleotide residue.
+
+    Purines (A/G/DA/DG): N9, N3, N1, C5
+    Pyrimidines (C/U/DC/DT/...): N1, O2, N3, C5
+    Returns coordinates list (None if missing).
+    """
+    purines = {"A", "G", "DA", "DG"}
+    atom_names = (
+        ["N9", "N3", "N1", "C5"] if residue.residue_name in purines else ["N1", "O2", "N3", "C5"]
+    )
+
+    coords: List[Optional[np.ndarray]] = []
+    for name in atom_names:
+        atom = residue.find_atom(name)
+        coords.append(atom.coordinates if atom is not None else None)
+    return coords
+
+
+def featurize_structure(structure: Structure) -> np.ndarray:
+    """
+    Convert a Structure into a fixed-length feature vector.
+    For n residues the length is 34 * n * (n-1) / 2.
+    """
+    residues = [r for r in structure.residues if r.is_nucleotide]
+    n = len(residues)
+    if n < 2:
+        return np.zeros(0, dtype=np.float32)
+
+    base_coords = [_select_base_atoms(r) for r in residues]
+    feats: List[float] = []
+
+    for i in range(n):
+        ai = base_coords[i]
+        for j in range(i + 1, n):
+            aj = base_coords[j]
+
+            # 16 distances
+            for ci in ai:
+                for cj in aj:
+                    dist = float(np.linalg.norm(ci - cj)) if None not in (ci, cj) else 0.0
+                    feats.append(dist)
+
+            # 18 torsion features (sin, cos over 9 angles)
+            a1 = ai[0]
+            a4 = aj[0]
+            for idx2 in range(1, 4):
+                for idx3 in range(1, 4):
+                    a2, a3 = ai[idx2], aj[idx3]
+                    if None not in (a1, a2, a3, a4):
+                        angle = calculate_torsion_angle(a1, a2, a3, a4)
+                        feats.extend([float(np.sin(angle)), float(np.cos(angle))])
+                    else:
+                        feats.extend([0.0, 1.0])
+
+    return np.asarray(feats, dtype=np.float32)
+
+
+def run_approximate(structures: List[Structure], file_paths: List[Path], args) -> None:
+    """
+    Approximate mode: features → PCA → FAISS radius clustering.
+    """
+    print("\nRunning approximate mode (feature-based PCA + FAISS)")
+
+    feature_vectors = [featurize_structure(s) for s in structures]
+    feature_lengths = {len(v) for v in feature_vectors}
+    if len(feature_lengths) != 1:
+        print("Error: Inconsistent feature lengths among structures", file=sys.stderr)
+        sys.exit(1)
+
+    X = np.stack(feature_vectors).astype(np.float32)
+    print(f"Feature matrix shape: {X.shape}")
+
+    pca = PCA(n_components=0.95, svd_solver="full", random_state=0)
+    X_red = pca.fit_transform(X).astype(np.float32)
+    d = X_red.shape[1]
+    print(f"PCA reduced to {d} dimensions (95 % variance)")
+
+    index = faiss.IndexFlatL2(d)
+    index.add(X_red)
+    radius_sq = args.radius ** 2
+
+    visited: set[int] = set()
+    clusters: List[List[int]] = []
+
+    for idx in range(len(structures)):
+        if idx in visited:
+            continue
+        D, I = index.search(X_red[idx : idx + 1], len(structures))
+        cluster = [int(i) for dist, i in zip(D[0], I[0]) if dist <= radius_sq]
+        clusters.append(cluster)
+        visited.update(cluster)
+
+    print(f"\nIdentified {len(clusters)} representatives with radius {args.radius}")
+    for cluster in clusters:
+        rep = cluster[0]
+        redundants = cluster[1:]
+        print(f"Representative: {file_paths[rep]}")
+        for r in redundants:
+            print(f"  Redundant: {file_paths[r]}")
+
+    if args.output_json:
+        out = {
+            "parameters": {"mode": "approximate", "radius": args.radius},
+            "clusters": [
+                {
+                    "representative": str(file_paths[c[0]]),
+                    "members": [str(file_paths[m]) for m in c[1:]],
+                }
+                for c in clusters
+            ],
+        }
+        with open(args.output_json, "w") as f:
+            json.dump(out, f, indent=2)
+        print(f"\nApproximate clustering saved to {args.output_json}")
+
+    sys.exit(0)
+# ----------------------------------------------------------------------
 
 
 def find_all_thresholds_and_clusters(
@@ -778,6 +919,10 @@ def main():
     # Validate nucleotide counts
     print("\nValidating nucleotide counts...")
     validate_nucleotide_counts(structures, valid_files)
+
+    # Switch workflow based on requested mode
+    if args.mode == "approximate":
+        run_approximate(structures, valid_files, args)
 
     # Initialize cache
     print(f"\nInitializing nRMSD cache...")
