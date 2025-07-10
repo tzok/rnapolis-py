@@ -35,7 +35,10 @@ def parse_arguments():
     )
 
     parser.add_argument(
-        "files", nargs="+", type=Path, help="Input mmCIF or PDB files to analyze"
+        "files",
+        nargs="*",
+        type=Path,
+        help="Input mmCIF or PDB files to analyze (use '-' or omit to read paths from stdin)",
     )
 
     parser.add_argument(
