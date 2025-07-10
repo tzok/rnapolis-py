@@ -687,9 +687,7 @@ def run_approximate_multiple(
                     "clusters": [
                         {
                             "representative": str(file_paths[c[0]]),
-                            "members": [
-                                str(file_paths[m]) for m in c[1:]
-                            ],
+                            "members": [str(file_paths[m]) for m in c[1:]],
                         }
                         for c in clusters
                     ],
