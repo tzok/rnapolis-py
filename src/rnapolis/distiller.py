@@ -93,8 +93,13 @@ def parse_arguments():
     parser.add_argument(
         "--radius",
         type=float,
-        default=10.0,
-        help="Radius in PCA-reduced space for redundancy detection (approximate mode only, default: 10.0)",
+        action="append",
+        default=[10.0],
+        help=(
+            "Radius in PCA-reduced space for redundancy detection "
+            "(approximate mode). Can be supplied multiple times; "
+            "results will be produced for each value (default: 10.0)."
+        ),
     )
 
     return parser.parse_args()
@@ -524,11 +529,16 @@ def featurize_structure(structure: Structure) -> np.ndarray:
     return np.asarray(feats, dtype=np.float32)
 
 
-def run_approximate(structures: List[Structure], file_paths: List[Path], args) -> None:
+def run_approximate(
+    structures: List[Structure],
+    file_paths: List[Path],
+    radius: float,
+    output_json: Optional[str],
+) -> None:
     """
     Approximate mode: features → PCA → FAISS radius clustering.
     """
-    print("\nRunning approximate mode (feature-based PCA + FAISS)")
+    print(f"\nRunning approximate mode (feature-based PCA + FAISS)  –  radius = {radius}")
 
     feature_vectors = [featurize_structure(s) for s in structures]
     feature_lengths = {len(v) for v in feature_vectors}
@@ -546,7 +556,7 @@ def run_approximate(structures: List[Structure], file_paths: List[Path], args) -
 
     index = faiss.IndexFlatL2(d)
     index.add(X_red)
-    radius_sq = args.radius**2
+    radius_sq = radius**2
 
     visited: set[int] = set()
     clusters: List[List[int]] = []
@@ -559,7 +569,7 @@ def run_approximate(structures: List[Structure], file_paths: List[Path], args) -
         clusters.append(cluster)
         visited.update(cluster)
 
-    print(f"\nIdentified {len(clusters)} representatives with radius {args.radius}")
+    print(f"\nIdentified {len(clusters)} representatives with radius {radius}")
     for cluster in clusters:
         rep = cluster[0]
         redundants = cluster[1:]
@@ -567,9 +577,9 @@ def run_approximate(structures: List[Structure], file_paths: List[Path], args) -
         for r in redundants:
             print(f"  Redundant: {file_paths[r]}")
 
-    if args.output_json:
+    if output_json:
         out = {
-            "parameters": {"mode": "approximate", "radius": args.radius},
+            "parameters": {"mode": "approximate", "radius": radius},
             "clusters": [
                 {
                     "representative": str(file_paths[c[0]]),
@@ -578,9 +588,12 @@ def run_approximate(structures: List[Structure], file_paths: List[Path], args) -
                 for c in clusters
             ],
         }
-        with open(args.output_json, "w") as f:
+        out_path = Path(output_json)
+        if out_path.suffix == ".json":
+            out_path = out_path.with_name(f"{out_path.stem}_r{radius}{out_path.suffix}")
+        with open(out_path, "w") as f:
             json.dump(out, f, indent=2)
-        print(f"\nApproximate clustering saved to {args.output_json}")
+        print(f"\nApproximate clustering saved to {out_path}")
 
     return
 
@@ -1121,7 +1134,8 @@ def main():
 
     # Switch workflow based on requested mode
     if args.mode == "approximate":
-        run_approximate(structures, valid_files, args)
+        for radius in args.radius:
+            run_approximate(structures, valid_files, radius, args.output_json)
         return
     else:
         run_exact(structures, valid_files, args)
