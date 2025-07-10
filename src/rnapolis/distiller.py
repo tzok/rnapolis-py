@@ -253,7 +253,12 @@ def validate_nucleotide_counts(
     """
     nucleotide_counts = []
 
-    for structure, file_path in zip(structures, file_paths):
+    for structure, file_path in tqdm(
+        zip(structures, file_paths),
+        total=len(structures),
+        desc="Validating nucleotide counts",
+        unit="structure",
+    ):
         nucleotide_residues = [
             residue for residue in structure.residues if residue.is_nucleotide
         ]
