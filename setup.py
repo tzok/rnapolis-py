@@ -63,6 +63,7 @@ setup(
         "requests",
         "scikit-learn",
         "scipy",
+        "tqdm",
         "viennarna",
     ],
 )
