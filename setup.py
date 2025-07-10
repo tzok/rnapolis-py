@@ -5,7 +5,7 @@ with open("README.md") as f:
 
 setup(
     name="RNApolis",
-    version="0.9.2",
+    version="0.10.0",
     packages=["rnapolis"],
     package_dir={"": "src"},
     author="Tomasz Zok",
@@ -52,6 +52,7 @@ setup(
     },
     install_requires=[
         "appdirs",
+        "faiss-cpu",
         "graphviz",
         "mmcif",
         "numpy",
