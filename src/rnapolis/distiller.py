@@ -580,12 +580,13 @@ def run_approximate(
         visited.update(cluster)
 
     print(f"\nIdentified {len(clusters)} representatives with radius {radius}")
-    for cluster in clusters:
-        rep = cluster[0]
-        redundants = cluster[1:]
-        print(f"Representative: {file_paths[rep]}")
-        for r in redundants:
-            print(f"  Redundant: {file_paths[r]}")
+    if output_json is None:
+        for cluster in clusters:
+            rep = cluster[0]
+            redundants = cluster[1:]
+            print(f"Representative: {file_paths[rep]}")
+            for r in redundants:
+                print(f"  Redundant: {file_paths[r]}")
 
     if output_json:
         out = {
@@ -680,12 +681,13 @@ def run_approximate_multiple(
             visited.update(cluster)
 
         print(f"\nIdentified {len(clusters)} representatives with radius {radius}")
-        for cluster in clusters:
-            rep = cluster[0]
-            redundants = cluster[1:]
-            print(f"Representative: {file_paths[rep]}")
-            for r in redundants:
-                print(f"  Redundant: {file_paths[r]}")
+        if output_json is None:
+            for cluster in clusters:
+                rep = cluster[0]
+                redundants = cluster[1:]
+                print(f"Representative: {file_paths[rep]}")
+                for r in redundants:
+                    print(f"  Redundant: {file_paths[r]}")
 
         if output_json is not None:
             results_for_json.append(
