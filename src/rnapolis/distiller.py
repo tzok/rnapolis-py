@@ -94,11 +94,11 @@ def parse_arguments():
         "--radius",
         type=float,
         action="append",
-        default=[10.0],
+        default=[1.0, 2.0, 4.0, 8.0],
         help=(
             "Radius in PCA-reduced space for redundancy detection "
             "(approximate mode). Can be supplied multiple times; "
-            "results will be produced for each value (default: 10.0)."
+            "results will be produced for each value (default: 1, 2, 4, 8)."
         ),
     )
 
