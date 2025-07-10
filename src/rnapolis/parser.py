@@ -439,6 +439,10 @@ def filter_clashing_atoms(atoms: List[Atom], clash_distance: float = 0.5) -> Lis
 
     unique_atoms_list = list(unique_atoms.values())
 
+    # If there are zero or one atoms, no clashes can occur
+    if len(unique_atoms_list) <= 1:
+        return unique_atoms_list
+
     # Now handle clashing atoms
     coords = np.array([(atom.x, atom.y, atom.z) for atom in unique_atoms_list])
     tree = KDTree(coords)
