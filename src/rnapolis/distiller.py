@@ -288,7 +288,9 @@ def _select_base_atoms(residue) -> List[Optional[np.ndarray]]:
     """
     purines = {"A", "G", "DA", "DG"}
     atom_names = (
-        ["N9", "N3", "N1", "C5"] if residue.residue_name in purines else ["N1", "O2", "N3", "C5"]
+        ["N9", "N3", "N1", "C5"]
+        if residue.residue_name in purines
+        else ["N1", "O2", "N3", "C5"]
     )
 
     coords: List[Optional[np.ndarray]] = []
@@ -319,7 +321,9 @@ def featurize_structure(structure: Structure) -> np.ndarray:
             # 16 distances
             for ci in ai:
                 for cj in aj:
-                    dist = float(np.linalg.norm(ci - cj)) if None not in (ci, cj) else 0.0
+                    dist = (
+                        float(np.linalg.norm(ci - cj)) if None not in (ci, cj) else 0.0
+                    )
                     feats.append(dist)
 
             # 18 torsion features (sin, cos over 9 angles)
@@ -359,7 +363,7 @@ def run_approximate(structures: List[Structure], file_paths: List[Path], args) -
 
     index = faiss.IndexFlatL2(d)
     index.add(X_red)
-    radius_sq = args.radius ** 2
+    radius_sq = args.radius**2
 
     visited: set[int] = set()
     clusters: List[List[int]] = []
@@ -396,6 +400,8 @@ def run_approximate(structures: List[Structure], file_paths: List[Path], args) -
         print(f"\nApproximate clustering saved to {args.output_json}")
 
     sys.exit(0)
+
+
 # ----------------------------------------------------------------------
 
 
