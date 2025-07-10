@@ -276,6 +276,167 @@ def validate_nucleotide_counts(
 
 
 # ----------------------------------------------------------------------
+
+def run_exact(structures: List[Structure], valid_files: List[Path], args) -> None:
+    """
+    Exact mode: nRMSD-based clustering workflow (previously in main).
+    Produces the same outputs/visualisations as before.
+    """
+    # Initialize cache
+    print(f"\nInitializing nRMSD cache...")
+    cache = NRMSDCache(args.cache_file, args.cache_save_interval)
+
+    # Compute distance matrix
+    print("\nComputing distance matrix...")
+    distance_matrix = find_structure_clusters(
+        structures, valid_files, cache, args.visualize, args.rmsd_method
+    )
+
+    # Build linkage matrix
+    linkage_matrix = linkage(squareform(distance_matrix), method="complete")
+
+    # Determine threshold
+    if args.threshold is None:
+        optimal_threshold = determine_optimal_threshold(distance_matrix, linkage_matrix)
+    else:
+        optimal_threshold = args.threshold
+        print(f"Using user-specified threshold: {optimal_threshold}")
+
+    # Collect threshold data
+    all_threshold_data = find_all_thresholds_and_clusters(
+        distance_matrix, linkage_matrix, valid_files
+    )
+    threshold_clustering = get_clustering_at_threshold(
+        linkage_matrix, distance_matrix, valid_files, optimal_threshold
+    )
+
+    # Visualisation (re-uses the earlier logic)
+    if args.visualize:
+        try:
+            import matplotlib.pyplot as plt
+
+            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 6))
+
+            dendrogram(
+                linkage_matrix,
+                labels=[f"Structure {i}" for i in range(len(structures))],
+                ax=ax1,
+                color_threshold=optimal_threshold,
+            )
+            ax1.axhline(
+                y=optimal_threshold,
+                color="red",
+                linestyle="--",
+                linewidth=2,
+                label=f"Threshold = {optimal_threshold:.6f}",
+            )
+            ax1.set_title("Hierarchical Clustering Dendrogram")
+            ax1.set_xlabel("Structure Index")
+            ax1.set_ylabel("nRMSD Distance")
+            ax1.legend()
+
+            thresholds = np.array(
+                [entry["nrmsd_threshold"] for entry in all_threshold_data]
+            )
+            cluster_counts = np.array(
+                [len(entry["clusters"]) for entry in all_threshold_data]
+            )
+
+            x_smooth, y_smooth, inflection_x = fit_exponential_decay(
+                thresholds, cluster_counts
+            )
+
+            ax2.scatter(thresholds, cluster_counts, alpha=0.7, s=30, label="Data points")
+            if len(x_smooth) > 0:
+                ax2.plot(
+                    x_smooth,
+                    y_smooth,
+                    "b-",
+                    linewidth=2,
+                    alpha=0.8,
+                    label="Exponential decay fit",
+                )
+
+            if len(inflection_x) > 0 and len(x_smooth) > 0:
+                inflection_y = np.interp(inflection_x, x_smooth, y_smooth)
+                ax2.scatter(
+                    inflection_x,
+                    inflection_y,
+                    color="orange",
+                    s=100,
+                    marker="*",
+                    zorder=6,
+                    label=f"Key points ({len(inflection_x)})",
+                )
+
+            ax2.axvline(
+                x=optimal_threshold,
+                color="red",
+                linestyle="--",
+                linewidth=2,
+                label=f"Threshold = {optimal_threshold:.6f}",
+            )
+            ax2.scatter(
+                [optimal_threshold],
+                [threshold_clustering["n_clusters"]],
+                color="red",
+                s=100,
+                zorder=5,
+                label=f"Selected ({threshold_clustering['n_clusters']} clusters)",
+            )
+
+            ax2.set_xlabel("nRMSD Threshold")
+            ax2.set_ylabel("Number of Clusters")
+            ax2.set_title("Threshold vs Cluster Count with Exponential Decay Fit")
+            ax2.grid(True, alpha=0.3)
+            ax2.legend()
+
+            plt.tight_layout()
+            plt.savefig("clustering_analysis.png", dpi=300, bbox_inches="tight")
+            print("Clustering analysis plots saved to clustering_analysis.png")
+
+            try:
+                plt.show()
+            except Exception:
+                print("Note: Could not display plot interactively, but saved to file")
+        except ImportError:
+            print(
+                "Warning: matplotlib not available, skipping visualization",
+                file=sys.stderr,
+            )
+
+    # Summary
+    print(f"\nFound {len(all_threshold_data)} different clustering configurations")
+    print(
+        f"Threshold range: {all_threshold_data[0]['nrmsd_threshold']:.6f} to {all_threshold_data[-1]['nrmsd_threshold']:.6f}"
+    )
+    print(
+        f"Cluster count range: {len(all_threshold_data[-1]['clusters'])} to {len(all_threshold_data[0]['clusters'])}"
+    )
+
+    print(f"\nClustering at threshold {optimal_threshold:.6f}:")
+    print(f"  Number of clusters: {threshold_clustering['n_clusters']}")
+    print(f"  Cluster sizes: {threshold_clustering['cluster_sizes']}")
+    for i, cluster in enumerate(threshold_clustering["clusters"]):
+        print(
+            f"  Cluster {i + 1}: {cluster['representative']} + {len(cluster['members'])} members"
+        )
+
+    if args.output_json:
+        output_data = {
+            "all_thresholds": all_threshold_data,
+            "threshold_clustering": threshold_clustering,
+            "parameters": {
+                "threshold": optimal_threshold,
+                "threshold_source": "user-specified"
+                if args.threshold is not None
+                else "auto-detected",
+                "rmsd_method": args.rmsd_method,
+            },
+        }
+        with open(args.output_json, "w") as f:
+            json.dump(output_data, f, indent=2)
+        print(f"\nComprehensive clustering results saved to {args.output_json}")
 # Approximate mode helper functions and workflow
 # ----------------------------------------------------------------------
 def _select_base_atoms(residue) -> List[Optional[np.ndarray]]:
@@ -411,7 +572,7 @@ def run_approximate(structures: List[Structure], file_paths: List[Path], args) -
             json.dump(out, f, indent=2)
         print(f"\nApproximate clustering saved to {args.output_json}")
 
-    sys.exit(0)
+    return
 
 
 # ----------------------------------------------------------------------
@@ -941,6 +1102,10 @@ def main():
     # Switch workflow based on requested mode
     if args.mode == "approximate":
         run_approximate(structures, valid_files, args)
+        return
+    else:
+        run_exact(structures, valid_files, args)
+        return
 
     # Initialize cache
     print(f"\nInitializing nRMSD cache...")
