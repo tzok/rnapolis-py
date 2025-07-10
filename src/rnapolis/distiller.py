@@ -600,6 +600,94 @@ def run_approximate(
     return
 
 
+def run_approximate_multiple(
+    structures: List[Structure],
+    file_paths: List[Path],
+    radii: List[float],
+    output_json: Optional[str],
+) -> None:
+    """
+    Approximate mode (multi-radius): compute PCA once, then perform clustering
+    for each radius value provided. This avoids redundant dimensionality reduction.
+    """
+    if not radii:
+        print("Error: No radius values supplied", file=sys.stderr)
+        sys.exit(1)
+
+    # ------------------------------------------------------------------
+    # 1. Feature extraction
+    # ------------------------------------------------------------------
+    print("\nRunning approximate mode (feature-based PCA + FAISS)")
+    feature_vectors = [featurize_structure(s) for s in structures]
+    feature_lengths = {len(v) for v in feature_vectors}
+    if len(feature_lengths) != 1:
+        print("Error: Inconsistent feature lengths among structures", file=sys.stderr)
+        sys.exit(1)
+
+    X = np.stack(feature_vectors).astype(np.float32)
+    print(f"Feature matrix shape: {X.shape}")
+
+    # ------------------------------------------------------------------
+    # 2. PCA transformation (fit once)
+    # ------------------------------------------------------------------
+    pca = PCA(n_components=0.95, svd_solver="full", random_state=0)
+    X_red = pca.fit_transform(X).astype(np.float32)
+    d = X_red.shape[1]
+    print(f"PCA reduced to {d} dimensions (95 % variance)")
+
+    # ------------------------------------------------------------------
+    # 3. Build FAISS index once
+    # ------------------------------------------------------------------
+    index = faiss.IndexFlatL2(d)
+    index.add(X_red)
+
+    # ------------------------------------------------------------------
+    # 4. Cluster for each radius
+    # ------------------------------------------------------------------
+    for radius in radii:
+        radius_sq = radius ** 2
+        visited: set[int] = set()
+        clusters: List[List[int]] = []
+
+        for idx in range(len(structures)):
+            if idx in visited:
+                continue
+            D, I = index.search(X_red[idx : idx + 1], len(structures))
+            cluster = [int(i) for dist, i in zip(D[0], I[0]) if dist <= radius_sq]
+            clusters.append(cluster)
+            visited.update(cluster)
+
+        print(f"\nIdentified {len(clusters)} representatives with radius {radius}")
+        for cluster in clusters:
+            rep = cluster[0]
+            redundants = cluster[1:]
+            print(f"Representative: {file_paths[rep]}")
+            for r in redundants:
+                print(f"  Redundant: {file_paths[r]}")
+
+        if output_json:
+            out = {
+                "parameters": {"mode": "approximate", "radius": radius},
+                "clusters": [
+                    {
+                        "representative": str(file_paths[c[0]]),
+                        "members": [str(file_paths[m]) for m in c[1:]],
+                    }
+                    for c in clusters
+                ],
+            }
+            out_path = Path(output_json)
+            if out_path.suffix == ".json":
+                out_path = out_path.with_name(
+                    f"{out_path.stem}_r{radius}{out_path.suffix}"
+                )
+            with open(out_path, "w") as f:
+                json.dump(out, f, indent=2)
+            print(f"\nApproximate clustering saved to {out_path}")
+
+    return
+
+
 # ----------------------------------------------------------------------
 
 
@@ -1136,8 +1224,9 @@ def main():
 
     # Switch workflow based on requested mode
     if args.mode == "approximate":
-        for radius in args.radius:
-            run_approximate(structures, valid_files, radius, args.output_json)
+        run_approximate_multiple(
+            structures, valid_files, args.radius, args.output_json
+        )
         return
     else:
         run_exact(structures, valid_files, args)
