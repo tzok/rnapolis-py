@@ -41,13 +41,13 @@ def parse_arguments():
     parser.add_argument(
         "--visualize",
         action="store_true",
-        help="Show dendrogram visualization of clustering",
+        help="Show dendrogram visualization of clustering (exact mode only)",
     )
 
     parser.add_argument(
         "--output-json",
         type=str,
-        help="Output JSON file to save clustering results",
+        help="Output JSON file to save clustering results (available in both modes)",
     )
 
     parser.add_argument(
@@ -55,28 +55,28 @@ def parse_arguments():
         type=str,
         choices=["quaternions", "svd", "qcp", "validate"],
         default="quaternions",
-        help="RMSD calculation method (default: quaternions). Use 'validate' to check all methods agree.",
+        help="RMSD calculation method (default: quaternions). Use 'validate' to check all methods agree. (exact mode only)",
     )
 
     parser.add_argument(
         "--threshold",
         type=float,
         default=None,
-        help="nRMSD threshold for clustering (default: auto-detect from exponential decay inflection point)",
+        help="nRMSD threshold for clustering (default: auto-detect from exponential decay inflection point) (exact mode only)",
     )
 
     parser.add_argument(
         "--cache-file",
         type=str,
         default="nrmsd_cache.json",
-        help="Cache file for storing computed nRMSD values (default: nrmsd_cache.json)",
+        help="Cache file for storing computed nRMSD values (exact mode only, default: nrmsd_cache.json)",
     )
 
     parser.add_argument(
         "--cache-save-interval",
         type=int,
         default=100,
-        help="Save cache to disk every N computations (default: 100)",
+        help="Save cache to disk every N computations (exact mode only, default: 100)",
     )
 
     parser.add_argument(
@@ -91,7 +91,7 @@ def parse_arguments():
         "--radius",
         type=float,
         default=10.0,
-        help="Radius in PCA-reduced space for redundancy detection in approximate mode (default: 10.0)",
+        help="Radius in PCA-reduced space for redundancy detection (approximate mode only, default: 10.0)",
     )
 
     return parser.parse_args()
