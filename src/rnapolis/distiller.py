@@ -538,7 +538,9 @@ def run_approximate(
     """
     Approximate mode: features → PCA → FAISS radius clustering.
     """
-    print(f"\nRunning approximate mode (feature-based PCA + FAISS)  –  radius = {radius}")
+    print(
+        f"\nRunning approximate mode (feature-based PCA + FAISS)  –  radius = {radius}"
+    )
 
     feature_vectors = [featurize_structure(s) for s in structures]
     feature_lengths = {len(v) for v in feature_vectors}
