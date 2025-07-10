@@ -84,7 +84,7 @@ def parse_arguments():
         choices=["exact", "approximate"],
         default="exact",
         help="Clustering mode switch: --mode exact (default) performs rigorous nRMSD clustering, "
-             "--mode approximate performs faster feature-based PCA + FAISS clustering",
+        "--mode approximate performs faster feature-based PCA + FAISS clustering",
     )
 
     parser.add_argument(
