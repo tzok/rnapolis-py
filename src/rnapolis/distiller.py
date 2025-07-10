@@ -283,21 +283,33 @@ def _select_base_atoms(residue) -> List[Optional[np.ndarray]]:
     Select four canonical base atoms for a nucleotide residue.
 
     Purines (A/G/DA/DG): N9, N3, N1, C5
-    Pyrimidines (C/U/DC/DT/...): N1, O2, N3, C5
-    Returns coordinates list (None if missing).
+    Pyrimidines (C/U/DC/DT): N1, O2, N3, C5
+
+    If residue name is unknown, we try purine mapping first and, if incomplete,
+    fall back to pyrimidine mapping. Returned list always has length 4 and may
+    contain ``None`` when coordinates are missing.
     """
     purines = {"A", "G", "DA", "DG"}
-    atom_names = (
-        ["N9", "N3", "N1", "C5"]
-        if residue.residue_name in purines
-        else ["N1", "O2", "N3", "C5"]
-    )
+    pyrimidines = {"C", "U", "DC", "DT"}
 
-    coords: List[Optional[np.ndarray]] = []
-    for name in atom_names:
-        atom = residue.find_atom(name)
-        coords.append(atom.coordinates if atom is not None else None)
-    return coords
+    def _coords_for(names: List[str]) -> List[Optional[np.ndarray]]:
+        """Helper to fetch coordinates for a list of atom names."""
+        return [
+            (atom.coordinates if (atom := residue.find_atom(n)) is not None else None)
+            for n in names
+        ]
+
+    if residue.residue_name in purines:
+        return _coords_for(["N9", "N3", "N1", "C5"])
+
+    if residue.residue_name in pyrimidines:
+        return _coords_for(["N1", "O2", "N3", "C5"])
+
+    # Unknown residue – attempt purine rule first, then pyrimidine
+    coords = _coords_for(["N9", "N3", "N1", "C5"])
+    if all(c is not None for c in coords):
+        return coords
+    return _coords_for(["N1", "O2", "N3", "C5"])
 
 
 def featurize_structure(structure: Structure) -> np.ndarray:
