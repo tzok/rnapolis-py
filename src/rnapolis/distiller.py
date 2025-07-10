@@ -1074,8 +1074,18 @@ def main():
     """Main entry point for the distiller CLI tool."""
     args = parse_arguments()
 
+    # Combine file paths from CLI arguments and/or stdin
+    file_paths: List[Path] = []
+    cli_paths = [p for p in args.files if str(p) != "-"]
+    file_paths.extend(cli_paths)
+
+    # If no CLI paths provided or '-' sentinel present, read from stdin
+    if not args.files or any(str(p) == "-" for p in args.files):
+        stdin_paths = [Path(line.strip()) for line in sys.stdin if line.strip()]
+        file_paths.extend(stdin_paths)
+
     # Validate input files
-    valid_files = validate_input_files(args.files)
+    valid_files = validate_input_files(file_paths)
 
     if not valid_files:
         print("Error: No valid input files found", file=sys.stderr)
