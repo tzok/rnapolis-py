@@ -1,5 +1,5 @@
 appdirs==1.4.4
-faiss==1.5.3
+faiss-cpu==1.11.0
 graphviz==0.21
 mmcif==0.92.0
 numpy==2.2.3
