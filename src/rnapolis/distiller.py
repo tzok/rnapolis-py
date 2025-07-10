@@ -83,14 +83,15 @@ def parse_arguments():
         "--mode",
         choices=["exact", "approximate"],
         default="exact",
-        help="Clustering mode: 'exact' (nRMSD clustering) or 'approximate' (feature-based PCA+FAISS)",
+        help="Clustering mode switch: --mode exact (default) performs rigorous nRMSD clustering, "
+             "--mode approximate performs faster feature-based PCA + FAISS clustering",
     )
 
     parser.add_argument(
         "--radius",
         type=float,
-        default=0.5,
-        help="Radius in PCA space for redundancy detection in approximate mode (default: 0.5)",
+        default=10.0,
+        help="Radius in PCA-reduced space for redundancy detection in approximate mode (default: 10.0)",
     )
 
     return parser.parse_args()
