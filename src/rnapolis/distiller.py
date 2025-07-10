@@ -35,7 +35,10 @@ def parse_arguments():
     )
 
     parser.add_argument(
-        "files", nargs="+", type=Path, help="Input mmCIF or PDB files to analyze"
+        "files",
+        nargs="*",
+        type=Path,
+        help="Input mmCIF or PDB files to analyze (use '-' or omit to read paths from stdin)",
     )
 
     parser.add_argument(
@@ -82,16 +85,21 @@ def parse_arguments():
     parser.add_argument(
         "--mode",
         choices=["exact", "approximate"],
-        default="exact",
-        help="Clustering mode switch: --mode exact (default) performs rigorous nRMSD clustering, "
-        "--mode approximate performs faster feature-based PCA + FAISS clustering",
+        default="approximate",
+        help="Clustering mode switch: --mode approximate (default) performs faster feature-based PCA + FAISS clustering, "
+        "--mode exact performs rigorous nRMSD clustering",
     )
 
     parser.add_argument(
         "--radius",
         type=float,
-        default=10.0,
-        help="Radius in PCA-reduced space for redundancy detection (approximate mode only, default: 10.0)",
+        action="append",
+        default=[1.0, 2.0, 4.0, 8.0],
+        help=(
+            "Radius in PCA-reduced space for redundancy detection "
+            "(approximate mode). Can be supplied multiple times; "
+            "results will be produced for each value (default: 1, 2, 4, 8)."
+        ),
     )
 
     return parser.parse_args()
@@ -245,7 +253,12 @@ def validate_nucleotide_counts(
     """
     nucleotide_counts = []
 
-    for structure, file_path in zip(structures, file_paths):
+    for structure, file_path in tqdm(
+        zip(structures, file_paths),
+        total=len(structures),
+        desc="Validating nucleotide counts",
+        unit="structure",
+    ):
         nucleotide_residues = [
             residue for residue in structure.residues if residue.is_nucleotide
         ]
@@ -521,13 +534,28 @@ def featurize_structure(structure: Structure) -> np.ndarray:
     return np.asarray(feats, dtype=np.float32)
 
 
-def run_approximate(structures: List[Structure], file_paths: List[Path], args) -> None:
+def run_approximate_multiple(
+    structures: List[Structure],
+    file_paths: List[Path],
+    radii: List[float],
+    output_json: Optional[str],
+) -> None:
     """
-    Approximate mode: features → PCA → FAISS radius clustering.
+    Approximate mode (multi-radius): compute PCA once, then perform clustering
+    for each radius value provided. This avoids redundant dimensionality reduction.
     """
-    print("\nRunning approximate mode (feature-based PCA + FAISS)")
+    if not radii:
+        print("Error: No radius values supplied", file=sys.stderr)
+        sys.exit(1)
 
-    feature_vectors = [featurize_structure(s) for s in structures]
+    # ------------------------------------------------------------------
+    # 1. Feature extraction
+    # ------------------------------------------------------------------
+    print("\nRunning approximate mode (feature-based PCA + FAISS)")
+    feature_vectors = [
+        featurize_structure(s)
+        for s in tqdm(structures, desc="Featurizing", unit="structure")
+    ]
     feature_lengths = {len(v) for v in feature_vectors}
     if len(feature_lengths) != 1:
         print("Error: Inconsistent feature lengths among structures", file=sys.stderr)
@@ -536,48 +564,74 @@ def run_approximate(structures: List[Structure], file_paths: List[Path], args) -
     X = np.stack(feature_vectors).astype(np.float32)
     print(f"Feature matrix shape: {X.shape}")
 
+    # ------------------------------------------------------------------
+    # 2. PCA transformation (fit once)
+    # ------------------------------------------------------------------
     pca = PCA(n_components=0.95, svd_solver="full", random_state=0)
     X_red = pca.fit_transform(X).astype(np.float32)
     d = X_red.shape[1]
     print(f"PCA reduced to {d} dimensions (95 % variance)")
 
+    # ------------------------------------------------------------------
+    # 3. Build FAISS index once
+    # ------------------------------------------------------------------
     index = faiss.IndexFlatL2(d)
     index.add(X_red)
-    radius_sq = args.radius**2
 
-    visited: set[int] = set()
-    clusters: List[List[int]] = []
+    # ------------------------------------------------------------------
+    # 4. Cluster for each radius
+    # ------------------------------------------------------------------
+    results_for_json: List[dict] = []
+    for radius in radii:
+        radius_sq = radius**2
+        visited: set[int] = set()
+        clusters: List[List[int]] = []
 
-    for idx in range(len(structures)):
-        if idx in visited:
-            continue
-        D, I = index.search(X_red[idx : idx + 1], len(structures))
-        cluster = [int(i) for dist, i in zip(D[0], I[0]) if dist <= radius_sq]
-        clusters.append(cluster)
-        visited.update(cluster)
+        for idx in range(len(structures)):
+            if idx in visited:
+                continue
+            D, I = index.search(X_red[idx : idx + 1], len(structures))
+            cluster = [int(i) for dist, i in zip(D[0], I[0]) if dist <= radius_sq]
+            clusters.append(cluster)
+            visited.update(cluster)
 
-    print(f"\nIdentified {len(clusters)} representatives with radius {args.radius}")
-    for cluster in clusters:
-        rep = cluster[0]
-        redundants = cluster[1:]
-        print(f"Representative: {file_paths[rep]}")
-        for r in redundants:
-            print(f"  Redundant: {file_paths[r]}")
+        print(f"\nIdentified {len(clusters)} representatives with radius {radius}")
+        if output_json is None:
+            for cluster in clusters:
+                rep = cluster[0]
+                redundants = cluster[1:]
+                print(f"Representative: {file_paths[rep]}")
+                for r in redundants:
+                    print(f"  Redundant: {file_paths[r]}")
 
-    if args.output_json:
-        out = {
-            "parameters": {"mode": "approximate", "radius": args.radius},
-            "clusters": [
+        if output_json is not None:
+            results_for_json.append(
                 {
-                    "representative": str(file_paths[c[0]]),
-                    "members": [str(file_paths[m]) for m in c[1:]],
+                    "radius": radius,
+                    "n_clusters": len(clusters),
+                    "clusters": [
+                        {
+                            "representative": str(file_paths[c[0]]),
+                            "members": [str(file_paths[m]) for m in c[1:]],
+                        }
+                        for c in clusters
+                    ],
                 }
-                for c in clusters
-            ],
+            )
+
+    # Write combined JSON once after processing all radii
+    if output_json and results_for_json:
+        combined = {
+            "parameters": {
+                "mode": "approximate",
+                "radii": radii,
+                "n_structures": len(structures),
+            },
+            "results": results_for_json,
         }
-        with open(args.output_json, "w") as f:
-            json.dump(out, f, indent=2)
-        print(f"\nApproximate clustering saved to {args.output_json}")
+        with open(output_json, "w") as f:
+            json.dump(combined, f, indent=2)
+        print(f"\nApproximate clustering for all radii saved to {output_json}")
 
     return
 
@@ -1074,8 +1128,18 @@ def main():
     """Main entry point for the distiller CLI tool."""
     args = parse_arguments()
 
+    # Combine file paths from CLI arguments and/or stdin
+    file_paths: List[Path] = []
+    cli_paths = [p for p in args.files if str(p) != "-"]
+    file_paths.extend(cli_paths)
+
+    # If no CLI paths provided or '-' sentinel present, read from stdin
+    if not args.files or any(str(p) == "-" for p in args.files):
+        stdin_paths = [Path(line.strip()) for line in sys.stdin if line.strip()]
+        file_paths.extend(stdin_paths)
+
     # Validate input files
-    valid_files = validate_input_files(args.files)
+    valid_files = validate_input_files(file_paths)
 
     if not valid_files:
         print("Error: No valid input files found", file=sys.stderr)
@@ -1085,22 +1149,26 @@ def main():
 
     # Parse all structure files
     print("Parsing structure files...")
-    structures = []
-    for file_path in valid_files:
+    structures: List[Structure] = []
+    parsed_files: List[Path] = []
+
+    for file_path in tqdm(valid_files, desc="Parsing", unit="file"):
         try:
             structure = parse_structure_file(file_path)
             structures.append(structure)
-            print(f"  Parsed {file_path}")
+            parsed_files.append(file_path)
         except Exception:
+            # Keep reporting failures explicitly
             print(f"  Failed to parse {file_path}, skipping", file=sys.stderr)
-            continue
+
+    # Replace the original list with the successfully parsed ones
+    valid_files = parsed_files
 
     if not structures:
         print("Error: No structures could be parsed", file=sys.stderr)
         sys.exit(1)
 
-    # Update valid_files to match successfully parsed structures
-    valid_files = valid_files[: len(structures)]
+    # valid_files already filtered to successfully parsed structures above
 
     # Validate nucleotide counts
     print("\nValidating nucleotide counts...")
@@ -1108,7 +1176,7 @@ def main():
 
     # Switch workflow based on requested mode
     if args.mode == "approximate":
-        run_approximate(structures, valid_files, args)
+        run_approximate_multiple(structures, valid_files, args.radius, args.output_json)
         return
     else:
         run_exact(structures, valid_files, args)
