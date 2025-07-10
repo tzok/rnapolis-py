@@ -547,7 +547,10 @@ def run_approximate(
         f"\nRunning approximate mode (feature-based PCA + FAISS)  –  radius = {radius}"
     )
 
-    feature_vectors = [featurize_structure(s) for s in structures]
+    feature_vectors = [
+        featurize_structure(s)
+        for s in tqdm(structures, desc="Featurizing", unit="structure")
+    ]
     feature_lengths = {len(v) for v in feature_vectors}
     if len(feature_lengths) != 1:
         print("Error: Inconsistent feature lengths among structures", file=sys.stderr)
