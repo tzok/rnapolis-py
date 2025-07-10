@@ -597,6 +597,19 @@ def run_approximate(
             json.dump(out, f, indent=2)
         print(f"\nApproximate clustering saved to {out_path}")
 
+    if output_json and results_for_json:
+        combined = {
+            "parameters": {
+                "mode": "approximate",
+                "radii": radii,
+                "n_structures": len(structures),
+            },
+            "results": results_for_json,
+        }
+        with open(output_json, "w") as f:
+            json.dump(combined, f, indent=2)
+        print(f"\nApproximate clustering for all radii saved to {output_json}")
+
     return
 
 
@@ -644,6 +657,7 @@ def run_approximate_multiple(
     # ------------------------------------------------------------------
     # 4. Cluster for each radius
     # ------------------------------------------------------------------
+    results_for_json: List[dict] = []
     for radius in radii:
         radius_sq = radius**2
         visited: set[int] = set()
@@ -665,25 +679,22 @@ def run_approximate_multiple(
             for r in redundants:
                 print(f"  Redundant: {file_paths[r]}")
 
-        if output_json:
-            out = {
-                "parameters": {"mode": "approximate", "radius": radius},
-                "clusters": [
-                    {
-                        "representative": str(file_paths[c[0]]),
-                        "members": [str(file_paths[m]) for m in c[1:]],
-                    }
-                    for c in clusters
-                ],
-            }
-            out_path = Path(output_json)
-            if out_path.suffix == ".json":
-                out_path = out_path.with_name(
-                    f"{out_path.stem}_r{radius}{out_path.suffix}"
-                )
-            with open(out_path, "w") as f:
-                json.dump(out, f, indent=2)
-            print(f"\nApproximate clustering saved to {out_path}")
+        if output_json is not None:
+            results_for_json.append(
+                {
+                    "radius": radius,
+                    "n_clusters": len(clusters),
+                    "clusters": [
+                        {
+                            "representative": str(file_paths[c[0]]),
+                            "members": [
+                                str(file_paths[m]) for m in c[1:]
+                            ],
+                        }
+                        for c in clusters
+                    ],
+                }
+            )
 
     return
 
