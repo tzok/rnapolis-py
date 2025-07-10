@@ -1,12 +1,67 @@
 import string
 from functools import cached_property
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
 
+from rnapolis.parser_v2 import parse_cif_atoms, write_cif
+
 # Constants
 AVERAGE_OXYGEN_PHOSPHORUS_DISTANCE_COVALENT = 1.6
+
+# Define atom sets for different residue types
+BACKBONE_RIBOSE_ATOMS = {
+    "P",
+    "O5'",
+    "C5'",
+    "C4'",
+    "O4'",
+    "C3'",
+    "O3'",
+    "C2'",
+    "O2'",
+    "C1'",
+}
+# DNA backbone atoms (no O2' compared to RNA)
+BACKBONE_DEOXYRIBOSE_ATOMS = {
+    "P",
+    "O5'",
+    "C5'",
+    "C4'",
+    "O4'",
+    "C3'",
+    "O3'",
+    "C2'",
+    "C1'",
+}
+PURINE_CORE_ATOMS = {"N9", "C8", "N7", "C5", "C6", "N1", "C2", "N3", "C4"}
+PYRIMIDINE_CORE_ATOMS = {"N1", "C2", "N3", "C4", "C5", "C6"}
+
+# RNA nucleotides
+ATOMS_A = BACKBONE_RIBOSE_ATOMS | PURINE_CORE_ATOMS | {"N6"}
+ATOMS_G = BACKBONE_RIBOSE_ATOMS | PURINE_CORE_ATOMS | {"O6"}
+ATOMS_C = BACKBONE_RIBOSE_ATOMS | PYRIMIDINE_CORE_ATOMS | {"N4", "O2"}
+ATOMS_U = BACKBONE_RIBOSE_ATOMS | PYRIMIDINE_CORE_ATOMS | {"O4", "O2"}
+
+# DNA nucleotides
+ATOMS_DA = BACKBONE_DEOXYRIBOSE_ATOMS | PURINE_CORE_ATOMS | {"N6"}
+ATOMS_DG = BACKBONE_DEOXYRIBOSE_ATOMS | PURINE_CORE_ATOMS | {"O6"}
+ATOMS_DC = BACKBONE_DEOXYRIBOSE_ATOMS | PYRIMIDINE_CORE_ATOMS | {"N4", "O2"}
+ATOMS_DT = BACKBONE_DEOXYRIBOSE_ATOMS | PYRIMIDINE_CORE_ATOMS | {"O4", "O2", "C7"}
+
+PURINES = {"A", "G", "DA", "DG"}
+PYRIMIDINES = {"C", "U", "DC", "DT"}
+RESIDUE_ATOMS_MAP = {
+    "A": ATOMS_A,
+    "G": ATOMS_G,
+    "C": ATOMS_C,
+    "U": ATOMS_U,
+    "DA": ATOMS_DA,
+    "DG": ATOMS_DG,
+    "DC": ATOMS_DC,
+    "DT": ATOMS_DT,
+}
 
 
 def calculate_torsion_angle(
@@ -54,6 +109,407 @@ def calculate_torsion_angle(
     angle = np.arctan2(y, x)
 
     return angle
+
+
+def find_paired_coordinates(
+    residues1: List["Residue"], residues2: List["Residue"]
+) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Find paired coordinates of matching atoms between two residues.
+
+    Parameters:
+    -----------
+    residues1 : List[Residue]
+        List of residues from the first structure
+    residues2 : List[Residue]
+        List of residues from the second structure
+
+    Returns:
+    --------
+    Tuple[np.ndarray, np.ndarray]
+        Tuple of two numpy arrays containing coordinates of matching atom pairs
+    """
+    all_paired_dfs = []
+
+    for residue1, residue2 in zip(residues1, residues2):
+        res_name1 = residue1.residue_name
+        res_name2 = residue2.residue_name
+
+        atoms_to_match = None
+
+        if res_name1 == res_name2:
+            atoms_to_match = RESIDUE_ATOMS_MAP.get(res_name1)
+        elif res_name1 in PURINES and res_name2 in PURINES:
+            # For mixed RNA/DNA purines, use common backbone + purine core
+            if any(name.startswith("D") for name in [res_name1, res_name2]):
+                # At least one is DNA, use deoxyribose backbone
+                atoms_to_match = BACKBONE_DEOXYRIBOSE_ATOMS | PURINE_CORE_ATOMS
+            else:
+                # Both RNA, use ribose backbone
+                atoms_to_match = BACKBONE_RIBOSE_ATOMS | PURINE_CORE_ATOMS
+        elif res_name1 in PYRIMIDINES and res_name2 in PYRIMIDINES:
+            # For mixed RNA/DNA pyrimidines, use common backbone + pyrimidine core
+            if any(name.startswith("D") for name in [res_name1, res_name2]):
+                # At least one is DNA, use deoxyribose backbone
+                atoms_to_match = BACKBONE_DEOXYRIBOSE_ATOMS | PYRIMIDINE_CORE_ATOMS
+            else:
+                # Both RNA, use ribose backbone
+                atoms_to_match = BACKBONE_RIBOSE_ATOMS | PYRIMIDINE_CORE_ATOMS
+        else:
+            # Different types, use minimal common backbone
+            if any(name.startswith("D") for name in [res_name1, res_name2]):
+                atoms_to_match = BACKBONE_DEOXYRIBOSE_ATOMS
+            else:
+                atoms_to_match = BACKBONE_RIBOSE_ATOMS
+
+        # Ensure atoms_to_match is not None
+        if atoms_to_match is None:
+            # Fallback to minimal backbone atoms
+            atoms_to_match = BACKBONE_DEOXYRIBOSE_ATOMS
+
+        if residue1.format == "mmCIF":
+            df1 = residue1.atoms
+        else:
+            df1 = parse_cif_atoms(write_cif(residue1.atoms))
+
+        if residue2.format == "mmCIF":
+            df2 = residue2.atoms
+        else:
+            df2 = parse_cif_atoms(write_cif(residue2.atoms))
+
+        if "auth_atom_id" in df1.columns and "auth_atom_id" in df2.columns:
+            atom_column = "auth_atom_id"
+        elif "label_atom_id" in df1.columns and "label_atom_id" in df2.columns:
+            atom_column = "label_atom_id"
+        else:
+            raise ValueError(
+                "No suitable atom identifier column found in the provided residues."
+            )
+
+        df1_filtered = df1[df1[atom_column].isin(atoms_to_match)]
+        df2_filtered = df2[df2[atom_column].isin(atoms_to_match)]
+
+        paired_df = pd.merge(
+            df1_filtered[[atom_column, "Cartn_x", "Cartn_y", "Cartn_z"]],
+            df2_filtered[[atom_column, "Cartn_x", "Cartn_y", "Cartn_z"]],
+            on=atom_column,
+            suffixes=("_1", "_2"),
+        )
+
+        if not paired_df.empty:
+            all_paired_dfs.append(paired_df)
+
+    final_df = pd.concat(all_paired_dfs, ignore_index=True)
+    coords_1 = final_df[["Cartn_x_1", "Cartn_y_1", "Cartn_z_1"]].to_numpy()
+    coords_2 = final_df[["Cartn_x_2", "Cartn_y_2", "Cartn_z_2"]].to_numpy()
+    return coords_1, coords_2
+
+
+def rmsd_quaternions(coords1: np.ndarray, coords2: np.ndarray) -> float:
+    """
+    Calculates RMSD using the Quaternion method.
+
+    Parameters:
+    -----------
+    coords1 : np.ndarray
+        Nx3 array of coordinates for the first structure
+    coords2 : np.ndarray
+        Nx3 array of coordinates for the second structure
+    """
+    P, Q = coords1, coords2
+
+    # 1. Center coordinates using vectorized operations
+    centroid_P = np.mean(P, axis=0)
+    centroid_Q = np.mean(Q, axis=0)
+    P_centered = P - centroid_P
+    Q_centered = Q - centroid_Q
+
+    # 2. Covariance matrix using matrix multiplication
+    C = P_centered.T @ Q_centered
+
+    # 3. K matrix
+    K = np.zeros((4, 4))
+    K[0, 0] = C[0, 0] + C[1, 1] + C[2, 2]
+    K[0, 1] = K[1, 0] = C[1, 2] - C[2, 1]
+    K[0, 2] = K[2, 0] = C[2, 0] - C[0, 2]
+    K[0, 3] = K[3, 0] = C[0, 1] - C[1, 0]
+    K[1, 1] = C[0, 0] - C[1, 1] - C[2, 2]
+    K[1, 2] = K[2, 1] = C[0, 1] + C[1, 0]
+    K[1, 3] = K[3, 1] = C[0, 2] + C[2, 0]
+    K[2, 2] = -C[0, 0] + C[1, 1] - C[2, 2]
+    K[2, 3] = K[3, 2] = C[1, 2] + C[2, 1]
+    K[3, 3] = -C[0, 0] - C[1, 1] + C[2, 2]
+
+    # 4. Eigenvalue/vector
+    eigenvalues, _ = np.linalg.eigh(K)
+
+    # E0 = sum of squared distances from centroids
+    E0 = np.sum(P_centered**2) + np.sum(Q_centered**2)
+
+    # The min RMSD squared is (E0 - 2*max_eigenvalue) / N
+    N = P.shape[0]
+    rmsd_sq = (E0 - 2 * np.max(eigenvalues)) / N
+
+    # Handle potential floating point inaccuracies
+    return np.sqrt(max(0.0, rmsd_sq))
+
+
+def rmsd_svd(coords1: np.ndarray, coords2: np.ndarray) -> float:
+    """
+    Calculates RMSD using SVD decomposition (Kabsch algorithm).
+
+    Parameters:
+    -----------
+    coords1 : np.ndarray
+        Nx3 array of coordinates for the first structure
+    coords2 : np.ndarray
+        Nx3 array of coordinates for the second structure
+    """
+    P, Q = coords1, coords2
+
+    # 1. Center coordinates
+    centroid_P = np.mean(P, axis=0)
+    centroid_Q = np.mean(Q, axis=0)
+    P_centered = P - centroid_P
+    Q_centered = Q - centroid_Q
+
+    # 2. Compute cross-covariance matrix
+    H = P_centered.T @ Q_centered
+
+    # 3. SVD decomposition
+    U, S, Vt = np.linalg.svd(H)
+
+    # 4. Compute optimal rotation matrix
+    R = Vt.T @ U.T
+
+    # Ensure proper rotation (det(R) = 1)
+    if np.linalg.det(R) < 0:
+        Vt[-1, :] *= -1
+        R = Vt.T @ U.T
+
+    # 5. Apply rotation to P_centered
+    P_rotated = P_centered @ R.T
+
+    # 6. Calculate RMSD
+    diff = P_rotated - Q_centered
+    rmsd_sq = np.sum(diff**2) / P.shape[0]
+
+    return np.sqrt(rmsd_sq)
+
+
+def rmsd_qcp(coords1: np.ndarray, coords2: np.ndarray) -> float:
+    """
+    Calculates RMSD using the QCP (Quaternion Characteristic Polynomial) method.
+    This implementation follows the BioPython QCP algorithm but uses np.linalg.eigh
+    instead of Newton-Raphson for simplicity.
+
+    Parameters:
+    -----------
+    coords1 : np.ndarray
+        Nx3 array of coordinates for the first structure
+    coords2 : np.ndarray
+        Nx3 array of coordinates for the second structure
+    """
+
+    # Center coordinates at origin
+    centroid1 = np.mean(coords1, axis=0)
+    centroid2 = np.mean(coords2, axis=0)
+    coords1_centered = coords1 - centroid1
+    coords2_centered = coords2 - centroid2
+
+    # Calculate G1, G2, and cross-covariance matrix A (following BioPython)
+    G1 = np.trace(np.dot(coords2_centered, coords2_centered.T))
+    G2 = np.trace(np.dot(coords1_centered, coords1_centered.T))
+    A = np.dot(coords2_centered.T, coords1_centered)  # Cross-covariance matrix
+    E0 = (G1 + G2) * 0.5
+
+    # Extract elements from A matrix
+    Sxx, Sxy, Sxz = A[0, 0], A[0, 1], A[0, 2]
+    Syx, Syy, Syz = A[1, 0], A[1, 1], A[1, 2]
+    Szx, Szy, Szz = A[2, 0], A[2, 1], A[2, 2]
+
+    # Build the K matrix (quaternion matrix) as in BioPython
+    K = np.zeros((4, 4))
+    K[0, 0] = Sxx + Syy + Szz
+    K[0, 1] = K[1, 0] = Syz - Szy
+    K[0, 2] = K[2, 0] = Szx - Sxz
+    K[0, 3] = K[3, 0] = Sxy - Syx
+    K[1, 1] = Sxx - Syy - Szz
+    K[1, 2] = K[2, 1] = Sxy + Syx
+    K[1, 3] = K[3, 1] = Szx + Sxz
+    K[2, 2] = -Sxx + Syy - Szz
+    K[2, 3] = K[3, 2] = Syz + Szy
+    K[3, 3] = -Sxx - Syy + Szz
+
+    # Find the largest eigenvalue using numpy
+    eigenvalues, _ = np.linalg.eigh(K)
+    max_eigenvalue = np.max(eigenvalues)
+
+    # Calculate RMSD following BioPython formula
+    natoms = coords1.shape[0]
+    rmsd_sq = (2.0 * abs(E0 - max_eigenvalue)) / natoms
+    rmsd = np.sqrt(rmsd_sq)
+
+    return rmsd
+
+
+def rmsd_to_nrmsd(rmsd: float, num_atoms: int) -> float:
+    """
+    Convert RMSD to normalized RMSD (nRMSD).
+
+    Parameters:
+    -----------
+    rmsd : float
+        Root Mean Square Deviation value
+    num_atoms : int
+        Number of atoms used in the RMSD calculation
+
+    Returns:
+    --------
+    float
+        Normalized RMSD value
+    """
+    return rmsd / np.sqrt(num_atoms)
+
+
+def nrmsd_quaternions(coords1: np.ndarray, coords2: np.ndarray) -> float:
+    """
+    Calculates nRMSD using the Quaternion method.
+
+    Parameters:
+    -----------
+    coords1 : np.ndarray
+        Nx3 array of coordinates for the first structure
+    coords2 : np.ndarray
+        Nx3 array of coordinates for the second structure
+    """
+    rmsd = rmsd_quaternions(coords1, coords2)
+    return rmsd_to_nrmsd(rmsd, coords1.shape[0])
+
+
+def nrmsd_svd(coords1: np.ndarray, coords2: np.ndarray) -> float:
+    """
+    Calculates nRMSD using SVD decomposition (Kabsch algorithm).
+
+    Parameters:
+    -----------
+    coords1 : np.ndarray
+        Nx3 array of coordinates for the first structure
+    coords2 : np.ndarray
+        Nx3 array of coordinates for the second structure
+    """
+    rmsd = rmsd_svd(coords1, coords2)
+    return rmsd_to_nrmsd(rmsd, coords1.shape[0])
+
+
+def nrmsd_qcp(coords1: np.ndarray, coords2: np.ndarray) -> float:
+    """
+    Calculates nRMSD using the QCP (Quaternion Characteristic Polynomial) method.
+
+    Parameters:
+    -----------
+    coords1 : np.ndarray
+        Nx3 array of coordinates for the first structure
+    coords2 : np.ndarray
+        Nx3 array of coordinates for the second structure
+    """
+    rmsd = rmsd_qcp(coords1, coords2)
+    return rmsd_to_nrmsd(rmsd, coords1.shape[0])
+
+
+def nrmsd_validate(coords1: np.ndarray, coords2: np.ndarray) -> float:
+    """
+    Validates that all nRMSD methods produce the same result.
+    Uses quaternions method as the primary result after validation.
+
+    Parameters:
+    -----------
+    coords1 : np.ndarray
+        Nx3 array of coordinates for the first structure
+    coords2 : np.ndarray
+        Nx3 array of coordinates for the second structure
+
+    Returns:
+    --------
+    float
+        nRMSD value (from quaternions method after validation)
+
+    Raises:
+    -------
+    ValueError
+        If any methods produce significantly different results
+    """
+    # Calculate using all methods
+    result_quaternions = nrmsd_quaternions(coords1, coords2)
+    result_svd = nrmsd_svd(coords1, coords2)
+    result_qcp = nrmsd_qcp(coords1, coords2)
+
+    # Check if results are approximately equal (within 1e-6 tolerance)
+    tolerance = 1e-6
+
+    # Check quaternions vs SVD
+    if abs(result_quaternions - result_svd) > tolerance:
+        raise ValueError(
+            f"nRMSD methods disagree: quaternions={result_quaternions:.8f}, "
+            f"svd={result_svd:.8f}, difference={abs(result_quaternions - result_svd):.8f}"
+        )
+
+    # Check quaternions vs QCP
+    if abs(result_quaternions - result_qcp) > tolerance:
+        raise ValueError(
+            f"nRMSD methods disagree: quaternions={result_quaternions:.8f}, "
+            f"qcp={result_qcp:.8f}, difference={abs(result_quaternions - result_qcp):.8f}"
+        )
+
+    # Check SVD vs QCP
+    if abs(result_svd - result_qcp) > tolerance:
+        raise ValueError(
+            f"nRMSD methods disagree: svd={result_svd:.8f}, "
+            f"qcp={result_qcp:.8f}, difference={abs(result_svd - result_qcp):.8f}"
+        )
+
+    # Return quaternions result as the validated value
+    return result_quaternions
+
+
+def nrmsd_quaternions_residues(
+    residues1: List["Residue"], residues2: List["Residue"]
+) -> float:
+    """
+    Calculates nRMSD using the Quaternion method from residue lists.
+    residues1 and residues2 are lists of Residue objects.
+    """
+    coords1, coords2 = find_paired_coordinates(residues1, residues2)
+    return nrmsd_quaternions(coords1, coords2)
+
+
+def nrmsd_svd_residues(residues1: List["Residue"], residues2: List["Residue"]) -> float:
+    """
+    Calculates nRMSD using SVD decomposition from residue lists.
+    residues1 and residues2 are lists of Residue objects.
+    """
+    coords1, coords2 = find_paired_coordinates(residues1, residues2)
+    return nrmsd_svd(coords1, coords2)
+
+
+def nrmsd_qcp_residues(residues1: List["Residue"], residues2: List["Residue"]) -> float:
+    """
+    Calculates nRMSD using the QCP method from residue lists.
+    residues1 and residues2 are lists of Residue objects.
+    """
+    coords1, coords2 = find_paired_coordinates(residues1, residues2)
+    return nrmsd_qcp(coords1, coords2)
+
+
+def nrmsd_validate_residues(
+    residues1: List["Residue"], residues2: List["Residue"]
+) -> float:
+    """
+    Validates that all nRMSD methods produce the same result from residue lists.
+    residues1 and residues2 are lists of Residue objects.
+    """
+    coords1, coords2 = find_paired_coordinates(residues1, residues2)
+    return nrmsd_validate(coords1, coords2)
 
 
 class Structure:
@@ -465,6 +921,30 @@ class Residue:
         """Get a list of all atoms in this residue."""
         return [Atom(self.atoms.iloc[i], self.format) for i in range(len(self.atoms))]
 
+    @cached_property
+    def _atom_dict(self) -> dict[str, "Atom"]:
+        """Cache a dictionary of atom names to Atom instances."""
+        atom_dict = {}
+
+        for i in range(len(self.atoms)):
+            atom_data = self.atoms.iloc[i]
+            atom = Atom(atom_data, self.format)
+
+            # Get the atom name based on format
+            if self.format == "PDB":
+                atom_name = atom_data["name"]
+            elif self.format == "mmCIF":
+                if "auth_atom_id" in self.atoms.columns:
+                    atom_name = atom_data["auth_atom_id"]
+                else:
+                    atom_name = atom_data["label_atom_id"]
+            else:
+                continue
+
+            atom_dict[atom_name] = atom
+
+        return atom_dict
+
     def find_atom(self, atom_name: str) -> Optional["Atom"]:
         """
         Find an atom by name in this residue.
@@ -479,23 +959,7 @@ class Residue:
         Optional[Atom]
             The Atom object, or None if not found
         """
-        if self.format == "PDB":
-            mask = self.atoms["name"] == atom_name
-            atoms_df = self.atoms[mask]
-            if len(atoms_df) > 0:
-                return Atom(atoms_df.iloc[0], self.format)
-        elif self.format == "mmCIF":
-            if "auth_atom_id" in self.atoms.columns:
-                mask = self.atoms["auth_atom_id"] == atom_name
-                atoms_df = self.atoms[mask]
-                if len(atoms_df) > 0:
-                    return Atom(atoms_df.iloc[0], self.format)
-            else:
-                mask = self.atoms["label_atom_id"] == atom_name
-                atoms_df = self.atoms[mask]
-                if len(atoms_df) > 0:
-                    return Atom(atoms_df.iloc[0], self.format)
-        return None
+        return self._atom_dict.get(atom_name)
 
     @cached_property
     def is_nucleotide(self) -> bool:
