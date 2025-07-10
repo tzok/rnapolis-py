@@ -277,6 +277,7 @@ def validate_nucleotide_counts(
 
 # ----------------------------------------------------------------------
 
+
 def run_exact(structures: List[Structure], valid_files: List[Path], args) -> None:
     """
     Exact mode: nRMSD-based clustering workflow (previously in main).
@@ -346,7 +347,9 @@ def run_exact(structures: List[Structure], valid_files: List[Path], args) -> Non
                 thresholds, cluster_counts
             )
 
-            ax2.scatter(thresholds, cluster_counts, alpha=0.7, s=30, label="Data points")
+            ax2.scatter(
+                thresholds, cluster_counts, alpha=0.7, s=30, label="Data points"
+            )
             if len(x_smooth) > 0:
                 ax2.plot(
                     x_smooth,
@@ -437,6 +440,8 @@ def run_exact(structures: List[Structure], valid_files: List[Path], args) -> Non
         with open(args.output_json, "w") as f:
             json.dump(output_data, f, indent=2)
         print(f"\nComprehensive clustering results saved to {args.output_json}")
+
+
 # Approximate mode helper functions and workflow
 # ----------------------------------------------------------------------
 def _select_base_atoms(residue) -> List[Optional[np.ndarray]]:
