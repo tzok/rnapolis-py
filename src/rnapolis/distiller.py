@@ -1210,22 +1210,26 @@ def main():
 
     # Parse all structure files
     print("Parsing structure files...")
-    structures = []
-    for file_path in valid_files:
+    structures: List[Structure] = []
+    parsed_files: List[Path] = []
+
+    for file_path in tqdm(valid_files, desc="Parsing", unit="file"):
         try:
             structure = parse_structure_file(file_path)
             structures.append(structure)
-            print(f"  Parsed {file_path}")
+            parsed_files.append(file_path)
         except Exception:
+            # Keep reporting failures explicitly
             print(f"  Failed to parse {file_path}, skipping", file=sys.stderr)
-            continue
+
+    # Replace the original list with the successfully parsed ones
+    valid_files = parsed_files
 
     if not structures:
         print("Error: No structures could be parsed", file=sys.stderr)
         sys.exit(1)
 
-    # Update valid_files to match successfully parsed structures
-    valid_files = valid_files[: len(structures)]
+    # valid_files already filtered to successfully parsed structures above
 
     # Validate nucleotide counts
     print("\nValidating nucleotide counts...")
