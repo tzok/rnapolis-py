@@ -18,6 +18,9 @@ def read_3d_structure(
     atoms, modified, sequence_by_entity, is_nucleic_acid_by_entity = (
         parse_cif(cif_or_pdb) if is_cif(cif_or_pdb) else parse_pdb(cif_or_pdb)
     )
+    if not atoms:
+        logger.warning("No atoms parsed from file, returning empty Structure3D.")
+        return Structure3D([])
     available_models = {atom.model: None for atom in atoms}
     atoms_by_model = {
         model: list(filter(lambda atom: atom.model == model, atoms))
