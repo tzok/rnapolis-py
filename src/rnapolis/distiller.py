@@ -9,22 +9,22 @@ from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+import faiss
 import numpy as np
 from scipy.cluster.hierarchy import dendrogram, fcluster, linkage
 from scipy.optimize import curve_fit
 from scipy.spatial.distance import squareform
-from tqdm import tqdm
 from sklearn.decomposition import PCA
-import faiss
+from tqdm import tqdm
 
 from rnapolis.parser_v2 import parse_cif_atoms, parse_pdb_atoms
 from rnapolis.tertiary_v2 import (
     Structure,
+    calculate_torsion_angle,
     nrmsd_qcp_residues,
     nrmsd_quaternions_residues,
     nrmsd_svd_residues,
     nrmsd_validate_residues,
-    calculate_torsion_angle,
 )
 
 
@@ -284,7 +284,7 @@ def run_exact(structures: List[Structure], valid_files: List[Path], args) -> Non
     Produces the same outputs/visualisations as before.
     """
     # Initialize cache
-    print(f"\nInitializing nRMSD cache...")
+    print("\nInitializing nRMSD cache...")
     cache = NRMSDCache(args.cache_file, args.cache_save_interval)
 
     # Compute distance matrix
@@ -499,9 +499,10 @@ def featurize_structure(structure: Structure) -> np.ndarray:
             # 16 distances
             for ci in ai:
                 for cj in aj:
-                    dist = (
-                        float(np.linalg.norm(ci - cj)) if None not in (ci, cj) else 0.0
-                    )
+                    if ci is None or cj is None:
+                        dist = 0.0
+                    else:
+                        dist = float(np.linalg.norm(ci - cj))
                     feats.append(dist)
 
             # 18 torsion features (sin, cos over 9 angles)
@@ -510,11 +511,11 @@ def featurize_structure(structure: Structure) -> np.ndarray:
             for idx2 in range(1, 4):
                 for idx3 in range(1, 4):
                     a2, a3 = ai[idx2], aj[idx3]
-                    if None not in (a1, a2, a3, a4):
+                    if any(x is None for x in (a1, a2, a3, a4)):
+                        feats.extend([0.0, 1.0])
+                    else:
                         angle = calculate_torsion_angle(a1, a2, a3, a4)
                         feats.extend([float(np.sin(angle)), float(np.cos(angle))])
-                    else:
-                        feats.extend([0.0, 1.0])
 
     return np.asarray(feats, dtype=np.float32)
 
@@ -1111,194 +1112,6 @@ def main():
     else:
         run_exact(structures, valid_files, args)
         return
-
-    # Initialize cache
-    print(f"\nInitializing nRMSD cache...")
-    cache = NRMSDCache(args.cache_file, args.cache_save_interval)
-
-    # Compute distance matrix
-    print("\nComputing distance matrix...")
-    distance_matrix = find_structure_clusters(
-        structures, valid_files, cache, args.visualize, args.rmsd_method
-    )
-
-    # Get all threshold data and determine optimal threshold if not provided
-    linkage_matrix = linkage(squareform(distance_matrix), method="complete")
-
-    # Determine threshold (either user-provided or auto-detected)
-    if args.threshold is None:
-        optimal_threshold = determine_optimal_threshold(distance_matrix, linkage_matrix)
-    else:
-        optimal_threshold = args.threshold
-        print(f"Using user-specified threshold: {optimal_threshold}")
-
-    all_threshold_data = find_all_thresholds_and_clusters(
-        distance_matrix, linkage_matrix, valid_files
-    )
-
-    # Get clustering at the determined threshold
-    threshold_clustering = get_clustering_at_threshold(
-        linkage_matrix, distance_matrix, valid_files, optimal_threshold
-    )
-
-    # Show visualizations if requested
-    if args.visualize:
-        try:
-            import matplotlib.pyplot as plt
-
-            # Create figure with subplots
-            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 6))
-
-            # Plot dendrogram with threshold line
-            dend = dendrogram(
-                linkage_matrix,
-                labels=[f"Structure {i}" for i in range(len(structures))],
-                ax=ax1,
-                color_threshold=optimal_threshold,
-            )
-            ax1.axhline(
-                y=optimal_threshold,
-                color="red",
-                linestyle="--",
-                linewidth=2,
-                label=f"Threshold = {optimal_threshold:.6f}",
-            )
-            ax1.set_title("Hierarchical Clustering Dendrogram")
-            ax1.set_xlabel("Structure Index")
-            ax1.set_ylabel("nRMSD Distance")
-            ax1.legend()
-
-            # Plot threshold vs cluster count scatter plot with B-spline and inflection points
-            thresholds = np.array(
-                [entry["nrmsd_threshold"] for entry in all_threshold_data]
-            )
-            cluster_counts = np.array(
-                [len(entry["clusters"]) for entry in all_threshold_data]
-            )
-
-            # Fit exponential decay curve and find inflection points
-            x_smooth, y_smooth, inflection_x = fit_exponential_decay(
-                thresholds, cluster_counts
-            )
-
-            # Plot original data points
-            ax2.scatter(
-                thresholds, cluster_counts, alpha=0.7, s=30, label="Data points"
-            )
-
-            # Plot exponential decay curve
-            if len(x_smooth) > 0:
-                ax2.plot(
-                    x_smooth,
-                    y_smooth,
-                    "b-",
-                    linewidth=2,
-                    alpha=0.8,
-                    label="Exponential decay fit",
-                )
-
-            # Mark inflection points
-            if len(inflection_x) > 0:
-                # Get y values for inflection points from the fitted curve
-                if len(x_smooth) > 0:
-                    inflection_y = np.interp(inflection_x, x_smooth, y_smooth)
-
-                    ax2.scatter(
-                        inflection_x,
-                        inflection_y,
-                        color="orange",
-                        s=100,
-                        marker="*",
-                        zorder=6,
-                        label=f"Key points ({len(inflection_x)})",
-                    )
-
-                    # Print inflection points
-                    print(f"\nFound {len(inflection_x)} key points:")
-                    for i, (x_inf, y_inf) in enumerate(zip(inflection_x, inflection_y)):
-                        print(
-                            f"  Point {i + 1}: threshold = {x_inf:.6f}, clusters = {y_inf:.1f}"
-                        )
-
-            # Mark selected threshold
-            ax2.axvline(
-                x=optimal_threshold,
-                color="red",
-                linestyle="--",
-                linewidth=2,
-                label=f"Threshold = {optimal_threshold:.6f}",
-            )
-            ax2.scatter(
-                [optimal_threshold],
-                [threshold_clustering["n_clusters"]],
-                color="red",
-                s=100,
-                zorder=5,
-                label=f"Selected ({threshold_clustering['n_clusters']} clusters)",
-            )
-
-            ax2.set_xlabel("nRMSD Threshold")
-            ax2.set_ylabel("Number of Clusters")
-            ax2.set_title("Threshold vs Cluster Count with Exponential Decay Fit")
-            ax2.grid(True, alpha=0.3)
-            ax2.legend()
-
-            plt.tight_layout()
-
-            # Always save the plot when --visualize is used
-            plt.savefig("clustering_analysis.png", dpi=300, bbox_inches="tight")
-            print("Clustering analysis plots saved to clustering_analysis.png")
-
-            # Try to show interactively, but don't fail if it doesn't work
-            try:
-                plt.show()
-            except Exception:
-                print("Note: Could not display plot interactively, but saved to file")
-
-        except ImportError:
-            print(
-                "Warning: matplotlib not available, skipping visualization",
-                file=sys.stderr,
-            )
-
-    # Print summary
-    print(f"\nFound {len(all_threshold_data)} different clustering configurations")
-    print(
-        f"Threshold range: {all_threshold_data[0]['nrmsd_threshold']:.6f} to {all_threshold_data[-1]['nrmsd_threshold']:.6f}"
-    )
-    print(
-        f"Cluster count range: {len(all_threshold_data[-1]['clusters'])} to {len(all_threshold_data[0]['clusters'])}"
-    )
-
-    # Print clustering at determined threshold
-    print(f"\nClustering at threshold {optimal_threshold:.6f}:")
-    print(f"  Number of clusters: {threshold_clustering['n_clusters']}")
-    print(f"  Cluster sizes: {threshold_clustering['cluster_sizes']}")
-    for i, cluster in enumerate(threshold_clustering["clusters"]):
-        print(
-            f"  Cluster {i + 1}: {cluster['representative']} + {len(cluster['members'])} members"
-        )
-
-    # Save comprehensive JSON with all thresholds and threshold clustering
-    if args.output_json:
-        output_data = {
-            "all_thresholds": all_threshold_data,
-            "threshold_clustering": threshold_clustering,
-            "parameters": {
-                "threshold": optimal_threshold,
-                "threshold_source": "user-specified"
-                if args.threshold is not None
-                else "auto-detected",
-                "rmsd_method": args.rmsd_method,
-            },
-        }
-
-        with open(args.output_json, "w") as f:
-            json.dump(output_data, f, indent=2)
-
-        print(f"\nComprehensive clustering results saved to {args.output_json}")
-    else:
-        print("\nUse --output-json to save clustering results to a file")
 
 
 if __name__ == "__main__":
