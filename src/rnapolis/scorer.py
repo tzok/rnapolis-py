@@ -48,7 +48,7 @@ def dmcd_dmcq(target, model):
             for angle in angles:
                 ang1 = target.at[i, angle]
                 ang2 = model.at[i, angle]
-                if not (math.isnan(ang1) or math.isnan(ang1)):
+                if not (math.isnan(ang1) or math.isnan(ang2)):
                     dmcd = math.atan2(math.sin(ang1 - ang2), math.cos(ang1 - ang2))
                     dmcds.append(dmcd)
                     dmcqs.append(abs(dmcd))
@@ -215,7 +215,7 @@ def main(argv):
     model_path = args.model_path
     reps = args.bootstrap_reps
     rounding = args.rounding
-    visualize = args.visualize
+    visualize_on = args.visualize
 
     target_data = parse_file(target_path)
     target_structure = tertiary.Structure(target_data)
@@ -229,7 +229,7 @@ def main(argv):
     npdmcd, npdmcq = np.array(dmcd), np.array(dmcq)
     npdmcq_double = np.array([2*v for v in dmcq])
 
-    if(visualize):
+    if(visualize_on):
         visualize(npdmcq, "dmcq.svg", "dmcq_clusters.svg")
         visualize(npdmcd, "dmcd.svg", "dmcd_clusters.svg")
 
@@ -239,8 +239,8 @@ def main(argv):
     if(np.allclose(npdmcd, 0)):
         ci_lower_mcq, ci_upper_mcq, ci_lower_mcd, ci_upper_mcd = [0,0,0,0]
     else:
-        ci_lower_mcq, ci_upper_mcq = descriptive.circ_mean_ci(npdmcq, method = "bootstrap", ci = 0.95, mean = mcd)
-        ci_lower_mcd, ci_upper_mcd = descriptive.circ_mean_ci(npdmcd, method = "bootstrap", ci = 0.95, mean = mcq)
+        ci_lower_mcq, ci_upper_mcq = descriptive.circ_mean_ci(npdmcq, method = "bootstrap", ci = 0.95, mean = mcq)
+        ci_lower_mcd, ci_upper_mcd = descriptive.circ_mean_ci(npdmcd, method = "bootstrap", ci = 0.95, mean = mcd)
 
     ci_lower_rmcq, ci_upper_rmcq = r_ci(dmcq, reps)
     ci_lower_rmcd, ci_upper_rmcd = r_ci(dmcd, reps)
