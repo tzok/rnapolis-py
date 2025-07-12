@@ -207,7 +207,7 @@ def main(argv):
     parser.add_argument("--model_path", type=str, help="model", required=True) 
     parser.add_argument("--bootstrap_reps", type=int, help="reps", required=False, default=10000) 
     parser.add_argument("--rounding", type=int, help="rouding", required=False, default=10)
-    parser.add_argument("--visualize", type=bool, help="rouding", required=False, default=False)
+    parser.add_argument("--visualize", action="store_true", required=False, default=False)
 
     args = parser.parse_args()
 
