@@ -1,2 +1,2 @@
 hypothesis==6.138.14
-pytest==8.4.1
+pytest==8.4.2
