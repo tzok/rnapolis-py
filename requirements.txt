@@ -6,7 +6,7 @@ numpy==2.2.3
 ordered-set==4.1.0
 orjson==3.11.3
 pandas==2.3.2
-pulp==3.2.2
+pulp==3.3.0
 requests==2.32.5
 scikit-learn==1.7.0
 scipy==1.15.2
