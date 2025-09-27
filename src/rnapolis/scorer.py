@@ -18,10 +18,10 @@ import csv
 
 
 def parse_file(filepath):
-    if (filepath[len(filepath)-3:] == "pdb"):
+    if filepath[len(filepath) - 3 :] == "pdb":
         with open(filepath) as file:
             data = rna_parser.parse_pdb_atoms(file)
-    elif (filepath[len(filepath)-3:] == "cif"):
+    elif filepath[len(filepath) - 3 :] == "cif":
         with open(filepath) as file:
             data = rna_parser.parse_cif_atoms(file)
     else:
@@ -31,7 +31,7 @@ def parse_file(filepath):
 
 
 def save_csv(result_file_path, data):
-    with open(result_file_path, 'w', newline='') as file:
+    with open(result_file_path, "w", newline="") as file:
         writer = csv.writer(file)
         writer.writerows(data)
 
@@ -44,24 +44,36 @@ def dmcd_dmcq(target, model):
         chain = target.at[i, "chain_id"]
         num = target.at[i, "residue_number"]
         name = target.at[i, "residue_name"]
-        if (model.at[i, "chain_id"] == chain and model.at[i, "residue_number"] == num and model.at[i, "residue_name"] == name):
+        if (
+            model.at[i, "chain_id"] == chain
+            and model.at[i, "residue_number"] == num
+            and model.at[i, "residue_name"] == name
+        ):
             for angle in angles:
                 ang1 = target.at[i, angle]
                 ang2 = model.at[i, angle]
                 if not (math.isnan(ang1) or math.isnan(ang2)):
                     dmcd = math.atan2(math.sin(ang1 - ang2), math.cos(ang1 - ang2))
-                    dmcds.append(dmcd)
-                    dmcqs.append(abs(dmcd))
+                    if not (math.isnan(dmcd)):
+                        dmcds.append(dmcd)
+                        dmcqs.append(abs(dmcd))
         else:
             for j in range(len(model.index)):
-                if (model.at[j, "chain_id"] == chain and model.at[j, "residue_number"] == num and model.at[j, "residue_name"] == name):
+                if (
+                    model.at[j, "chain_id"] == chain
+                    and model.at[j, "residue_number"] == num
+                    and model.at[j, "residue_name"] == name
+                ):
                     for angle in angles:
                         ang1 = target.at[i, angle]
                         ang2 = model.at[j, angle]
                         if not (math.isnan(ang1) or math.isnan(ang1)):
-                            dmcd = math.atan2(math.sin(ang1 - ang2), math.cos(ang1 - ang2))
-                            dmcds.append(dmcd)
-                            dmcqs.append(abs(dmcd))
+                            dmcd = math.atan2(
+                                math.sin(ang1 - ang2), math.cos(ang1 - ang2)
+                            )
+                            if not (math.isnan(dmcd)):
+                                dmcds.append(dmcd)
+                                dmcqs.append(abs(dmcd))
     return dmcds, dmcqs
 
 
@@ -82,41 +94,43 @@ def circular_mad(d, med):
     return np.median(rs).item()
 
 
-def r_ci(d, reps, alfa = 0.05):
+def r_ci(d, reps, alfa=0.05):
     rs = []
     for i in range(reps):
         n = [random.choice(d) for j in range(len(d))]
         r = descriptive.circ_r(np.array(n))
         rs.append(r)
-    lower = np.percentile(rs, alfa/2)
-    upper = np.percentile(rs, 100-alfa/2)
+    lower = np.percentile(rs, alfa / 2)
+    upper = np.percentile(rs, 100 - alfa / 2)
     return lower.item(), upper.item()
 
 
-def circular_mad_ci(d, med, reps, alfa = 0.05):
+def circular_mad_ci(d, med, reps, alfa=0.05):
     rs = []
     for i in range(reps):
         n = [random.choice(d) for j in range(len(d))]
         r = circular_mad(n, med)
         rs.append(r)
-    lower = np.percentile(rs, alfa/2)
-    upper = np.percentile(rs, 100-alfa/2)
+    lower = np.percentile(rs, alfa / 2)
+    upper = np.percentile(rs, 100 - alfa / 2)
     return lower.item(), upper.item()
 
 
 def simulation_test(d, mad_o, negatives, reps):
     n = 0
-    if(negatives):
+    if negatives:
         for i in range(reps):
             d_new = [random.uniform(-math.pi, math.pi) for _ in range(len(d))]
             mad_r = circular_mad(d_new, descriptive.circ_median(np.array(d_new)))
-            if (mad_r <= mad_o): n += 1
+            if mad_r <= mad_o:
+                n += 1
     else:
         for i in range(reps):
             d_new = [random.uniform(0, math.pi) for _ in range(len(d))]
             mad_r = circular_mad(d_new, descriptive.circ_median(np.array(d_new)))
-            if (mad_r <= mad_o): n += 1
-    return n/reps
+            if mad_r <= mad_o:
+                n += 1
+    return n / reps
 
 
 def score(d):
@@ -125,27 +139,40 @@ def score(d):
     wu = [0.1, 0.2, 0.1, 0.2, 0.15, 0.25]
     ws = [0.5, 0.2, 0.3]
 
-    f = wf[0] * max(0, 1 - d["mcq"] / (0.5 * math.pi)) + wf[1] * max(0, 1 - d["medcq"] / (0.5 * math.pi))
+    f = wf[0] * max(0, 1 - d["mcq"] / (0.5 * math.pi)) + wf[1] * max(
+        0, 1 - d["medcq"] / (0.5 * math.pi)
+    )
 
-    c = wc[0] * d["rmcq"] + wc[1] * max(0, 1 - d["circular_mad_mcq"]) + wc[2] * (1 - d["p_watson_dmcq"]) + wc[3] * (1 - d["p_sim_test_dmcq"])
-    
+    c = (
+        wc[0] * d["rmcq"]
+        + wc[1] * max(0, 1 - d["circular_mad_mcq"])
+        + wc[2] * (1 - d["p_watson_dmcq"])
+        + wc[3] * (1 - d["p_sim_test_dmcq"])
+    )
+
     ## to jest zgodnie ze wzorem
-    u = wu[0] * max(0, 1 - (abs(d["mcd"]) / (0.25 * math.pi))) + wu[1] * max(0, 1 - (abs(d["medcd"]) / (0.25 * math.pi))) + wu[2] * (1 - d["rmcd"]) + wu[3] * max(0, 1 - (d["circular_mad_mcd"] / (0.25 * math.pi))) + wu[4] * d["p_rayleigh_dmcd"] + wu[5] * d["p_wilcoxon_dmcd"]
+    u = (
+        wu[0] * max(0, 1 - (abs(d["mcd"]) / (0.25 * math.pi)))
+        + wu[1] * max(0, 1 - (abs(d["medcd"]) / (0.25 * math.pi)))
+        + wu[2] * (1 - d["rmcd"])
+        + wu[3] * max(0, 1 - (d["circular_mad_mcd"] / (0.25 * math.pi)))
+        + wu[4] * d["p_rayleigh_dmcd"]
+        + wu[5] * d["p_wilcoxon_dmcd"]
+    )
 
     ## to jest do 1
     ##u = wu[0] * max(0, 1 - (abs(d["mcd"]) / (0.25 * math.pi))) + wu[1] * max(0, 1 - (abs(d["medcd"]) / (0.25 * math.pi))) + wu[2] * d["rmcd"] + wu[3] * max(0, 1 - (d["circular_mad_mcd"] / (0.25 * math.pi))) + wu[4] * (1 - d["p_rayleigh_dmcd"]) + wu[5] * (1 - d["p_wilcoxon_dmcd"])
 
     score = ws[0] * f + ws[1] * c + ws[2] * u
-    
+
     return score
 
 
 def visualize(d, outfile1, outfile2):
-
     if np.allclose(d, d[0]):
         fig, ax = plt.subplots(subplot_kw={"projection": "polar"}, figsize=(6, 6))
         ax.set_title("All values equal", pad=30)
-        ax.plot([0], [1], 'o')
+        ax.plot([0], [1], "o")
         plt.savefig(outfile1, format="svg")
         plt.close()
         return
@@ -157,7 +184,7 @@ def visualize(d, outfile1, outfile2):
         mosaic="""
         A
         """,
-        figsize=(10, 10), 
+        figsize=(10, 10),
         subplot_kw={"projection": "polar"},
         layout="constrained",
     )
@@ -173,7 +200,8 @@ def visualize(d, outfile1, outfile2):
     fig, ax = plt.subplot_mosaic(
         mosaic="""
         AB
-        """, figsize=(10, 8), 
+        """,
+        figsize=(10, 8),
         subplot_kw={"projection": "polar"},
         layout="constrained",
     )
@@ -189,7 +217,7 @@ def visualize(d, outfile1, outfile2):
                 "mean": {"color": f"C{i}"},
                 "median": {"color": f"C{i}"},
                 "rose": {"color": f"C{i}"},
-            }
+            },
         )
         ax["A"].set_rlim(0, 3)
         ax["B"].set_rlim(0, 3)
@@ -197,17 +225,22 @@ def visualize(d, outfile1, outfile2):
     ax["A"].set_title("Cluster 1", pad=30)
     ax["B"].set_title("Cluster 2", pad=30)
     plt.savefig(outfile2, format="svg")
-    plt.close() 
-
+    plt.close()
 
 
 def main(argv):
     parser = argparse.ArgumentParser(description="run scoring")
-    parser.add_argument("--target_path", type=str, help="target", required=True) 
-    parser.add_argument("--model_path", type=str, help="model", required=True) 
-    parser.add_argument("--bootstrap_reps", type=int, help="reps", required=False, default=10000) 
-    parser.add_argument("--rounding", type=int, help="rouding", required=False, default=10)
-    parser.add_argument("--visualize", action="store_true", required=False, default=False)
+    parser.add_argument("--target_path", type=str, help="target", required=True)
+    parser.add_argument("--model_path", type=str, help="model", required=True)
+    parser.add_argument(
+        "--bootstrap_reps", type=int, help="reps", required=False, default=10000
+    )
+    parser.add_argument(
+        "--rounding", type=int, help="rouding", required=False, default=10
+    )
+    parser.add_argument(
+        "--visualize", action="store_true", required=False, default=False
+    )
 
     args = parser.parse_args()
 
@@ -227,38 +260,56 @@ def main(argv):
 
     dmcd, dmcq = dmcd_dmcq(target_torsion_angles, model_torsion_angles)
     npdmcd, npdmcq = np.array(dmcd), np.array(dmcq)
-    npdmcq_double = np.array([2*v for v in dmcq])
+    npdmcq_double = np.array([2 * v for v in dmcq])
 
-    if(visualize_on):
+    if visualize_on:
         visualize(npdmcq, "dmcq.svg", "dmcq_clusters.svg")
         visualize(npdmcd, "dmcd.svg", "dmcd_clusters.svg")
 
     mcq, rmcq = descriptive.circ_mean_and_r(npdmcq)
     mcd, rmcd = descriptive.circ_mean_and_r(npdmcd)
 
-    if(np.allclose(npdmcd, 0)):
-        ci_lower_mcq, ci_upper_mcq, ci_lower_mcd, ci_upper_mcd = [0,0,0,0]
+    if np.allclose(npdmcd, 0):
+        ci_lower_mcq, ci_upper_mcq, ci_lower_mcd, ci_upper_mcd = [0, 0, 0, 0]
     else:
-        ci_lower_mcq, ci_upper_mcq = descriptive.circ_mean_ci(npdmcq, method = "bootstrap", ci = 0.95, mean = mcq)
-        ci_lower_mcd, ci_upper_mcd = descriptive.circ_mean_ci(npdmcd, method = "bootstrap", ci = 0.95, mean = mcd)
+        ci_lower_mcq, ci_upper_mcq = descriptive.circ_mean_ci(
+            npdmcq, method="bootstrap", ci=0.95, mean=mcq
+        )
+        ci_lower_mcd, ci_upper_mcd = descriptive.circ_mean_ci(
+            npdmcd, method="bootstrap", ci=0.95, mean=mcd
+        )
 
     ci_lower_rmcq, ci_upper_rmcq = r_ci(dmcq, reps)
     ci_lower_rmcd, ci_upper_rmcd = r_ci(dmcd, reps)
 
-    if(np.allclose(npdmcd, 0)):
-        medcq, medcd = [0,0]
+    if np.allclose(npdmcd, 0):
+        medcq, medcd = [0, 0]
     else:
-        medcq = descriptive.circ_median(npdmcq) 
+        medcq = descriptive.circ_median(npdmcq)
         medcd = descriptive.circ_median(npdmcd)
 
-    ci_lower_medcq, ci_upper_medcq = [float(v) for v in descriptive.circ_median_ci(alpha = npdmcq, method = "bootstrap", ci = 0.95, median = medcq)[:2]]
-    ci_lower_medcd, ci_upper_medcd = [float(v) for v in descriptive.circ_median_ci(alpha = npdmcd, method = "bootstrap", ci = 0.95, median = medcd)[:2]]
+    ci_lower_medcq, ci_upper_medcq = [
+        float(v)
+        for v in descriptive.circ_median_ci(
+            alpha=npdmcq, method="bootstrap", ci=0.95, median=medcq
+        )[:2]
+    ]
+    ci_lower_medcd, ci_upper_medcd = [
+        float(v)
+        for v in descriptive.circ_median_ci(
+            alpha=npdmcd, method="bootstrap", ci=0.95, median=medcd
+        )[:2]
+    ]
 
     circular_mad_mcq = circular_mad(dmcq, medcq)
     circular_mad_mcd = circular_mad(dmcd, medcd)
 
-    ci_lower_circular_mad_mcq, ci_upper_circular_mad_mcq = circular_mad_ci(dmcq, medcq, reps)
-    ci_lower_circular_mad_mcd, ci_upper_circular_mad_mcd = circular_mad_ci(dmcq, medcd, reps)
+    ci_lower_circular_mad_mcq, ci_upper_circular_mad_mcq = circular_mad_ci(
+        dmcq, medcq, reps
+    )
+    ci_lower_circular_mad_mcd, ci_upper_circular_mad_mcd = circular_mad_ci(
+        dmcq, medcd, reps
+    )
 
     p_rayleigh_dmcd = hypothesis.rayleigh_test(npdmcd).pval.item()
     p_rayleigh_dmcq = hypothesis.rayleigh_test(npdmcq_double).pval.item()
@@ -266,13 +317,12 @@ def main(argv):
     p_sim_test_dmcd = simulation_test(dmcd, circular_mad_mcd, True, reps)
     p_sim_test_dmcq = simulation_test(dmcq, circular_mad_mcq, False, reps)
 
-    if(np.allclose(npdmcd, 0)):
-        p_wilcoxon_dmcd, p_watson_dmcd, p_watson_dmcq  = [0,0,0]
+    if np.allclose(npdmcd, 0):
+        p_wilcoxon_dmcd, p_watson_dmcd, p_watson_dmcq = [0, 0, 0]
     else:
         p_wilcoxon_dmcd = scipy.stats.wilcoxon(dmcd).pvalue
         p_watson_dmcd = hypothesis.watson_test(npdmcd)[1]
         p_watson_dmcq = hypothesis.watson_test(npdmcq_double)[1]
-
 
     results = {
         "mcq": mcq,
@@ -305,12 +355,14 @@ def main(argv):
         "p_sim_test_dmcq": p_sim_test_dmcq,
         "p_wilcoxon_dmcd": p_wilcoxon_dmcd,
         "p_watson_dmcd": p_watson_dmcd,
-        "p_watson_dmcq": p_watson_dmcq
+        "p_watson_dmcq": p_watson_dmcq,
     }
 
     results["score"] = score(results)
 
-    results_list = [[str(key) for key in results.keys()]] + [[round(v, rounding) for v in list(results.values())]]
+    results_list = [[str(key) for key in results.keys()]] + [
+        [round(v, rounding) for v in list(results.values())]
+    ]
     save_csv("result.csv", results_list)
     print(results["score"])
 
