@@ -1,2 +1,2 @@
-hypothesis==6.139.2
+hypothesis==6.140.2
 pytest==8.4.2
