@@ -228,28 +228,7 @@ def visualize(d, outfile1, outfile2):
     plt.close()
 
 
-def main(argv):
-    parser = argparse.ArgumentParser(description="run scoring")
-    parser.add_argument("--target_path", type=str, help="target", required=True)
-    parser.add_argument("--model_path", type=str, help="model", required=True)
-    parser.add_argument(
-        "--bootstrap_reps", type=int, help="reps", required=False, default=10000
-    )
-    parser.add_argument(
-        "--rounding", type=int, help="rouding", required=False, default=10
-    )
-    parser.add_argument(
-        "--visualize", action="store_true", required=False, default=False
-    )
-
-    args = parser.parse_args()
-
-    target_path = args.target_path
-    model_path = args.model_path
-    reps = args.bootstrap_reps
-    rounding = args.rounding
-    visualize_on = args.visualize
-
+def run_score(target_path, model_path, reps, rounding, visualize_on):
     target_data = parse_file(target_path)
     target_structure = tertiary.Structure(target_data)
     target_torsion_angles = target_structure.torsion_angles
@@ -360,12 +339,40 @@ def main(argv):
 
     results["score"] = score(results)
 
+    return results
+
+
+def main(argv):
+    parser = argparse.ArgumentParser(description="run scoring")
+    parser.add_argument("--target_path", type=str, help="target", required=True)
+    parser.add_argument("--model_path", type=str, help="model", required=True)
+    parser.add_argument(
+        "--bootstrap_reps", type=int, help="reps", required=False, default=10000
+    )
+    parser.add_argument(
+        "--rounding", type=int, help="rouding", required=False, default=10
+    )
+    parser.add_argument(
+        "--visualize", action="store_true", required=False, default=False
+    )
+
+    args = parser.parse_args()
+
+    target_path = args.target_path
+    model_path = args.model_path
+    reps = args.bootstrap_reps
+    rounding = args.rounding
+    visualize_on = args.visualize
+
+    results = run_score(target_path, model_path, reps, rounding, visualize_on)
+    
     results_list = [[str(key) for key in results.keys()]] + [
         [round(v, rounding) for v in list(results.values())]
     ]
     save_csv("result.csv", results_list)
     print(results["score"])
 
+    
 
 if __name__ == "__main__":
     main(sys.argv[1:])
