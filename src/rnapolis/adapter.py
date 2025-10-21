@@ -4,10 +4,11 @@ import logging
 import math
 import os
 import re
+from collections import defaultdict
 from dataclasses import dataclass
 from enum import Enum
 from tempfile import NamedTemporaryFile
-from typing import Dict, List, Optional, Tuple
+from typing import DefaultDict, Dict, List, Optional, Set, Tuple
 
 import orjson
 
@@ -47,6 +48,7 @@ class ExternalTool(Enum):
     RNAVIEW = "rnaview"
     BPNET = "bpnet"
     MAXIT = "maxit"
+    BARNABA = "barnaba"
 
 
 logging.basicConfig(level=os.getenv("LOGLEVEL", "INFO").upper())
@@ -77,6 +79,11 @@ def auto_detect_tool(external_files: List[str]) -> ExternalTool:
         # Check for BPNet pattern
         if file_path.endswith("basepair.json"):
             return ExternalTool.BPNET
+
+        # Check for Barnaba pattern
+        basename = os.path.basename(file_path)
+        if "pairing" in basename or "stacking" in basename:
+            return ExternalTool.BARNABA
 
         # Check for JSON files (DSSR)
         if file_path.endswith(".json"):
@@ -988,6 +995,156 @@ def parse_rnaview_output(
     )
 
 
+def parse_barnaba_output(
+    file_paths: List[str], structure3d: Structure3D
+) -> BaseInteractions:
+    """
+    Parse barnaba output files and convert to BaseInteractions.
+    Args:
+        file_paths: List of paths to barnaba output files (pairing and stacking)
+        structure3d: The 3D structure parsed from PDB/mmCIF
+    Returns:
+        BaseInteractions object containing the interactions found by barnaba
+    """
+    RESIDUE_REGEX = re.compile(r"(.+)_([0-9]+)_([0-9]+)")
+    STACKING_TOPOLOGIES = {
+        ">>": "upward",
+        "<<": "downward",
+        "<>": "outward",
+        "><": "inward",
+    }
+
+    def get_leontis_westhof(interaction: str) -> Optional[LeontisWesthof]:
+        if "x" in interaction.lower():
+            return None
+        if interaction in ("WCc", "GUc"):
+            return LeontisWesthof.cWW
+        return LeontisWesthof[f"{interaction[2]}{interaction[:2]}"]
+
+    # barnaba replaces chain identifiers with numbers and does not use insertion codes.
+    # We need to create a mapping from barnaba's identifiers to original residues.
+    chains_list: List[str] = []
+    chains_set: Set[str] = set()
+    for residue in structure3d.residues:
+        if residue.auth and residue.auth.chain not in chains_set:
+            chains_list.append(residue.auth.chain)
+            chains_set.add(residue.auth.chain)
+    chain_map = {i: chain for i, chain in enumerate(chains_list)}
+
+    # usage: mapped_residues[chain][new_number] = residue
+    mapped_residues: Dict[str, Dict[int, Residue]] = defaultdict(dict)
+    new_numbers: DefaultDict[str, int] = defaultdict(int)
+    present_residues: Set[Tuple[str, int, str]] = set()
+
+    for residue in structure3d.residues:
+        if residue.auth is None:
+            continue
+
+        auth = residue.auth
+        chain = auth.chain
+        old_number = auth.number
+        icode = auth.icode or ""
+
+        res_key = (chain, old_number, icode)
+        if res_key not in present_residues:
+            present_residues.add(res_key)
+            new_numbers[chain] += 1
+            mapped_residues[chain][new_numbers[chain]] = residue
+
+    def get_residue(residue_info: str) -> Optional[Residue]:
+        match = RESIDUE_REGEX.match(residue_info)
+        if not match:
+            logging.warning(f"Could not parse barnaba residue: {residue_info}")
+            return None
+
+        name, new_number_str, chain_idx_str = match.groups()
+        new_number = int(new_number_str)
+        chain_idx = int(chain_idx_str)
+
+        if chain_idx not in chain_map:
+            logging.warning(f"Unknown chain index in barnaba residue: {residue_info}")
+            return None
+
+        chain = chain_map[chain_idx]
+        residue = mapped_residues.get(chain, {}).get(new_number)
+
+        if residue is None:
+            logging.warning(f"Could not map barnaba residue: {residue_info}")
+            return None
+
+        if residue.auth and residue.auth.name != name:
+            logging.warning(
+                f"Residue name mismatch for {residue_info}: expected {name}, found {residue.auth.name}"
+            )
+
+        return residue
+
+    base_pairs: List[BasePair] = []
+    stackings: List[Stacking] = []
+    other_interactions: List[OtherInteraction] = []
+
+    for file_path in file_paths:
+        try:
+            with open(file_path, "r") as f:
+                content = f.read()
+        except Exception as e:
+            logging.warning(f"Could not read barnaba file {file_path}: {e}")
+            continue
+
+        basename = os.path.basename(file_path)
+        is_pairing = "pairing" in basename
+        is_stacking = "stacking" in basename
+
+        if not is_pairing and not is_stacking:
+            if "ANNO" in content:
+                if any(topo in content for topo in STACKING_TOPOLOGIES):
+                    is_stacking = True
+                elif any(pair_anno in content for pair_anno in ["WCc", "GUc", "WHt"]):
+                    is_pairing = True
+
+        if not is_pairing and not is_stacking:
+            logging.info(f"Skipping unknown barnaba file: {file_path}")
+            continue
+
+        for line in content.splitlines():
+            if line.startswith("#") or not line.strip():
+                continue
+
+            fields = line.split()
+            if len(fields) < 3:
+                continue
+
+            res1_str, res2_str, interaction_str = fields[0], fields[1], fields[2]
+
+            nt1 = get_residue(res1_str)
+            nt2 = get_residue(res2_str)
+
+            if not nt1 or not nt2:
+                continue
+
+            if is_pairing:
+                try:
+                    lw = get_leontis_westhof(interaction_str)
+                    if lw:
+                        base_pairs.append(BasePair(nt1, nt2, lw, None))
+                    else:
+                        other_interactions.append(OtherInteraction(nt1, nt2))
+                except (KeyError, IndexError):
+                    other_interactions.append(OtherInteraction(nt1, nt2))
+            elif is_stacking:
+                try:
+                    topology_str = STACKING_TOPOLOGIES.get(interaction_str)
+                    if topology_str:
+                        topology = StackingTopology[topology_str]
+                        stackings.append(Stacking(nt1, nt2, topology))
+                except KeyError:
+                    logging.warning(
+                        f"Unknown barnaba stacking topology: {interaction_str}"
+                    )
+
+    return BaseInteractions(base_pairs, stackings, [], [], other_interactions)
+
+
 def parse_external_output(
     file_paths: List[str], tool: ExternalTool, structure3d: Structure3D
 ) -> BaseInteractions:
@@ -1012,6 +1169,8 @@ def parse_external_output(
         return parse_bpnet_output(file_paths)
     elif tool == ExternalTool.RNAVIEW:
         return parse_rnaview_output(file_paths, structure3d)
+    elif tool == ExternalTool.BARNABA:
+        return parse_barnaba_output(file_paths, structure3d)
     else:
         raise ValueError(f"Unsupported external tool: {tool}")
 
