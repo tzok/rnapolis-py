@@ -4,8 +4,6 @@ import logging
 import math
 import os
 import re
-import subprocess
-import tempfile
 from collections import defaultdict
 from dataclasses import dataclass
 from enum import Enum
@@ -91,8 +89,12 @@ def auto_detect_tool(external_files: List[str]) -> ExternalTool:
         if file_path.endswith("basepair.json"):
             return ExternalTool.BPNET
 
-        # Check for Barnaba pattern
+        # Check for MC-Annotate pattern
         basename = os.path.basename(file_path)
+        if basename == "stdout.txt":
+            return ExternalTool.MCANNOTATE
+
+        # Check for Barnaba pattern
         if "pairing" in basename or "stacking" in basename:
             return ExternalTool.BARNABA
 
@@ -1383,23 +1385,6 @@ class MCAnnotateAdapter:
                     self.analysis_output.basePairs.append(base_pair_interaction)
                     base_added = True
 
-    @classmethod
-    def run_mc_annotate(cls, pdb_content: str) -> str:
-        with tempfile.TemporaryDirectory() as directory_name:
-            with tempfile.NamedTemporaryFile(
-                "w+", dir=directory_name, suffix=".pdb"
-            ) as file:
-                file.write(pdb_content)
-                file.seek(0)
-                mc_result = subprocess.run(
-                    ["mc-annotate", file.name],
-                    cwd=directory_name,
-                    capture_output=True,
-                    text=True,
-                ).stdout
-        logging.debug(f"MC-Annotate result: {mc_result}")
-        return mc_result
-
     def append_names(self, file_content: str) -> None:
         for line in file_content.splitlines():
             if line.startswith(self.ATOM) or line.startswith(self.HETATM):
@@ -1413,10 +1398,9 @@ class MCAnnotateAdapter:
                 self.names[residue_info] = name
 
     def analyze_by_mc_annotate(
-        self, pdb_content: str, **_: Dict[str, Any]
+        self, pdb_content: str, mc_result: str, **_: Dict[str, Any]
     ) -> BaseInteractions:
         self.append_names(pdb_content)
-        mc_result = self.run_mc_annotate(pdb_content)
         current_state = None
 
         for line in mc_result.splitlines():
@@ -1452,24 +1436,38 @@ def parse_mcannotate_output(
 ) -> BaseInteractions:
     """
     Parse mc-annotate output and convert to BaseInteractions.
-    mc-annotate is run on the input PDB file and its stdout is parsed.
+    This function expects a file with mc-annotate stdout and a PDB/CIF file.
     """
-    if not file_paths:
-        logging.warning("No input file found for mc-annotate.")
+    stdout_file = None
+    structure_file = None
+    for file_path in file_paths:
+        if os.path.basename(file_path) == "stdout.txt":
+            stdout_file = file_path
+        elif file_path.endswith((".pdb", ".cif")):
+            structure_file = file_path
+
+    if not stdout_file:
+        logging.warning("No stdout.txt file found for mc-annotate.")
         return BaseInteractions([], [], [], [], [])
 
-    input_file = file_paths[0]
-    logging.info(f"Processing mc-annotate on file: {input_file}")
+    if not structure_file:
+        logging.warning("No PDB/CIF file found for mc-annotate.")
+        return BaseInteractions([], [], [], [], [])
+
+    logging.info(f"Processing mc-annotate stdout file: {stdout_file}")
+    logging.info(f"Using structure file for residue names: {structure_file}")
 
     try:
-        with open(input_file, "r") as f:
+        with open(stdout_file, "r") as f:
+            mc_result = f.read()
+        with open(structure_file, "r") as f:
             pdb_content = f.read()
     except Exception as e:
-        logging.warning(f"Could not read input file {input_file}: {e}")
+        logging.warning(f"Could not read input files for mc-annotate: {e}")
         return BaseInteractions([], [], [], [], [])
 
     adapter = MCAnnotateAdapter()
-    base_interactions = adapter.analyze_by_mc_annotate(pdb_content)
+    base_interactions = adapter.analyze_by_mc_annotate(pdb_content, mc_result)
 
     return BaseInteractions.from_structure3d(
         structure3d,
