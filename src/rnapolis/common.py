@@ -5,7 +5,7 @@ import re
 import string
 from collections import defaultdict
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import InitVar, dataclass
 from enum import Enum
 from functools import cache, cached_property, total_ordering
 from typing import Dict, List, Optional, Tuple
@@ -1061,6 +1061,12 @@ class BaseInteractions:
     base_ribose_interactions: List[BaseRibose]
     base_phosphate_interactions: List[BasePhosphate]
     other_interactions: List[OtherInteraction]
+    structure3d: InitVar[Optional["Structure3D"]] = None
+
+    def __post_init__(self, structure3d: Optional["Structure3D"]):
+        if structure3d:
+            # additional logic using structure3d can be implemented here
+            pass
 
 
 @dataclass(frozen=True, order=True)
