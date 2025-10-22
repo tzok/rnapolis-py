@@ -85,15 +85,6 @@ def detect_cis_trans(residue_i: Residue3D, residue_j: Residue3D) -> Optional[str
     return "c" if -90.0 < torsion < 90.0 else "t"
 
 
-def detect_saenger(
-    residue_i: Residue3D, residue_j: Residue3D, lw: LeontisWesthof
-) -> Optional[Saenger]:
-    key = (f"{residue_i.one_letter_name}{residue_j.one_letter_name}", lw.value)
-    if key in Saenger.table():
-        return Saenger[Saenger.table()[key]]
-    return None
-
-
 def detect_bph_br_classification(
     donor_residue: Residue3D, donor: Atom, acceptor: Atom
 ) -> Optional[int]:
@@ -367,7 +358,9 @@ def find_pairs(
                 Residue(residue_i.label, residue_i.auth),
                 Residue(residue_j.label, residue_j.auth),
                 lw,
-                detect_saenger(residue_i, residue_j, lw),
+                Saenger.from_leontis_westhof(
+                    residue_i.one_letter_name, residue_j.one_letter_name, lw
+                ),
             )
         )
 
@@ -483,7 +476,9 @@ def extract_base_interactions(
 ) -> BaseInteractions:
     base_pairs, base_phosphate, base_ribose = find_pairs(tertiary_structure, model)
     stackings = find_stackings(tertiary_structure, model)
-    return BaseInteractions(base_pairs, stackings, base_ribose, base_phosphate, [])
+    return BaseInteractions.from_structure3d(
+        tertiary_structure, base_pairs, stackings, base_ribose, base_phosphate, []
+    )
 
 
 def generate_pymol_script(mapping: Mapping2D3D, stems: List[Stem]) -> str:
@@ -688,91 +683,6 @@ def add_common_output_arguments(parser: argparse.ArgumentParser):
     )
 
 
-def unify_structure_data(structure2d: Structure2D, mapping: Mapping2D3D) -> Structure2D:
-    """
-    Unify structure data by:
-    1. Adding missing Saenger classifications to base pairs
-    2. Filling in empty residue labels from Structure3D
-    """
-    # Create a mapping from residue to residue3d for label filling
-    residue_to_residue3d = {}
-    for residue3d in mapping.structure3d.residues:
-        residue_key = Residue(residue3d.label, residue3d.auth)
-        residue_to_residue3d[residue_key] = residue3d
-
-    def fill_residue_label(residue: Residue) -> Residue:
-        """Fill empty label from Structure3D if available."""
-        if residue.label is not None:
-            return residue
-
-        # Try to find matching residue3d by auth
-        for residue3d in mapping.structure3d.residues:
-            if residue.auth == residue3d.auth:
-                return Residue(residue3d.label, residue.auth)
-
-        return residue
-
-    # Process base pairs
-    unified_base_pairs = []
-    for base_pair in structure2d.base_pairs:
-        # Fill in missing labels
-        nt1 = fill_residue_label(base_pair.nt1)
-        nt2 = fill_residue_label(base_pair.nt2)
-
-        # Detect missing Saenger classification
-        saenger = base_pair.saenger
-        if saenger is None:
-            # Find corresponding 3D residues for Saenger detection
-            residue3d_1 = residue_to_residue3d.get(Residue(nt1.label, nt1.auth))
-            residue3d_2 = residue_to_residue3d.get(Residue(nt2.label, nt2.auth))
-
-            if residue3d_1 is not None and residue3d_2 is not None:
-                saenger = detect_saenger(residue3d_1, residue3d_2, base_pair.lw)
-
-        unified_base_pairs.append(BasePair(nt1, nt2, base_pair.lw, saenger))
-
-    # Process other interaction types (fill labels only)
-    unified_stackings = []
-    for stacking in structure2d.stackings:
-        nt1 = fill_residue_label(stacking.nt1)
-        nt2 = fill_residue_label(stacking.nt2)
-        unified_stackings.append(Stacking(nt1, nt2, stacking.topology))
-
-    unified_base_ribose = []
-    for base_ribose in structure2d.base_ribose_interactions:
-        nt1 = fill_residue_label(base_ribose.nt1)
-        nt2 = fill_residue_label(base_ribose.nt2)
-        unified_base_ribose.append(BaseRibose(nt1, nt2, base_ribose.br))
-
-    unified_base_phosphate = []
-    for base_phosphate in structure2d.base_phosphate_interactions:
-        nt1 = fill_residue_label(base_phosphate.nt1)
-        nt2 = fill_residue_label(base_phosphate.nt2)
-        unified_base_phosphate.append(BasePhosphate(nt1, nt2, base_phosphate.bph))
-
-    unified_other = []
-    for other in structure2d.other_interactions:
-        nt1 = fill_residue_label(other.nt1)
-        nt2 = fill_residue_label(other.nt2)
-        unified_other.append(OtherInteraction(nt1, nt2))
-
-    # Create new Structure2D with unified data
-    unified_base_interactions = BaseInteractions(
-        unified_base_pairs,
-        unified_stackings,
-        unified_base_ribose,
-        unified_base_phosphate,
-        unified_other,
-    )
-
-    # Recreate Structure2D with unified interactions
-    unified_structure2d, _ = mapping.structure3d.extract_secondary_structure(
-        unified_base_interactions, False
-    )
-
-    return unified_structure2d
-
-
 def handle_output_arguments(
     args: argparse.Namespace,
     structure2d: Structure2D,
@@ -780,34 +690,31 @@ def handle_output_arguments(
     input_filename: str,
 ):
     """Handles writing output based on provided arguments."""
-    # Unify the structure data before processing outputs
-    unified_structure2d = unify_structure_data(structure2d, mapping)
-
     input_basename = os.path.basename(input_filename)
     if args.csv:
-        write_csv(args.csv, unified_structure2d)
+        write_csv(args.csv, structure2d)
 
     if args.json:
-        write_json(args.json, unified_structure2d)
+        write_json(args.json, structure2d)
 
     if args.bpseq:
-        write_bpseq(args.bpseq, unified_structure2d.bpseq)
+        write_bpseq(args.bpseq, structure2d.bpseq)
 
     if args.extended:
-        print(unified_structure2d.extended_dot_bracket)
+        print(structure2d.extended_dot_bracket)
     else:
-        print(unified_structure2d.dot_bracket)
+        print(structure2d.dot_bracket)
 
     if args.dot:
-        print(BpSeq.from_string(unified_structure2d.bpseq).graphviz)
+        print(BpSeq.from_string(structure2d.bpseq).graphviz)
 
     if args.pml:
-        pml_script = generate_pymol_script(mapping, unified_structure2d.stems)
+        pml_script = generate_pymol_script(mapping, structure2d.stems)
         with open(args.pml, "w") as f:
             f.write(pml_script)
 
     if args.inter_stem_csv:
-        if unified_structure2d.inter_stem_parameters:
+        if structure2d.inter_stem_parameters:
             # Convert list of dataclasses to list of dicts
             params_list = [
                 {
@@ -820,7 +727,7 @@ def handle_output_arguments(
                     "min_endpoint_distance_pdf": p.min_endpoint_distance_pdf,
                     "coaxial_probability": p.coaxial_probability,
                 }
-                for p in unified_structure2d.interStemParameters
+                for p in structure2d.interStemParameters
             ]
             df = pd.DataFrame(params_list)
             df["input_basename"] = input_basename
@@ -838,9 +745,9 @@ def handle_output_arguments(
             # pd.DataFrame(columns=['input_basename', 'stem1_idx', ...]).to_csv(args.inter_stem_csv, index=False)
 
     if args.stems_csv:
-        if unified_structure2d.stems:
+        if structure2d.stems:
             stems_data = []
-            for i, stem in enumerate(unified_structure2d.stems):
+            for i, stem in enumerate(structure2d.stems):
                 try:
                     res5p_first = mapping.bpseq_index_to_residue_map.get(
                         stem.strand5p.first
