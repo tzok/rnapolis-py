@@ -317,10 +317,14 @@ def parse_dssr_output(
             if nt1 is not None and nt2 is not None:
                 stackings.append(Stacking(nt1, nt2, None))
 
-    return BaseInteractions(base_pairs, stackings, [], [], [])
+    return BaseInteractions.from_structure3d(
+        structure3d, base_pairs, stackings, [], [], []
+    )
 
 
-def parse_maxit_output(file_paths: List[str]) -> BaseInteractions:
+def parse_maxit_output(
+    file_paths: List[str], structure3d: Structure3D
+) -> BaseInteractions:
     """
     Parse MAXIT output files and convert to BaseInteractions.
 
@@ -448,10 +452,14 @@ def parse_maxit_output(file_paths: List[str]) -> BaseInteractions:
     except Exception as e:
         logging.warning(f"Error processing MAXIT file {cif_file}: {e}", exc_info=True)
 
-    return BaseInteractions(all_base_pairs, [], [], [], all_other_interactions)
+    return BaseInteractions.from_structure3d(
+        structure3d, all_base_pairs, [], [], [], all_other_interactions
+    )
 
 
-def parse_bpnet_output(file_paths: List[str]) -> BaseInteractions:
+def parse_bpnet_output(
+    file_paths: List[str], structure3d: Structure3D
+) -> BaseInteractions:
     """
     Parse BPNet output files and convert to BaseInteractions.
 
@@ -649,7 +657,8 @@ def parse_bpnet_output(file_paths: List[str]) -> BaseInteractions:
                 f"Error processing BPNet rob file {rob_file}: {e}", exc_info=True
             )
 
-    return BaseInteractions(
+    return BaseInteractions.from_structure3d(
+        structure3d,
         base_pairs,
         stackings,
         base_ribose_interactions,
@@ -986,7 +995,8 @@ def parse_rnaview_output(
     except Exception as e:
         logging.warning(f"Error processing RNAView file {out_file}: {e}", exc_info=True)
 
-    return BaseInteractions(
+    return BaseInteractions.from_structure3d(
+        structure3d,
         base_pairs,
         stackings,
         base_ribose_interactions,
@@ -1142,7 +1152,10 @@ def parse_barnaba_output(
                         f"Unknown barnaba stacking topology: {interaction_str}"
                     )
 
-    return BaseInteractions(base_pairs, stackings, [], [], other_interactions)
+    breakpoint()
+    return BaseInteractions.from_structure3d(
+        structure3d, base_pairs, stackings, [], [], other_interactions
+    )
 
 
 def parse_external_output(
@@ -1160,13 +1173,13 @@ def parse_external_output(
         BaseInteractions object containing the interactions found by the external tool
     """
     if tool == ExternalTool.FR3D:
-        return parse_fr3d_output(file_paths)
+        return parse_fr3d_output(file_paths, structure3d)
     elif tool == ExternalTool.DSSR:
         return parse_dssr_output(file_paths, structure3d)
     elif tool == ExternalTool.MAXIT:
-        return parse_maxit_output(file_paths)
+        return parse_maxit_output(file_paths, structure3d)
     elif tool == ExternalTool.BPNET:
-        return parse_bpnet_output(file_paths)
+        return parse_bpnet_output(file_paths, structure3d)
     elif tool == ExternalTool.RNAVIEW:
         return parse_rnaview_output(file_paths, structure3d)
     elif tool == ExternalTool.BARNABA:
@@ -1175,7 +1188,9 @@ def parse_external_output(
         raise ValueError(f"Unsupported external tool: {tool}")
 
 
-def parse_fr3d_output(file_paths: List[str]) -> BaseInteractions:
+def parse_fr3d_output(
+    file_paths: List[str], structure3d: Structure3D
+) -> BaseInteractions:
     """
     Parse FR3D output files and convert to BaseInteractions.
 
@@ -1208,7 +1223,8 @@ def parse_fr3d_output(file_paths: List[str]) -> BaseInteractions:
                 _process_interaction_line(line, interactions_data)
 
     # Return a BaseInteractions object with all the processed interactions
-    return BaseInteractions(
+    return BaseInteractions.from_structure3d(
+        structure3d,
         interactions_data["base_pairs"],
         interactions_data["stackings"],
         interactions_data["base_ribose_interactions"],
