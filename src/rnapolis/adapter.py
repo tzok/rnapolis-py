@@ -42,14 +42,6 @@ from rnapolis.tertiary import (
 from rnapolis.util import handle_input_file
 
 
-class PdbParsingError(Exception):
-    pass
-
-
-class RegexError(Exception):
-    pass
-
-
 class ExternalTool(Enum):
     FR3D = "fr3d"
     DSSR = "dssr"
@@ -1241,11 +1233,12 @@ class MCAnnotateAdapter:
         self.base_phosphate_interactions: List[BasePhosphate] = []
         self.other_interactions: List[OtherInteraction] = []
 
-    def classify_edge(self, edge_type: str) -> str:
+    def classify_edge(self, edge_type: str) -> Optional[str]:
         for edge, edges in self.EDGES.items():
             if edge_type in edges:
                 return edge
-        raise PdbParsingError('Edge type "{type}" unknown')
+        logging.warning('Edge type "{type}" unknown')
+        return None
 
     def get_residue(self, residue_info_list: Tuple[Union[str, Any], ...]) -> Residue:
         chain = residue_info_list[0]
@@ -1262,14 +1255,18 @@ class MCAnnotateAdapter:
             None, ResidueAuth(chain, number, icode, self.names[residue_info])
         )
 
-    def get_residues(self, residues_info: str) -> Tuple[Residue, Residue]:
+    def get_residues(
+        self, residues_info: str
+    ) -> Tuple[Optional[Residue], Optional[Residue]]:
         regex_result = re.search(self.RESIDUE_REGEX, residues_info)
         if regex_result is None:
-            raise RegexError("MC-Annotate regex failed: {residues_info}")
+            logging.error("MC-Annotate regex failed: {residues_info}")
+            return None, None
         residues_info_list = regex_result.groups()
         # Expects (chain1, number1, icode1, chain2, number2, icode2)
         if len(residues_info_list) != 6:
-            raise RegexError(f"MC-Annotate regex failed for {residues_info}")
+            logging.error(f"MC-Annotate regex failed for {residues_info}")
+            return None, None
         residue_left = self.get_residue(residues_info_list[:3])
         residue_right = self.get_residue(residues_info_list[3:])
         return residue_left, residue_right
@@ -1278,6 +1275,9 @@ class MCAnnotateAdapter:
         splitted_line = line.split()
         topology_info = splitted_line[topology_position]
         residue_left, residue_right = self.get_residues(splitted_line[0])
+        if residue_left is None or residue_right is None:
+            logging.warning(f"Could not parse residues in line: {line}")
+            return
         stacking = Stacking(
             residue_left, residue_right, StackingTopology[topology_info]
         )
@@ -1308,13 +1308,14 @@ class MCAnnotateAdapter:
         residues: Tuple[Residue, Residue],
         token: str,
         tokens: List[str],
-    ) -> BasePair:
+    ) -> Optional[BasePair]:
         if self.CIS in tokens:
             cis_trans = "c"
         elif self.TRANS in tokens:
             cis_trans = "t"
         else:
-            raise PdbParsingError(f"Cis/trans expected, but not present in {tokens}")
+            logging.warning(f"Cis/trans expected, but not present in {tokens}")
+            return None
 
         # example saenger: XIX or XII,XIII (?)
         for potential_saenger_token in tokens:
@@ -1330,6 +1331,10 @@ class MCAnnotateAdapter:
         left_edge, right_edge = token.split("/", 1)
         leontis_westhof_left = self.classify_edge(left_edge)
         leontis_westohf_right = self.classify_edge(right_edge)
+
+        if leontis_westhof_left is None or leontis_westohf_right is None:
+            return None
+
         leontis_westhof = LeontisWesthof[
             f"{cis_trans}{leontis_westhof_left}{leontis_westohf_right}"
         ]
@@ -1344,6 +1349,9 @@ class MCAnnotateAdapter:
     def append_interactions(self, line: str) -> None:
         splitted_line = line.split()
         residues = self.get_residues(splitted_line[0])
+        if residues[0] is None or residues[1] is None:
+            logging.warning(f"Could not parse residues in line: {line}")
+            return
         # Assumes that one pair can belong to every interaction type
         # no more than once!
         base_added, ribose_added, phosphate_added = False, False, False
@@ -1385,7 +1393,8 @@ class MCAnnotateAdapter:
                     base_pair_interaction = self.get_base_interaction(
                         residues, token, tokens
                     )
-                    self.base_pairs.append(base_pair_interaction)
+                    if base_pair_interaction is not None:
+                        self.base_pairs.append(base_pair_interaction)
                     base_added = True
 
     def append_names(self, file_content: str) -> None:
