@@ -77,21 +77,22 @@ def auto_detect_tool(external_files: List[str]) -> ExternalTool:
         return ExternalTool.MAXIT
 
     for file_path in external_files:
+        basename = os.path.basename(file_path)
+
         # Check for FR3D pattern
-        if file_path.endswith("basepair_detail.txt"):
+        if basename.endswith("basepair_detail.txt"):
             return ExternalTool.FR3D
 
         # Check for RNAView pattern
-        if file_path.endswith(".out"):
+        if basename.endswith(".out"):
             return ExternalTool.RNAVIEW
 
         # Check for BPNet pattern
-        if file_path.endswith("basepair.json"):
+        if basename.endswith("basepair.json"):
             return ExternalTool.BPNET
 
         # Check for MC-Annotate pattern
-        basename = os.path.basename(file_path)
-        if basename == "stdout.txt":
+        if basename.endswith("stdout.txt"):
             return ExternalTool.MCANNOTATE
 
         # Check for Barnaba pattern
@@ -99,7 +100,7 @@ def auto_detect_tool(external_files: List[str]) -> ExternalTool:
             return ExternalTool.BARNABA
 
         # Check for JSON files (DSSR)
-        if file_path.endswith(".json"):
+        if basename.endswith(".json"):
             return ExternalTool.DSSR
 
     # Default to MAXIT if no patterns match
@@ -1231,10 +1232,14 @@ class MCAnnotateAdapter:
     NAME_INDEX = slice(17, 20)
 
     def __init__(self) -> None:
-        self.analysis_output = BaseInteractions([], [], [], [], [])
         # Since names are not present in adjacent and non-adjacent stackings
         # we need save these values eariler
         self.names: Dict[str, str] = {}
+        self.base_pairs: List[BasePair] = []
+        self.stackings: List[Stacking] = []
+        self.base_ribose_interactions: List[BaseRibose] = []
+        self.base_phosphate_interactions: List[BasePhosphate] = []
+        self.other_interactions: List[OtherInteraction] = []
 
     def classify_edge(self, edge_type: str) -> str:
         for edge, edges in self.EDGES.items():
@@ -1276,7 +1281,7 @@ class MCAnnotateAdapter:
         stacking = Stacking(
             residue_left, residue_right, StackingTopology[topology_info]
         )
-        self.analysis_output.stackings.append(stacking)
+        self.stackings.append(stacking)
 
     def get_ribose_interaction(
         self, residues: Tuple[Residue, Residue], token: str
@@ -1354,22 +1359,20 @@ class MCAnnotateAdapter:
                     break
             else:
                 other_interaction = self.get_other_interaction(residues)
-                self.analysis_output.otherInteractions.append(other_interaction)
+                self.other_interactions.append(other_interaction)
                 return
 
         for token in tokens:
             if self.RIBOSE_ATOM in token and not ribose_added:
                 # example token: Ss/O2'
                 ribose_interaction = self.get_ribose_interaction(residues, token)
-                self.analysis_output.baseRiboseInteractions.append(ribose_interaction)
+                self.base_ribose_interactions.append(ribose_interaction)
                 ribose_added = True
 
             elif self.PHOSPHATE_ATOM in token and not phosphate_added:
                 # example token: O2P/Bh
                 phosphate_interaction = self.get_phosphate_interaction(residues, token)
-                self.analysis_output.basePhosphateInteractions.append(
-                    phosphate_interaction
-                )
+                self.base_phosphate_interactions.append(phosphate_interaction)
                 phosphate_added = True
 
             elif len(token.split("/", 1)) > 1:
@@ -1382,7 +1385,7 @@ class MCAnnotateAdapter:
                     base_pair_interaction = self.get_base_interaction(
                         residues, token, tokens
                     )
-                    self.analysis_output.basePairs.append(base_pair_interaction)
+                    self.base_pairs.append(base_pair_interaction)
                     base_added = True
 
     def append_names(self, file_content: str) -> None:
@@ -1428,7 +1431,13 @@ class MCAnnotateAdapter:
                     # Skip summary section - meaningless information
                     pass
 
-        return self.analysis_output
+        return (
+            self.base_pairs,
+            self.stackings,
+            self.base_ribose_interactions,
+            self.base_phosphate_interactions,
+            self.other_interactions,
+        )
 
 
 def parse_mcannotate_output(
@@ -1436,14 +1445,14 @@ def parse_mcannotate_output(
 ) -> BaseInteractions:
     """
     Parse mc-annotate output and convert to BaseInteractions.
-    This function expects a file with mc-annotate stdout and a PDB/CIF file.
+    This function expects a file with mc-annotate stdout and a PDB file.
     """
     stdout_file = None
     structure_file = None
     for file_path in file_paths:
-        if os.path.basename(file_path) == "stdout.txt":
+        if os.path.basename(file_path).endswith("stdout.txt"):
             stdout_file = file_path
-        elif file_path.endswith((".pdb", ".cif")):
+        elif file_path.endswith(".pdb"):
             structure_file = file_path
 
     if not stdout_file:
@@ -1451,7 +1460,7 @@ def parse_mcannotate_output(
         return BaseInteractions([], [], [], [], [])
 
     if not structure_file:
-        logging.warning("No PDB/CIF file found for mc-annotate.")
+        logging.warning("No PDB file found for mc-annotate.")
         return BaseInteractions([], [], [], [], [])
 
     logging.info(f"Processing mc-annotate stdout file: {stdout_file}")
@@ -1467,15 +1476,21 @@ def parse_mcannotate_output(
         return BaseInteractions([], [], [], [], [])
 
     adapter = MCAnnotateAdapter()
-    base_interactions = adapter.analyze_by_mc_annotate(pdb_content, mc_result)
+    (
+        base_pairs,
+        stackings,
+        base_ribose_interactions,
+        base_phosphate_interactions,
+        other_interactions,
+    ) = adapter.analyze_by_mc_annotate(pdb_content, mc_result)
 
     return BaseInteractions.from_structure3d(
         structure3d,
-        base_interactions.base_pairs,
-        base_interactions.stackings,
-        base_interactions.base_ribose_interactions,
-        base_interactions.base_phosphate_interactions,
-        base_interactions.other_interactions,
+        base_pairs,
+        stackings,
+        base_ribose_interactions,
+        base_phosphate_interactions,
+        other_interactions,
     )
 
 
@@ -1583,6 +1598,9 @@ def process_external_tool_output(
     if not external_file_paths:
         # For MAXIT or when no external files are provided, use the input file
         file_paths_to_process = [input_file_path]
+    elif tool == ExternalTool.MCANNOTATE:
+        # MC-Annotate requires both the stdout and the PDB file
+        file_paths_to_process = external_file_paths + [input_file_path]
     else:
         # Process all external files
         file_paths_to_process = external_file_paths
