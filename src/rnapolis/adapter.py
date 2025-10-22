@@ -247,7 +247,7 @@ def match_dssr_name_to_residue(
         nt_id = nt_id.split(":")[-1]
         for residue in structure3d.residues:
             if residue.full_name == nt_id:
-                return residue
+                return Residue(residue.label, residue.auth)
         logging.warning(f"Failed to find residue {nt_id}")
     return None
 
