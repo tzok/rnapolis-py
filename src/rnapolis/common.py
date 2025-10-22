@@ -1084,33 +1084,41 @@ class BaseInteractions:
         base_phosphate_interactions: List[BasePhosphate],
         other_interactions: List[OtherInteraction],
     ) -> "BaseInteractions":
-        auth2residue3d = {}
-        auth2label = {}
-        label2auth = {}
+        cni2residue = {}
+        cni2label = {}
+        cni2auth = {}
 
         for residue3d in structure3d.residues:
-            auth2residue3d[residue3d.auth] = residue3d
-            auth2label[residue3d.auth] = residue3d.label
-            label2auth[residue3d.label] = residue3d.auth
+            cni = (residue3d.chain, residue3d.number, residue3d.icode or None)
+            cni2auth[cni] = residue3d.auth
+            cni2label[cni] = residue3d.label
+            cni2residue[cni] = residue3d
 
         def unify_nt(nt: Residue) -> Residue:
             if nt.auth is not None and nt.label is not None:
                 return nt
+            cni = (nt.chain, nt.number, nt.icode or None)
             if nt.auth is not None:
-                return Residue(label=auth2label.get(nt.auth, None), auth=nt.auth)
+                return Residue(label=cni2label.get(cni, None), auth=nt.auth)
             if nt.label is not None:
-                return Residue(label=nt.label, auth=label2auth.get(nt.label, None))
+                return Residue(label=nt.label, auth=cni2auth.get(cni, None))
             return nt
 
         base_pairs_new = []
         for base_pair in base_pairs:
             nt1 = unify_nt(base_pair.nt1)
             nt2 = unify_nt(base_pair.nt2)
-            saenger = base_pair.saenger or Saenger.from_leontis_westhof(
-                auth2residue3d[nt1.auth].one_letter_name,
-                auth2residue3d[nt2.auth].one_letter_name,
-                base_pair.lw,
-            )
+
+            cni1 = (nt1.chain, nt1.number, nt1.icode or None)
+            cni2 = (nt2.chain, nt2.number, nt2.icode or None)
+            if cni1 not in cni2residue or cni2 not in cni2residue:
+                saenger = base_pair.saenger
+            else:
+                saenger = base_pair.saenger or Saenger.from_leontis_westhof(
+                    cni2residue[cni1].one_letter_name,
+                    cni2residue[cni2].one_letter_name,
+                    base_pair.lw,
+                )
             if (
                 nt1 != base_pair.nt1
                 or nt2 != base_pair.nt2
