@@ -1222,7 +1222,7 @@ class MCAnnotateAdapter:
     # both in our model and MC-Annotate
     ROMAN_NUMERALS = ("I", "V", "X")
 
-    # Positions of resiudes info in PDB files
+    # Positions of residues info in PDB files
     CHAIN_INDEX = 21
     NUMBER_INDEX = slice(22, 26)
     ICODE_INDEX = 26
@@ -1240,7 +1240,7 @@ class MCAnnotateAdapter:
                 return edge
         raise PdbParsingError('Edge type "{type}" unknown')
 
-    def get_resiude(self, residue_info_list: Tuple[Union[str, Any], ...]) -> Residue:
+    def get_residue(self, residue_info_list: Tuple[Union[str, Any], ...]) -> Residue:
         chain = residue_info_list[0]
         number = int(residue_info_list[1])
 
@@ -1263,8 +1263,8 @@ class MCAnnotateAdapter:
         # Expects (chain1, number1, icode1, chain2, number2, icode2)
         if len(residues_info_list) != 6:
             raise RegexError(f"MC-Annotate regex failed for {residues_info}")
-        residue_left = self.get_resiude(residues_info_list[:3])
-        residue_right = self.get_resiude(residues_info_list[3:])
+        residue_left = self.get_residue(residues_info_list[:3])
+        residue_right = self.get_residue(residues_info_list[3:])
         return residue_left, residue_right
 
     def append_stacking(self, line: str, topology_position: int) -> None:
