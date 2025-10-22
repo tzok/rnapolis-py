@@ -1077,7 +1077,7 @@ def parse_barnaba_output(
                 f"Residue name mismatch for {residue_info}: expected {name}, found {residue.auth.name}"
             )
 
-        return residue
+        return Residue(residue.label, residue.auth)
 
     base_pairs: List[BasePair] = []
     stackings: List[Stacking] = []
