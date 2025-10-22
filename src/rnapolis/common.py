@@ -1102,7 +1102,6 @@ class BaseInteractions:
                 return Residue(label=nt.label, auth=label2auth.get(nt.label, None))
             return nt
 
-        breakpoint()
         base_pairs_new = []
         for base_pair in base_pairs:
             nt1 = unify_nt(base_pair.nt1)

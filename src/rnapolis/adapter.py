@@ -1152,7 +1152,6 @@ def parse_barnaba_output(
                         f"Unknown barnaba stacking topology: {interaction_str}"
                     )
 
-    breakpoint()
     return BaseInteractions.from_structure3d(
         structure3d, base_pairs, stackings, [], [], other_interactions
     )
