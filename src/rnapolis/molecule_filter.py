@@ -222,7 +222,9 @@ def main():
         action="append",
         default=["chem_comp"],
     )
-    parser.add_argument("--pdb", help="change output format to PDB", action="store_true")
+    parser.add_argument(
+        "--pdb", help="change output format to PDB", action="store_true"
+    )
     parser.add_argument("path", help="path to a PDBx/mmCIF file")
     args = parser.parse_args()
 
