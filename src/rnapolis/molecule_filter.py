@@ -160,6 +160,20 @@ def filter_by_poly_types(
     return filter_cif(data, entity_ids, asym_ids, auth_asym_ids, retain_categories)
 
 
+def filter_by_entity_ids(
+    file_content: str,
+    entity_ids: Iterable[str],
+    retain_categories: Iterable[str] = ["chem_comp"],
+) -> str:
+    data = read_cif(file_content)
+    entity_ids = set(entity_ids)
+    asym_ids = select_ids(data, "struct_asym", "id", "entity_id", entity_ids)
+    auth_asym_ids = select_ids(
+        data, "atom_site", "auth_asym_id", "label_asym_id", asym_ids
+    )
+    return filter_cif(data, entity_ids, asym_ids, auth_asym_ids, retain_categories)
+
+
 def filter_by_chains(
     file_content: str,
     chains: Iterable[str],
@@ -190,6 +204,12 @@ def main():
         default=[],
     )
     parser.add_argument(
+        "--filter-by-entity-ids",
+        help="filter by entity IDs, e.g. 1, 2, 3",
+        action="append",
+        default=[],
+    )
+    parser.add_argument(
         "--filter-by-chains",
         help="filter by chain IDs (label_asym_id), e.g. A, B, C",
         action="append",
@@ -210,6 +230,14 @@ def main():
             filter_by_poly_types(
                 file.read(),
                 entity_poly_types=args.filter_by_poly_types,
+                retain_categories=args.retain_categories,
+            )
+        )
+    elif args.filter_by_entity_ids:
+        print(
+            filter_by_entity_ids(
+                file.read(),
+                entity_ids=args.filter_by_entity_ids,
                 retain_categories=args.retain_categories,
             )
         )
