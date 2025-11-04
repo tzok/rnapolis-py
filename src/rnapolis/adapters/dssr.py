@@ -3,7 +3,13 @@ from typing import List, Optional
 
 import orjson
 
-from rnapolis.common import BaseInteractions, BasePair, LeontisWesthof, Residue, Stacking
+from rnapolis.common import (
+    BaseInteractions,
+    BasePair,
+    LeontisWesthof,
+    Residue,
+    Stacking,
+)
 from rnapolis.tertiary import Structure3D
 
 

@@ -83,49 +83,9 @@ def auto_detect_tool(external_files: List[str]) -> ExternalTool:
     return ExternalTool.MAXIT
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 # RNAView regex pattern from the reference implementation
 
 # RNAView tokens
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 class MCAnnotateAdapter:
@@ -414,8 +374,6 @@ class MCAnnotateAdapter:
         )
 
 
-
-
 def parse_external_output(
     file_paths: List[str], tool: ExternalTool, structure3d: Structure3D
 ) -> BaseInteractions:
@@ -446,14 +404,6 @@ def parse_external_output(
         return parse_mcannotate_output(file_paths, structure3d)
     else:
         raise ValueError(f"Unsupported external tool: {tool}")
-
-
-
-
-
-
-
-
 
 
 def process_external_tool_output(
