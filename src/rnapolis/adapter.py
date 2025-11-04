@@ -341,6 +341,52 @@ def parse_dssr_output(
     )
 
 
+def _maxit_convert_saenger(hbond_type_28: str) -> Optional[Saenger]:
+    if hbond_type_28 == "?":
+        return None
+    try:
+        index = int(hbond_type_28)
+        if 1 <= index <= 28:
+            return list(Saenger)[index - 1]
+    except ValueError:
+        pass
+    return None
+
+
+def _maxit_convert_lw(hbond_type_12) -> Optional[LeontisWesthof]:
+    if hbond_type_12 == "?":
+        return None
+    try:
+        index = int(hbond_type_12)
+        if index == 1:
+            return LeontisWesthof.cWW
+        if index == 2:
+            return LeontisWesthof.tWW
+        if index == 3:
+            return LeontisWesthof.cWH
+        if index == 4:
+            return LeontisWesthof.tWH
+        if index == 5:
+            return LeontisWesthof.cWS
+        if index == 6:
+            return LeontisWesthof.tWS
+        if index == 7:
+            return LeontisWesthof.cHH
+        if index == 8:
+            return LeontisWesthof.tHH
+        if index == 9:
+            return LeontisWesthof.cHS
+        if index == 10:
+            return LeontisWesthof.tHS
+        if index == 11:
+            return LeontisWesthof.cSS
+        if index == 12:
+            return LeontisWesthof.tSS
+    except ValueError:
+        pass
+    return None
+
+
 def parse_maxit_output(
     file_paths: List[str], structure3d: Structure3D
 ) -> BaseInteractions:
@@ -355,51 +401,6 @@ def parse_maxit_output(
     Returns:
         BaseInteractions object containing the interactions found by MAXIT
     """
-
-    def convert_saenger(hbond_type_28: str) -> Optional[Saenger]:
-        if hbond_type_28 == "?":
-            return None
-        try:
-            index = int(hbond_type_28)
-            if 1 <= index <= 28:
-                return list(Saenger)[index - 1]
-        except ValueError:
-            pass
-        return None
-
-    def convert_lw(hbond_type_12) -> Optional[LeontisWesthof]:
-        if hbond_type_12 == "?":
-            return None
-        try:
-            index = int(hbond_type_12)
-            if index == 1:
-                return LeontisWesthof.cWW
-            if index == 2:
-                return LeontisWesthof.tWW
-            if index == 3:
-                return LeontisWesthof.cWH
-            if index == 4:
-                return LeontisWesthof.tWH
-            if index == 5:
-                return LeontisWesthof.cWS
-            if index == 6:
-                return LeontisWesthof.tWS
-            if index == 7:
-                return LeontisWesthof.cHH
-            if index == 8:
-                return LeontisWesthof.tHH
-            if index == 9:
-                return LeontisWesthof.cHS
-            if index == 10:
-                return LeontisWesthof.tHS
-            if index == 11:
-                return LeontisWesthof.cSS
-            if index == 12:
-                return LeontisWesthof.tSS
-        except ValueError:
-            pass
-        return None
-
     all_base_pairs = []
     all_other_interactions = []
 
@@ -460,8 +461,8 @@ def parse_maxit_output(
             residue_i = Residue(label_i, auth_i)
             residue_j = Residue(label_j, auth_j)
 
-            saenger = convert_saenger(entry["hbond_type_28"])
-            lw = convert_lw(entry["hbond_type_12"])
+            saenger = _maxit_convert_saenger(entry["hbond_type_28"])
+            lw = _maxit_convert_lw(entry["hbond_type_12"])
 
             if lw is not None:
                 all_base_pairs.append(BasePair(residue_i, residue_j, lw, saenger))
@@ -476,6 +477,34 @@ def parse_maxit_output(
     )
 
 
+def _bpnet_convert_lw(bpnet_lw) -> LeontisWesthof:
+    """Convert BPNet LW notation to LeontisWesthof enum."""
+    if len(bpnet_lw) != 4:
+        raise ValueError(f"bpnet lw invalid length: {bpnet_lw}")
+    bpnet_lw = bpnet_lw.replace("+", "W").replace("z", "S").replace("g", "H")
+    edge5 = bpnet_lw[0].upper()
+    edge3 = bpnet_lw[2].upper()
+    stericity = bpnet_lw[3].lower()
+    return LeontisWesthof[f"{stericity}{edge5}{edge3}"]
+
+
+def _bpnet_residues_from_overlap_info(fields):
+    """Parse residue information from overlap line fields."""
+    chains = fields[6].split("^")
+    numbers = list(map(int, fields[3].split(":")))
+    icode1, icode2 = fields[2], fields[4]
+    names = fields[5].split(":")
+
+    if icode1 in " ?":
+        icode1 = None
+    if icode2 in " ?":
+        icode2 = None
+
+    nt1 = Residue(None, ResidueAuth(chains[0], numbers[0], icode1, names[0]))
+    nt2 = Residue(None, ResidueAuth(chains[1], numbers[1], icode2, names[1]))
+    return nt1, nt2
+
+
 def parse_bpnet_output(
     file_paths: List[str], structure3d: Structure3D
 ) -> BaseInteractions:
@@ -488,33 +517,6 @@ def parse_bpnet_output(
     Returns:
         BaseInteractions object containing the interactions found by BPNet
     """
-
-    def convert_lw(bpnet_lw) -> LeontisWesthof:
-        """Convert BPNet LW notation to LeontisWesthof enum."""
-        if len(bpnet_lw) != 4:
-            raise ValueError(f"bpnet lw invalid length: {bpnet_lw}")
-        bpnet_lw = bpnet_lw.replace("+", "W").replace("z", "S").replace("g", "H")
-        edge5 = bpnet_lw[0].upper()
-        edge3 = bpnet_lw[2].upper()
-        stericity = bpnet_lw[3].lower()
-        return LeontisWesthof[f"{stericity}{edge5}{edge3}"]
-
-    def residues_from_overlap_info(fields):
-        """Parse residue information from overlap line fields."""
-        chains = fields[6].split("^")
-        numbers = list(map(int, fields[3].split(":")))
-        icode1, icode2 = fields[2], fields[4]
-        names = fields[5].split(":")
-
-        if icode1 in " ?":
-            icode1 = None
-        if icode2 in " ?":
-            icode2 = None
-
-        nt1 = Residue(None, ResidueAuth(chains[0], numbers[0], icode1, names[0]))
-        nt2 = Residue(None, ResidueAuth(chains[1], numbers[1], icode2, names[1]))
-        return nt1, nt2
-
     # Find required files
     basepair_json = None
     rob_file = None
@@ -565,7 +567,7 @@ def parse_bpnet_output(
                         entry["resname2"],
                     ),
                 )
-                lw = convert_lw(entry["basepair"])
+                lw = _bpnet_convert_lw(entry["basepair"])
                 base_pairs.append(BasePair(nt1, nt2, lw, None))
         except Exception as e:
             logging.warning(
@@ -587,14 +589,14 @@ def parse_bpnet_output(
                         # ASTK means Adjacent Stacking, OSTK means Non-Adjacent Stacking
                         # ADJA means Adjacent contact but not proper stacking
                         if fields[7] in ["ASTK", "OSTK", "ADJA"]:
-                            nt1, nt2 = residues_from_overlap_info(fields)
+                            nt1, nt2 = _bpnet_residues_from_overlap_info(fields)
                             stackings.append(Stacking(nt1, nt2, None))
                     else:
                         logging.warning(f"Failed to parse OVLP line: {line}")
                 elif line.startswith("PROX"):
                     fields = line.strip().split()
                     if len(fields) == 11:
-                        nt1, nt2 = residues_from_overlap_info(fields)
+                        nt1, nt2 = _bpnet_residues_from_overlap_info(fields)
                         atom1, atom2 = fields[7].split(":")
 
                         # Determine element types based on atom names
@@ -686,6 +688,138 @@ def parse_bpnet_output(
     )
 
 
+@dataclass
+class _RNAViewPotentialResidue:
+    residue: Residue
+    position_c2: Optional[Tuple[float, float, float]]
+    position_c6: Optional[Tuple[float, float, float]]
+    position_n1: Optional[Tuple[float, float, float]]
+
+    def is_correct_according_to_rnaview(self) -> bool:
+        """
+        This is a reimplementation of residue_ident() function from fpair_sub.c from RNAView source code.
+        """
+        if any(
+            (
+                self.position_c2 is None,
+                self.position_c6 is None,
+                self.position_n1 is None,
+            )
+        ):
+            return False
+
+        distance_n1_c2 = math.dist(self.position_n1, self.position_c2)  # type: ignore
+        distance_n1_c6 = math.dist(self.position_n1, self.position_c6)  # type: ignore
+        distance_c2_c6 = math.dist(self.position_c2, self.position_c6)  # type: ignore
+        return all(
+            (distance_n1_c2 <= 2.0, distance_n1_c6 <= 2.0, distance_c2_c6 <= 3.0)
+        )
+
+
+# RNAView regex pattern from the reference implementation
+_RNAVIEW_REGEX = re.compile(
+    r"\s*(\d+)_(\d+),\s+(\w):\s+(-?\d+)\s+(\w+)-(\w+)\s+(-?\d+)\s+(\w):\s+(syn|\s+)*((./.)\s+(cis|tran)(syn|\s+)*([IVX,]+|n/a|![^.]+)|stacked)\.?"
+)
+
+# RNAView tokens
+_RNAVIEW_BEGIN_BASE_PAIR = "BEGIN_base-pair"
+_RNAVIEW_END_BASE_PAIR = "END_base-pair"
+_RNAVIEW_STACKING = "stacked"
+_RNAVIEW_BASE_RIBOSE = "!(b_s)"
+_RNAVIEW_BASE_PHOSPHATE = "!b_(O1P,O2P)"
+_RNAVIEW_OTHER_INTERACTION = "!(s_s)"
+_RNAVIEW_SAENGER_UNKNOWN = "n/a"
+_RNAVIEW_PLUS_INTERACTION = "+/+"  # For us - cWW
+_RNAVIEW_MINUS_INTERACTION = "-/-"  # For us - cWW
+_RNAVIEW_X_INTERACTION = "X/X"  # For us - cWW
+_RNAVIEW_ONE_HBOND = "!1H(b_b)"  # For us - OtherInteraction
+_RNAVIEW_DOUBLE_SAENGER = ("XIV,XV", "XII,XIII")
+_RNAVIEW_UNKNOWN_LW_CHARS = (".", "?")
+_RNAVIEW_ROMAN_NUMERALS = ("I", "V", "X")
+
+
+def _rnaview_get_leontis_westhof(
+    lw_info: str, trans_cis_info: str
+) -> Optional[LeontisWesthof]:
+    """Convert RNAView LW notation to LeontisWesthof enum."""
+    trans_cis = trans_cis_info[0]
+    if any(char in lw_info for char in _RNAVIEW_UNKNOWN_LW_CHARS):
+        return None
+    if lw_info in (
+        _RNAVIEW_PLUS_INTERACTION,
+        _RNAVIEW_MINUS_INTERACTION,
+        _RNAVIEW_X_INTERACTION,
+    ):
+        return LeontisWesthof[f"{trans_cis}WW"]
+    return LeontisWesthof[f"{trans_cis}{lw_info[0].upper()}{lw_info[2].upper()}"]
+
+
+def _rnaview_append_residues_from_input_using_rnaview_indexing(
+    input_content: str, input_type: str = "cif"
+) -> Dict[int, Residue]:
+    """Parse input content and create RNAView-style residue mapping."""
+    atoms_df = (
+        parse_cif_atoms(input_content)
+        if input_type == "cif"
+        else parse_pdb_atoms(input_content)
+    )
+    structure = StructureV2(atoms_df)
+    residues_from_pdb: Dict[int, Residue] = {}
+    counter = 1
+
+    for residue in structure.residues:
+        residue_common = Residue(
+            None,
+            ResidueAuth(
+                residue.chain_id,
+                residue.residue_number,
+                residue.insertion_code,
+                residue.residue_name,
+            ),
+        )
+        c2 = residue.find_atom("C2")
+        c6 = residue.find_atom("C6")
+        n1 = residue.find_atom("N1")
+        potential_residue = _RNAViewPotentialResidue(
+            residue_common,
+            c2.coordinates if c2 else None,
+            c6.coordinates if c6 else None,
+            n1.coordinates if n1 else None,
+        )
+        if potential_residue.is_correct_according_to_rnaview():
+            residues_from_pdb[counter] = potential_residue.residue
+            counter += 1
+
+    logging.debug("RNAView residues mapping:")
+    for idx, residue in sorted(residues_from_pdb.items()):
+        logging.debug(f"  {idx}: {residue}")
+
+    return residues_from_pdb
+
+
+def _rnaview_check_indexing_correctness(
+    regex_result: Tuple[str, ...], line: str, residues_from_pdb: Dict[int, Residue]
+) -> None:
+    """Check if RNAView internal indexing matches PDB residue information."""
+    residue_left = residues_from_pdb[int(regex_result[0])]
+
+    if residue_left.auth.chain.lower() != regex_result[
+        2
+    ].lower() or residue_left.auth.number != int(regex_result[3]):
+        raise ValueError(
+            f"Wrong internal index for {residue_left}. Fix RNAView internal index mapping. Line: {line}"
+        )
+
+    residue_right = residues_from_pdb[int(regex_result[1])]
+
+    if residue_right.auth.chain.lower() != regex_result[
+        7
+    ].lower() or residue_right.auth.number != int(regex_result[6]):
+        raise ValueError(
+            f"Wrong internal index for {residue_right}. Fix RNAView internal index mapping. Line: {line}"
+        )
+
+
 def parse_rnaview_output(
     file_paths: List[str], structure3d: Structure3D
 ) -> BaseInteractions:
@@ -699,130 +833,6 @@ def parse_rnaview_output(
     Returns:
         BaseInteractions object containing the interactions found by RNAView
     """
-
-    @dataclass
-    class PotentialResidue:
-        residue: Residue
-        position_c2: Optional[Tuple[float, float, float]]
-        position_c6: Optional[Tuple[float, float, float]]
-        position_n1: Optional[Tuple[float, float, float]]
-
-        def is_correct_according_to_rnaview(self) -> bool:
-            """
-            This is a reimplementation of residue_ident() function from fpair_sub.c from RNAView source code.
-            """
-            if any(
-                (
-                    self.position_c2 is None,
-                    self.position_c6 is None,
-                    self.position_n1 is None,
-                )
-            ):
-                return False
-
-            distance_n1_c2 = math.dist(self.position_n1, self.position_c2)  # type: ignore
-            distance_n1_c6 = math.dist(self.position_n1, self.position_c6)  # type: ignore
-            distance_c2_c6 = math.dist(self.position_c2, self.position_c6)  # type: ignore
-            return all(
-                (distance_n1_c2 <= 2.0, distance_n1_c6 <= 2.0, distance_c2_c6 <= 3.0)
-            )
-
-    # RNAView regex pattern from the reference implementation
-    RNAVIEW_REGEX = re.compile(
-        r"\s*(\d+)_(\d+),\s+(\w):\s+(-?\d+)\s+(\w+)-(\w+)\s+(-?\d+)\s+(\w):\s+(syn|\s+)*((./.)\s+(cis|tran)(syn|\s+)*([IVX,]+|n/a|![^.]+)|stacked)\.?"
-    )
-
-    # RNAView tokens
-    BEGIN_BASE_PAIR = "BEGIN_base-pair"
-    END_BASE_PAIR = "END_base-pair"
-    STACKING = "stacked"
-    BASE_RIBOSE = "!(b_s)"
-    BASE_PHOSPHATE = "!b_(O1P,O2P)"
-    OTHER_INTERACTION = "!(s_s)"
-    SAENGER_UNKNOWN = "n/a"
-    PLUS_INTERACTION = "+/+"  # For us - cWW
-    MINUS_INTERACTION = "-/-"  # For us - cWW
-    X_INTERACTION = "X/X"  # For us - cWW
-    ONE_HBOND = "!1H(b_b)"  # For us - OtherInteraction
-    DOUBLE_SAENGER = ("XIV,XV", "XII,XIII")
-    UNKNOWN_LW_CHARS = (".", "?")
-    ROMAN_NUMERALS = ("I", "V", "X")
-
-    def get_leontis_westhof(
-        lw_info: str, trans_cis_info: str
-    ) -> Optional[LeontisWesthof]:
-        """Convert RNAView LW notation to LeontisWesthof enum."""
-        trans_cis = trans_cis_info[0]
-        if any(char in lw_info for char in UNKNOWN_LW_CHARS):
-            return None
-        if lw_info in (PLUS_INTERACTION, MINUS_INTERACTION, X_INTERACTION):
-            return LeontisWesthof[f"{trans_cis}WW"]
-        return LeontisWesthof[f"{trans_cis}{lw_info[0].upper()}{lw_info[2].upper()}"]
-
-    def append_residues_from_input_using_rnaview_indexing(
-        input_content: str, input_type: str = "cif"
-    ) -> Dict[int, Residue]:
-        """Parse input content and create RNAView-style residue mapping."""
-        atoms_df = (
-            parse_cif_atoms(input_content)
-            if input_type == "cif"
-            else parse_pdb_atoms(input_content)
-        )
-        structure = StructureV2(atoms_df)
-        residues_from_pdb: Dict[int, Residue] = {}
-        counter = 1
-
-        for residue in structure.residues:
-            residue_common = Residue(
-                None,
-                ResidueAuth(
-                    residue.chain_id,
-                    residue.residue_number,
-                    residue.insertion_code,
-                    residue.residue_name,
-                ),
-            )
-            c2 = residue.find_atom("C2")
-            c6 = residue.find_atom("C6")
-            n1 = residue.find_atom("N1")
-            potential_residue = PotentialResidue(
-                residue_common,
-                c2.coordinates if c2 else None,
-                c6.coordinates if c6 else None,
-                n1.coordinates if n1 else None,
-            )
-            if potential_residue.is_correct_according_to_rnaview():
-                residues_from_pdb[counter] = potential_residue.residue
-                counter += 1
-
-        logging.debug("RNAView residues mapping:")
-        for idx, residue in sorted(residues_from_pdb.items()):
-            logging.debug(f"  {idx}: {residue}")
-
-        return residues_from_pdb
-
-    def check_indexing_correctness(
-        regex_result: Tuple[str, ...], line: str, residues_from_pdb: Dict[int, Residue]
-    ) -> None:
-        """Check if RNAView internal indexing matches PDB residue information."""
-        residue_left = residues_from_pdb[int(regex_result[0])]
-
-        if residue_left.auth.chain.lower() != regex_result[
-            2
-        ].lower() or residue_left.auth.number != int(regex_result[3]):
-            raise ValueError(
-                f"Wrong internal index for {residue_left}. Fix RNAView internal index mapping. Line: {line}"
-            )
-
-        residue_right = residues_from_pdb[int(regex_result[1])]
-
-        if residue_right.auth.chain.lower() != regex_result[
-            7
-        ].lower() or residue_right.auth.number != int(regex_result[6]):
-            raise ValueError(
-                f"Wrong internal index for {residue_right}. Fix RNAView internal index mapping. Line: {line}"
-            )
-
     # Find the first .out file in the list
     out_file = None
     pdb_file = None
@@ -871,7 +881,7 @@ def parse_rnaview_output(
         try:
             with open(input_file, "r", encoding="utf-8") as f:
                 input_content = f.read()
-            residues_from_input = append_residues_from_input_using_rnaview_indexing(
+            residues_from_input = _rnaview_append_residues_from_input_using_rnaview_indexing(
                 input_content, input_type
             )
         except Exception as e:
@@ -888,12 +898,12 @@ def parse_rnaview_output(
 
         base_pair_section = False
         for line in rnaview_result.splitlines():
-            if line.startswith(BEGIN_BASE_PAIR):
+            if line.startswith(_RNAVIEW_BEGIN_BASE_PAIR):
                 base_pair_section = True
-            elif line.startswith(END_BASE_PAIR):
+            elif line.startswith(_RNAVIEW_END_BASE_PAIR):
                 base_pair_section = False
             elif base_pair_section:
-                rnaview_regex_result = re.search(RNAVIEW_REGEX, line)
+                rnaview_regex_result = re.search(_RNAVIEW_REGEX, line)
                 if rnaview_regex_result is None:
                     logging.warning(f"RNAView regex failed for line: {line}")
                     continue
@@ -949,26 +959,26 @@ def parse_rnaview_output(
                 # Interaction OR Saenger OR n/a OR empty string
                 token = rnaview_regex_groups[13]
 
-                if rnaview_regex_groups[9] == STACKING:
+                if rnaview_regex_groups[9] == _RNAVIEW_STACKING:
                     stackings.append(Stacking(residue_left, residue_right, None))
 
-                elif token == BASE_RIBOSE:
+                elif token == _RNAVIEW_BASE_RIBOSE:
                     base_ribose_interactions.append(
                         BaseRibose(residue_left, residue_right, None)
                     )
 
-                elif token == BASE_PHOSPHATE:
+                elif token == _RNAVIEW_BASE_PHOSPHATE:
                     base_phosphate_interactions.append(
                         BasePhosphate(residue_left, residue_right, None)
                     )
 
-                elif token in (OTHER_INTERACTION, ONE_HBOND):
+                elif token in (_RNAVIEW_OTHER_INTERACTION, _RNAVIEW_ONE_HBOND):
                     other_interactions.append(
                         OtherInteraction(residue_left, residue_right)
                     )
 
-                elif token == SAENGER_UNKNOWN:
-                    leontis_westhof = get_leontis_westhof(
+                elif token == _RNAVIEW_SAENGER_UNKNOWN:
+                    leontis_westhof = _rnaview_get_leontis_westhof(
                         rnaview_regex_groups[10], rnaview_regex_groups[11]
                     )
                     if leontis_westhof is None:
@@ -981,10 +991,10 @@ def parse_rnaview_output(
                         )
 
                 elif (
-                    all(char in ROMAN_NUMERALS for char in token)
-                    or token in DOUBLE_SAENGER
+                    all(char in _RNAVIEW_ROMAN_NUMERALS for char in token)
+                    or token in _RNAVIEW_DOUBLE_SAENGER
                 ):
-                    leontis_westhof = get_leontis_westhof(
+                    leontis_westhof = _rnaview_get_leontis_westhof(
                         rnaview_regex_groups[10], rnaview_regex_groups[11]
                     )
                     if leontis_westhof is None:
@@ -994,7 +1004,7 @@ def parse_rnaview_output(
                     else:
                         saenger = (
                             Saenger[token.split(",", 1)[0]]
-                            if token in DOUBLE_SAENGER
+                            if token in _RNAVIEW_DOUBLE_SAENGER
                             else Saenger[token]
                         )
                         base_pairs.append(
@@ -1019,6 +1029,121 @@ def parse_rnaview_output(
     )
 
 
+_BARNABA_STACKING_TOPOLOGIES = {
+    ">>": "upward",
+    "<<": "downward",
+    "<>": "outward",
+    "><": "inward",
+}
+
+
+def _barnaba_assign_indices_to_chains(indices, chains, score, avail):
+    # Convert to numpy for Hungarian; fall back to greedy if SciPy not available
+    S = np.array(score, dtype=float)
+    A = np.array(avail, dtype=float)
+    # small tie-breaker: prefer chains that have the residues at all
+    S2 = S + 1e-6 * A
+    # Maximize S2 by minimizing -S2
+    row_ind, col_ind = linear_sum_assignment(-S2)
+
+    mapping = {}
+    pair_scores = {}
+    for i, j in zip(row_ind, col_ind):
+        mapping[indices[i]] = chains[j]
+        pair_scores[(indices[i], chains[j])] = int(score[i][j])
+    return mapping, pair_scores
+
+
+def _barnaba_map_barnaba_to_rnapolis(
+    barnaba: Iterable[Tuple[str, int, int]],
+    rnapolis: Iterable[Tuple[str, int, str]],
+    name_eq: Callable[[str, str], bool] = lambda a, b: a == b,
+):
+    # Index input
+    barnaba = list(barnaba)
+    rnapolis = list(rnapolis)
+
+    # rnapolis grouped by number, and fast lookup by (number, chain)
+    rnap_by_num = defaultdict(dict)  # number -> {chain: name}
+    rnap_by_num_chain = {}  # (number, chain) -> (name, number, chain)
+    chains_all = set()
+    for rname, num, chain in rnapolis:
+        rnap_by_num[num][chain] = rname
+        rnap_by_num_chain[(num, chain)] = (rname, num, chain)
+        chains_all.add(chain)
+
+    indices = sorted({idx for _, _, idx in barnaba})
+    chains = sorted(chains_all)
+    idx_to_row = {idx: i for i, idx in enumerate(indices)}
+    ch_to_col = {ch: j for j, ch in enumerate(chains)}
+
+    # Build score and availability matrices
+    # score[i, c] = number of name matches if index i -> chain c
+    # avail[i, c] = number of residues where index i has a number that exists in chain c
+    m, n = len(indices), len(chains)
+    score = [[0] * n for _ in range(m)]
+    avail = [[0] * n for _ in range(m)]
+    for bname, num, idx in barnaba:
+        row = idx_to_row[idx]
+        for ch, rname in rnap_by_num.get(num, {}).items():
+            col = ch_to_col[ch]
+            avail[row][col] += 1
+            if name_eq(bname, rname):
+                score[row][col] += 1
+
+    # Choose assignment that maximizes score (with tiny tie-break on availability)
+    mapping, pair_scores = _barnaba_assign_indices_to_chains(
+        indices, chains, score, avail
+    )
+
+    # Use mapping to pair each barnaba residue to its rnapolis counterpart
+    pairs = []
+    mismatches = []
+    missing = []
+    for bname, num, idx in barnaba:
+        ch = mapping[idx]
+        r = rnap_by_num_chain.get((num, ch))
+        if r is None:
+            missing.append((bname, num, idx))
+            continue
+        match = bool(name_eq(bname, r[0]))
+        pairs.append(((bname, num, idx), r, match))
+        if not match:
+            mismatches.append(((bname, num, idx), r))
+
+    # Optional: extras present only in rnapolis
+    barnaba_keys = {(num, mapping[idx]) for _, num, idx in barnaba}
+    extras_in_rnapolis = [r for r in rnapolis if (r[1], r[2]) not in barnaba_keys]
+
+    return {
+        "index_to_chain": mapping,  # dict: barnaba_index -> rnapolis_chain
+        "pair_scores": pair_scores,  # per (index, chain) chosen, how many name matches
+        "pairs": pairs,  # list of ((bname,num,idx), (rname,num,chain), name_match_bool)
+        "mismatches": mismatches,  # list of pairs where names differ
+        "missing_in_rnapolis": missing,  # barnaba residues lacking a counterpart (should be empty)
+        "extras_in_rnapolis": extras_in_rnapolis,
+    }
+
+
+def _barnaba_get_leontis_westhof(interaction: str) -> Optional[LeontisWesthof]:
+    if "x" in interaction.lower():
+        return None
+    if interaction in ("WCc", "GUc"):
+        return LeontisWesthof.cWW
+    return LeontisWesthof[f"{interaction[2]}{interaction[:2]}"]
+
+
+def _barnaba_get_residue(
+    residue_info: str,
+    barnaba_mapping: Dict,
+    residue_mapping: Dict,
+    rnapolis_mapping: Dict,
+) -> Optional[Residue]:
+    barnaba_tuple = barnaba_mapping.get(residue_info, None)
+    rnapolis_tuple = residue_mapping.get(barnaba_tuple, None)
+    return rnapolis_mapping.get(rnapolis_tuple, None)
+
+
 def parse_barnaba_output(
     file_paths: List[str], structure3d: Structure3D
 ) -> BaseInteractions:
@@ -1030,13 +1155,6 @@ def parse_barnaba_output(
     Returns:
         BaseInteractions object containing the interactions found by barnaba
     """
-    STACKING_TOPOLOGIES = {
-        ">>": "upward",
-        "<<": "downward",
-        "<>": "outward",
-        "><": "inward",
-    }
-
     pairing_file = None
     stacking_file = None
 
@@ -1062,90 +1180,6 @@ def parse_barnaba_output(
         logging.warning("Could not find barnaba sequence in output files")
         return BaseInteractions([], [], [], [], [])
 
-    def map_barnaba_to_rnapolis(
-        barnaba: Iterable[Tuple[str, int, int]],
-        rnapolis: Iterable[Tuple[str, int, str]],
-        name_eq: Callable[[str, str], bool] = lambda a, b: a == b,
-    ):
-        # Index input
-        barnaba = list(barnaba)
-        rnapolis = list(rnapolis)
-
-        # rnapolis grouped by number, and fast lookup by (number, chain)
-        rnap_by_num = defaultdict(dict)  # number -> {chain: name}
-        rnap_by_num_chain = {}  # (number, chain) -> (name, number, chain)
-        chains_all = set()
-        for rname, num, chain in rnapolis:
-            rnap_by_num[num][chain] = rname
-            rnap_by_num_chain[(num, chain)] = (rname, num, chain)
-            chains_all.add(chain)
-
-        indices = sorted({idx for _, _, idx in barnaba})
-        chains = sorted(chains_all)
-        idx_to_row = {idx: i for i, idx in enumerate(indices)}
-        ch_to_col = {ch: j for j, ch in enumerate(chains)}
-
-        # Build score and availability matrices
-        # score[i, c] = number of name matches if index i -> chain c
-        # avail[i, c] = number of residues where index i has a number that exists in chain c
-        m, n = len(indices), len(chains)
-        score = [[0] * n for _ in range(m)]
-        avail = [[0] * n for _ in range(m)]
-        for bname, num, idx in barnaba:
-            row = idx_to_row[idx]
-            for ch, rname in rnap_by_num.get(num, {}).items():
-                col = ch_to_col[ch]
-                avail[row][col] += 1
-                if name_eq(bname, rname):
-                    score[row][col] += 1
-
-        # Choose assignment that maximizes score (with tiny tie-break on availability)
-        mapping, pair_scores = _assign_indices_to_chains(indices, chains, score, avail)
-
-        # Use mapping to pair each barnaba residue to its rnapolis counterpart
-        pairs = []
-        mismatches = []
-        missing = []
-        for bname, num, idx in barnaba:
-            ch = mapping[idx]
-            r = rnap_by_num_chain.get((num, ch))
-            if r is None:
-                missing.append((bname, num, idx))
-                continue
-            match = bool(name_eq(bname, r[0]))
-            pairs.append(((bname, num, idx), r, match))
-            if not match:
-                mismatches.append(((bname, num, idx), r))
-
-        # Optional: extras present only in rnapolis
-        barnaba_keys = {(num, mapping[idx]) for _, num, idx in barnaba}
-        extras_in_rnapolis = [r for r in rnapolis if (r[1], r[2]) not in barnaba_keys]
-
-        return {
-            "index_to_chain": mapping,  # dict: barnaba_index -> rnapolis_chain
-            "pair_scores": pair_scores,  # per (index, chain) chosen, how many name matches
-            "pairs": pairs,  # list of ((bname,num,idx), (rname,num,chain), name_match_bool)
-            "mismatches": mismatches,  # list of pairs where names differ
-            "missing_in_rnapolis": missing,  # barnaba residues lacking a counterpart (should be empty)
-            "extras_in_rnapolis": extras_in_rnapolis,
-        }
-
-    def _assign_indices_to_chains(indices, chains, score, avail):
-        # Convert to numpy for Hungarian; fall back to greedy if SciPy not available
-        S = np.array(score, dtype=float)
-        A = np.array(avail, dtype=float)
-        # small tie-breaker: prefer chains that have the residues at all
-        S2 = S + 1e-6 * A
-        # Maximize S2 by minimizing -S2
-        row_ind, col_ind = linear_sum_assignment(-S2)
-
-        mapping = {}
-        pair_scores = {}
-        for i, j in zip(row_ind, col_ind):
-            mapping[indices[i]] = chains[j]
-            pair_scores[(indices[i], chains[j])] = int(score[i][j])
-        return mapping, pair_scores
-
     barnaba_mapping = {
         residue_info: (
             residue_info.split("_")[0],
@@ -1159,25 +1193,13 @@ def parse_barnaba_output(
         for residue in structure3d.residues
         if residue.auth and residue.is_nucleotide
     }
-    barnaba_to_rnapolis_mapping = map_barnaba_to_rnapolis(
+    barnaba_to_rnapolis_mapping = _barnaba_map_barnaba_to_rnapolis(
         barnaba_mapping.values(), rnapolis_mapping.keys()
     )
     residue_mapping = {
         barnaba: rnapolis
         for barnaba, rnapolis, _ in barnaba_to_rnapolis_mapping["pairs"]
     }
-
-    def get_leontis_westhof(interaction: str) -> Optional[LeontisWesthof]:
-        if "x" in interaction.lower():
-            return None
-        if interaction in ("WCc", "GUc"):
-            return LeontisWesthof.cWW
-        return LeontisWesthof[f"{interaction[2]}{interaction[:2]}"]
-
-    def get_residue(residue_info: str) -> Optional[Residue]:
-        barnaba_tuple = barnaba_mapping.get(residue_info, None)
-        rnapolis_tuple = residue_mapping.get(barnaba_tuple, None)
-        return rnapolis_mapping.get(rnapolis_tuple, None)
 
     base_pairs: List[BasePair] = []
     stackings: List[Stacking] = []
@@ -1207,15 +1229,19 @@ def parse_barnaba_output(
 
             res1_str, res2_str, interaction_str = fields[0], fields[1], fields[2]
 
-            nt1 = get_residue(res1_str)
-            nt2 = get_residue(res2_str)
+            nt1 = _barnaba_get_residue(
+                res1_str, barnaba_mapping, residue_mapping, rnapolis_mapping
+            )
+            nt2 = _barnaba_get_residue(
+                res2_str, barnaba_mapping, residue_mapping, rnapolis_mapping
+            )
 
             if not nt1 or not nt2:
                 continue
 
             if is_pairing:
                 try:
-                    lw = get_leontis_westhof(interaction_str)
+                    lw = _barnaba_get_leontis_westhof(interaction_str)
                     if lw:
                         base_pairs.append(BasePair(nt1, nt2, lw, None))
                     else:
@@ -1224,7 +1250,7 @@ def parse_barnaba_output(
                     other_interactions.append(OtherInteraction(nt1, nt2))
             elif is_stacking:
                 try:
-                    topology_str = STACKING_TOPOLOGIES.get(interaction_str)
+                    topology_str = _BARNABA_STACKING_TOPOLOGIES.get(interaction_str)
                     if topology_str:
                         topology = StackingTopology[topology_str]
                         stackings.append(Stacking(nt1, nt2, topology))
