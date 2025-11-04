@@ -881,8 +881,10 @@ def parse_rnaview_output(
         try:
             with open(input_file, "r", encoding="utf-8") as f:
                 input_content = f.read()
-            residues_from_input = _rnaview_append_residues_from_input_using_rnaview_indexing(
-                input_content, input_type
+            residues_from_input = (
+                _rnaview_append_residues_from_input_using_rnaview_indexing(
+                    input_content, input_type
+                )
             )
         except Exception as e:
             logging.warning(
