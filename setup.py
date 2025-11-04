@@ -1,4 +1,4 @@
-from setuptools import setup, find_packages
+from setuptools import setup
 
 with open("README.md") as f:
     long_description = f.read()
@@ -6,8 +6,6 @@ with open("README.md") as f:
 setup(
     name="RNApolis",
     version="0.11.3",
-    packages=find_packages(where="src", include=["rnapolis", "rnapolis.*"]),
-    package_dir={"": "src"},
     author="Tomasz Zok",
     author_email="tomasz.zok@cs.put.poznan.pl",
     description="A Python library containing RNA-related bioinformatics functions and classes",
