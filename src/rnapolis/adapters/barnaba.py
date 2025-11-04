@@ -9,14 +9,13 @@ from scipy.optimize import linear_sum_assignment
 from rnapolis.common import (
     BaseInteractions,
     BasePair,
+    LeontisWesthof,
     OtherInteraction,
     Residue,
     Stacking,
     StackingTopology,
-    LeontisWesthof,
 )
 from rnapolis.tertiary import Structure3D
-
 
 _BARNABA_STACKING_TOPOLOGIES = {
     ">>": "upward",
@@ -64,8 +63,6 @@ def _barnaba_map_barnaba_to_rnapolis(
     indices = sorted({idx for _, _, idx in barnaba})
     chains = sorted(chains_all)
     idx_to_row = {idx: i for i, idx in enumerate(indices)}
-    ch_to_col = {ch: j for j, j in enumerate(chains)}
-    # Oops: fix ch_to_col mapping typo
     ch_to_col = {ch: j for j, ch in enumerate(chains)}
 
     # Build score and availability matrices

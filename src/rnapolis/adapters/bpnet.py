@@ -1,5 +1,5 @@
 import logging
-from typing import List, Optional, Tuple
+from typing import List
 
 import orjson
 
@@ -12,6 +12,7 @@ from rnapolis.common import (
     OtherInteraction,
     Residue,
     ResidueAuth,
+    Stacking,
 )
 from rnapolis.tertiary import Structure3D
 

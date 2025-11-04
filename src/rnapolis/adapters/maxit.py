@@ -5,12 +5,12 @@ from typing import List, Optional
 from rnapolis.common import (
     BaseInteractions,
     BasePair,
+    LeontisWesthof,
     OtherInteraction,
     Residue,
     ResidueAuth,
     ResidueLabel,
     Saenger,
-    LeontisWesthof,
 )
 from rnapolis.metareader import read_metadata
 from rnapolis.tertiary import Structure3D

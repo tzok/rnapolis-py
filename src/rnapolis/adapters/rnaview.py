@@ -1,6 +1,5 @@
 import logging
 import math
-import os
 import re
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
@@ -14,8 +13,8 @@ from rnapolis.common import (
     OtherInteraction,
     Residue,
     ResidueAuth,
-    Stacking,
     Saenger,
+    Stacking,
 )
 from rnapolis.parser_v2 import parse_cif_atoms, parse_pdb_atoms
 from rnapolis.tertiary import Structure3D

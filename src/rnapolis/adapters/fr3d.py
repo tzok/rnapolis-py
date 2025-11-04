@@ -3,11 +3,11 @@ from typing import Dict, List
 
 from rnapolis.common import (
     BR,
-    BPh,
     BaseInteractions,
     BasePair,
     BasePhosphate,
     BaseRibose,
+    BPh,
     LeontisWesthof,
     OtherInteraction,
     Residue,
