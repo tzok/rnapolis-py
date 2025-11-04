@@ -48,7 +48,8 @@ setup(
             "component_G.csv",
             "component_U.csv",
             "mmcif_pdbx_v50.dic",
-        ]
+        ],
+        "rnapolis.adapters": ["*"],
     },
     install_requires=[
         "appdirs",
