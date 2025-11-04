@@ -1,12 +1,12 @@
-from setuptools import setup
+from setuptools import setup, find_packages
 
 with open("README.md") as f:
     long_description = f.read()
 
 setup(
     name="RNApolis",
-    version="0.11.2",
-    packages=["rnapolis"],
+    version="0.11.3",
+    packages=find_packages(where="src", include=["rnapolis", "rnapolis.*"]),
     package_dir={"": "src"},
     author="Tomasz Zok",
     author_email="tomasz.zok@cs.put.poznan.pl",
@@ -48,7 +48,8 @@ setup(
             "component_G.csv",
             "component_U.csv",
             "mmcif_pdbx_v50.dic",
-        ]
+        ],
+        "rnapolis.adapters": ["*"],
     },
     install_requires=[
         "appdirs",
