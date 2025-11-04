@@ -2,8 +2,69 @@
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
+[project]
+name = "RNApolis"
+version = "0.11.3"
+authors = [{ name = "Tomasz Zok", email = "tomasz.zok@cs.put.poznan.pl" }]
+description = "A Python library containing RNA-related bioinformatics functions and classes"
+readme = "README.md"
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Console",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+]
+dependencies = [
+    "appdirs",
+    "faiss-cpu",
+    "graphviz",
+    "mmcif",
+    "numpy",
+    "ordered-set",
+    "orjson",
+    "pandas",
+    "pulp",
+    "requests",
+    "scikit-learn",
+    "scipy",
+    "tqdm",
+    "viennarna",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/tzok/rnapolis-py"
+"Bug Tracker" = "https://github.com/tzok/rnapolis-py/issues"
+
+[project.scripts]
+annotator = "rnapolis.annotator:main"
+adapter = "rnapolis.adapter:main"
+aligner = "rnapolis.aligner:main"
+clashfinder = "rnapolis.clashfinder:main"
+distiller = "rnapolis.distiller:main"
+metareader = "rnapolis.metareader:main"
+"molecule-filter" = "rnapolis.molecule_filter:main"
+"motif-extractor" = "rnapolis.motif_extractor:main"
+transformer = "rnapolis.transformer:main"
+"rfam-folder" = "rnapolis.rfam_folder:main"
+unifier = "rnapolis.unifier:main"
+splitter = "rnapolis.splitter:main"
+
 [tool.setuptools]
-package-dir = {"" = "src"}
+package-dir = { "" = "src" }
+include-package-data = true
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+rnapolis = [
+    "component_A.csv",
+    "component_C.csv",
+    "component_G.csv",
+    "component_U.csv",
+    "mmcif_pdbx_v50.dic",
+]
+"rnapolis.adapters" = ["*"]
