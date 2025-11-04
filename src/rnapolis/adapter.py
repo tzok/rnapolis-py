@@ -35,10 +35,12 @@ from rnapolis.common import (
 )
 from rnapolis.metareader import read_metadata
 from rnapolis.parser import read_3d_structure
+from rnapolis.parser_v2 import parse_cif_atoms, parse_pdb_atoms
 from rnapolis.tertiary import (
     Mapping2D3D,
     Structure3D,  # Import the new helper function
 )
+from rnapolis.tertiary_v2 import Structure as StructureV2
 from rnapolis.util import handle_input_file
 
 
@@ -719,21 +721,6 @@ def parse_rnaview_output(
         r"\s*(\d+)_(\d+),\s+(\w):\s+(-?\d+)\s+(\w+)-(\w+)\s+(-?\d+)\s+(\w):\s+(syn|\s+)*((./.)\s+(cis|tran)(syn|\s+)*([IVX,]+|n/a|![^.]+)|stacked)\.?"
     )
 
-    # Positions of residues info in PDB files
-    ATOM_NAME_INDEX = slice(12, 16)
-    CHAIN_INDEX = 21
-    NUMBER_INDEX = slice(22, 26)
-    ICODE_INDEX = 26
-    NAME_INDEX = slice(17, 20)
-    X_INDEX, Y_INDEX, Z_INDEX = slice(30, 38), slice(38, 46), slice(46, 54)
-
-    # Tokens used in PDB files
-    ATOM = "ATOM"
-    HETATM = "HETATM"
-    ATOM_C6 = "C6"
-    ATOM_C2 = "C2"
-    ATOM_N1 = "N1"
-
     # RNAView tokens
     BEGIN_BASE_PAIR = "BEGIN_base-pair"
     END_BASE_PAIR = "END_base-pair"
@@ -761,45 +748,38 @@ def parse_rnaview_output(
             return LeontisWesthof[f"{trans_cis}WW"]
         return LeontisWesthof[f"{trans_cis}{lw_info[0].upper()}{lw_info[2].upper()}"]
 
-    def append_residues_from_pdb_using_rnaview_indexing(
-        pdb_content: str,
+    def append_residues_from_input_using_rnaview_indexing(
+        input_content: str, input_type: str = "cif"
     ) -> Dict[int, Residue]:
-        """Parse PDB content and create RNAView-style residue mapping."""
-        potential_residues: Dict[str, PotentialResidue] = {}
-
-        for line in pdb_content.splitlines():
-            if line.startswith(ATOM) or line.startswith(HETATM):
-                atom_name = line[ATOM_NAME_INDEX].strip()
-
-                number = int(line[NUMBER_INDEX].strip())
-                icode = None if line[ICODE_INDEX].strip() == "" else line[ICODE_INDEX]
-                chain = line[CHAIN_INDEX].strip()
-                name = line[NAME_INDEX].strip()
-
-                residue = Residue(None, ResidueAuth(chain, number, icode, name))
-
-                if str(residue) not in potential_residues:
-                    potential_residues[str(residue)] = PotentialResidue(
-                        residue, None, None, None
-                    )
-                potential_residue = potential_residues[str(residue)]
-
-                atom_position = (
-                    float(line[X_INDEX].strip()),
-                    float(line[Y_INDEX].strip()),
-                    float(line[Z_INDEX].strip()),
-                )
-
-                if atom_name == ATOM_C6:
-                    potential_residue.position_c6 = atom_position
-                elif atom_name == ATOM_C2:
-                    potential_residue.position_c2 = atom_position
-                elif atom_name == ATOM_N1:
-                    potential_residue.position_n1 = atom_position
-
+        """Parse input content and create RNAView-style residue mapping."""
+        atoms_df = (
+            parse_cif_atoms(input_content)
+            if input_type == "cif"
+            else parse_pdb_atoms(input_content)
+        )
+        structure = StructureV2(atoms_df)
         residues_from_pdb: Dict[int, Residue] = {}
         counter = 1
-        for potential_residue in potential_residues.values():
+
+        for residue in structure.residues:
+            residue_common = Residue(
+                None,
+                ResidueAuth(
+                    residue.chain_id,
+                    residue.residue_number,
+                    residue.insertion_code,
+                    residue.residue_name,
+                ),
+            )
+            c2 = residue.find_atom("C2")
+            c6 = residue.find_atom("C6")
+            n1 = residue.find_atom("N1")
+            potential_residue = PotentialResidue(
+                residue_common,
+                c2.coordinates if c2 else None,
+                c6.coordinates if c6 else None,
+                n1.coordinates if n1 else None,
+            )
             if potential_residue.is_correct_according_to_rnaview():
                 residues_from_pdb[counter] = potential_residue.residue
                 counter += 1
@@ -835,18 +815,21 @@ def parse_rnaview_output(
     # Find the first .out file in the list
     out_file = None
     pdb_file = None
+    cif_file = None
     for file_path in file_paths:
         if file_path.endswith(".out"):
             out_file = file_path
         elif file_path.endswith(".pdb"):
             pdb_file = file_path
+        elif file_path.endswith(".cif"):
+            cif_file = file_path
 
     if out_file is None:
         logging.warning("No .out file found in RNAView file list")
         return BaseInteractions([], [], [], [], [])
 
     # Log unused files
-    used_files = [f for f in [out_file, pdb_file] if f is not None]
+    used_files = [f for f in [out_file, pdb_file, cif_file] if f is not None]
     unused_files = [f for f in file_paths if f not in used_files]
     if unused_files:
         logging.info(
@@ -860,18 +843,29 @@ def parse_rnaview_output(
     other_interactions = []
 
     # Parse PDB content to build residue mapping if PDB file is available
-    residues_from_pdb: Dict[int, Residue] = {}
-    if pdb_file:
-        logging.info(f"Processing RNAView PDB file: {pdb_file}")
+    residues_from_input: Dict[int, Residue] = {}
+
+    if cif_file:
+        input_file = cif_file
+        input_type = "cif"
+    elif pdb_file:
+        input_file = pdb_file
+        input_type = "pdb"
+    else:
+        input_file = None
+        input_type = None
+
+    if input_file:
+        logging.info(f"Processing RNAView mmCIF file: {input_file}")
         try:
-            with open(pdb_file, "r", encoding="utf-8") as f:
-                pdb_content = f.read()
-            residues_from_pdb = append_residues_from_pdb_using_rnaview_indexing(
-                pdb_content
+            with open(input_file, "r", encoding="utf-8") as f:
+                input_content = f.read()
+            residues_from_input = append_residues_from_input_using_rnaview_indexing(
+                input_content, input_type
             )
         except Exception as e:
             logging.warning(
-                f"Error processing RNAView PDB file {pdb_file}: {e}", exc_info=True
+                f"Error processing RNAView mmCIF file {cif_file}: {e}", exc_info=True
             )
 
     # Process the RNAView output file
@@ -911,13 +905,16 @@ def parse_rnaview_output(
                     logging.debug(f"  Classification: {rnaview_regex_groups[13]}")
 
                 # Use residue mapping if available, otherwise create residues from regex
-                if residues_from_pdb:
+                if residues_from_input:
                     try:
-                        check_indexing_correctness(
-                            rnaview_regex_groups, line, residues_from_pdb
-                        )
-                        residue_left = residues_from_pdb[int(rnaview_regex_groups[0])]
-                        residue_right = residues_from_pdb[int(rnaview_regex_groups[1])]
+                        # TODO: this check fails for two-letter chain names, because RNAView output uses only one letter anyway
+                        # check_indexing_correctness(
+                        #     rnaview_regex_groups, line, residues_from_input
+                        # )
+                        residue_left = residues_from_input[int(rnaview_regex_groups[0])]
+                        residue_right = residues_from_input[
+                            int(rnaview_regex_groups[1])
+                        ]
                     except (KeyError, ValueError) as e:
                         logging.warning(f"RNAView indexing error: {e}")
                         continue
@@ -1607,8 +1604,8 @@ def process_external_tool_output(
     if not external_file_paths:
         # For MAXIT or when no external files are provided, use the input file
         file_paths_to_process = [input_file_path]
-    elif tool == ExternalTool.MCANNOTATE:
-        # MC-Annotate requires both the stdout and the PDB file
+    elif tool == ExternalTool.MCANNOTATE or tool == ExternalTool.RNAVIEW:
+        # MC-Annotate and RNAView requires both the stdout and the PDB file
         file_paths_to_process = external_file_paths + [input_file_path]
     else:
         # Process all external files
