@@ -1,4 +1,4 @@
-from setuptools import setup
+from setuptools import setup, find_packages
 
 with open("README.md") as f:
     long_description = f.read()
@@ -6,7 +6,7 @@ with open("README.md") as f:
 setup(
     name="RNApolis",
     version="0.11.2",
-    packages=["rnapolis"],
+    packages=find_packages(where="src"),
     package_dir={"": "src"},
     author="Tomasz Zok",
     author_email="tomasz.zok@cs.put.poznan.pl",
