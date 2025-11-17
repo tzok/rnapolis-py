@@ -1,0 +1,7 @@
+auto_mix_prep==0.2.0
+matplotlib==3.10.7
+numpy==2.3.3
+pandas==2.3.3
+pycircstat2==0.1.14
+rnapolis==0.10.2
+scipy==1.16.2
