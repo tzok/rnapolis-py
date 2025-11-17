@@ -6,9 +6,6 @@ __pycache__
 dist
 build
 
-# Poetry
-poetry.lock
-
 # Devenv
 .devenv*
 devenv.local.nix
