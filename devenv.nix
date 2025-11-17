@@ -8,6 +8,7 @@
     };
   };
   packages = [
+    pkgs.graphviz
     pkgs.highs
     pkgs.zlib
   ];
