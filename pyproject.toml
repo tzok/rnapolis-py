@@ -36,6 +36,7 @@ dependencies = [
 
 [tool.poetry.group.dev.dependencies]
 pytest = "*"
+hypothesis = "*"
 
 [project.urls]
 "Homepage" = "https://github.com/tzok/rnapolis-py"
