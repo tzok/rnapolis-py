@@ -18,7 +18,7 @@ homepage = "https://github.com/tzok/rnapolis-py"
 repository = "https://github.com/tzok/rnapolis-py"
 
 [tool.poetry.dependencies]
-python = "^3.9"
+python = "^3.12"
 appdirs = "*"
 faiss-cpu = "*"
 graphviz = "*"
