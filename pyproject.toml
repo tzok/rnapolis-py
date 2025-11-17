@@ -1,13 +1,10 @@
-[build-system]
-requires = ["setuptools>=61.0"]
-build-backend = "setuptools.build_meta"
-
-[project]
+[tool.poetry]
 name = "RNApolis"
-version = "0.11.5"
-authors = [{ name = "Tomasz Zok", email = "tomasz.zok@cs.put.poznan.pl" }]
+version = "0.12.0"
 description = "A Python library containing RNA-related bioinformatics functions and classes"
+authors = ["Tomasz Zok <tomasz.zok@cs.put.poznan.pl>"]
 readme = "README.md"
+packages = [{ include = "rnapolis", from = "src" }]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Environment :: Console",
@@ -17,54 +14,40 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Topic :: Scientific/Engineering :: Bio-Informatics",
 ]
-dependencies = [
-    "appdirs",
-    "faiss-cpu",
-    "graphviz",
-    "mmcif",
-    "numpy",
-    "ordered-set",
-    "orjson",
-    "pandas",
-    "pulp",
-    "requests",
-    "scikit-learn",
-    "scipy",
-    "tqdm",
-    "viennarna",
-]
+homepage = "https://github.com/tzok/rnapolis-py"
+repository = "https://github.com/tzok/rnapolis-py"
 
-[project.urls]
-"Homepage" = "https://github.com/tzok/rnapolis-py"
-"Bug Tracker" = "https://github.com/tzok/rnapolis-py/issues"
+[tool.poetry.dependencies]
+python = "^3.12"
+appdirs = "*"
+faiss-cpu = "*"
+graphviz = "*"
+mmcif = "*"
+numpy = "*"
+ordered-set = "*"
+orjson = "*"
+pandas = "*"
+pulp = "*"
+requests = "*"
+scikit-learn = "*"
+scipy = "*"
+tqdm = "*"
+viennarna = "*"
 
-[project.scripts]
+[tool.poetry.group.dev.dependencies]
+pytest = "*"
+hypothesis = "*"
+
+[tool.poetry.scripts]
 annotator = "rnapolis.annotator:main"
 adapter = "rnapolis.adapter:main"
 aligner = "rnapolis.aligner:main"
 clashfinder = "rnapolis.clashfinder:main"
 distiller = "rnapolis.distiller:main"
 metareader = "rnapolis.metareader:main"
-"molecule-filter" = "rnapolis.molecule_filter:main"
-"motif-extractor" = "rnapolis.motif_extractor:main"
+molecule-filter = "rnapolis.molecule_filter:main"
+motif-extractor = "rnapolis.motif_extractor:main"
 transformer = "rnapolis.transformer:main"
-"rfam-folder" = "rnapolis.rfam_folder:main"
+rfam-folder = "rnapolis.rfam_folder:main"
 unifier = "rnapolis.unifier:main"
 splitter = "rnapolis.splitter:main"
-
-[tool.setuptools]
-package-dir = { "" = "src" }
-include-package-data = true
-
-[tool.setuptools.packages.find]
-where = ["src"]
-
-[tool.setuptools.package-data]
-rnapolis = [
-    "component_A.csv",
-    "component_C.csv",
-    "component_G.csv",
-    "component_U.csv",
-    "mmcif_pdbx_v50.dic",
-]
-"rnapolis.adapters" = ["*"]

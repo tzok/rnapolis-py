@@ -10,32 +10,37 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.12", "3.13"]
     steps:
     - name: Checkout code
       uses: actions/checkout@v5
 
-    - name: Set up Python 3.10
+    - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v6
       with:
-        python-version: "3.10"
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install Poetry
+      uses: snok/install-poetry@v1
+      with:
+        version: latest
+        virtualenvs-create: true
+        virtualenvs-in-project: true
 
     - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r dev_requirements.txt
-        pip install -r requirements.txt
-        pip install -r test_requirements.txt
+      run: poetry install --with dev
 
     - name: Download and extract HiGHSstatic
       run: |
         wget https://github.com/JuliaBinaryWrappers/HiGHSstatic_jll.jl/releases/download/HiGHSstatic-v1.8.1%2B0/HiGHSstatic.v1.8.1.x86_64-linux-gnu-cxx11.tar.gz
-        mkdir "${HOME}/.local"
+        mkdir -p "${HOME}/.local"
         tar xfz HiGHSstatic.v1.8.1.x86_64-linux-gnu-cxx11.tar.gz -C "${HOME}/.local"
         echo "${HOME}/.local/bin" >> "${GITHUB_PATH}"
 
     - name: Test with pytest
-      run: |
-        PYTHONPATH=src/ pytest
+      run: poetry run pytest
 
   auto-merge-dependabot-non-major-updates:
     needs: build
@@ -44,7 +49,7 @@ jobs:
     permissions:
       pull-requests: write
       contents: write
-      checks: write
+      checks: read
     steps:
       - name: Dependabot metadata
         id: metadata
