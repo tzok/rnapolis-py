@@ -4,6 +4,10 @@
 RNApolis.egg-info
 __pycache__
 dist
+build
+
+# Poetry
+poetry.lock
 
 # Devenv
 .devenv*
