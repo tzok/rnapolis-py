@@ -34,8 +34,8 @@ dependencies = [
     "viennarna",
 ]
 
-[project.optional-dependencies]
-dev = ["pytest"]
+[tool.poetry.group.dev.dependencies]
+pytest = "*"
 
 [project.urls]
 "Homepage" = "https://github.com/tzok/rnapolis-py"
