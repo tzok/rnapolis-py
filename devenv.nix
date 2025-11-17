@@ -2,10 +2,7 @@
 {
   languages.python = {
     enable = true;
-    venv = {
-      enable = true;
-      requirements = ./requirements.txt;
-    };
+    poetry.enable = true;
   };
   packages = [
     pkgs.graphviz
