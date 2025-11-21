@@ -1,0 +1,17 @@
+site_name: rnapolis-py documentation
+
+theme:
+  name: material
+
+plugins:
+  - search
+  - mkdocstrings:
+      default_handler: python
+
+nav:
+  - Home: index.md
+  - API:
+      - Annotator: api/annotator.md
+      - Adapter: api/adapter.md
+      - Aligner: api/aligner.md
+

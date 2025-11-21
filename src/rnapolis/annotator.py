@@ -61,10 +61,21 @@ logging.basicConfig(level=os.getenv("LOGLEVEL", "INFO").upper())
 def angle_between_vectors(
     v1: numpy.typing.NDArray[numpy.floating], v2: numpy.typing.NDArray[numpy.floating]
 ) -> float:
+    """
+    Compute the angle in radians between two vectors.
+
+    The angle is calculated using the dot product and vector norms.
+    """
     return math.acos(numpy.dot(v1, v2) / numpy.linalg.norm(v1) / numpy.linalg.norm(v2))
 
 
 def detect_cis_trans(residue_i: Residue3D, residue_j: Residue3D) -> Optional[str]:
+    """
+    Classify a base pair as cis or trans based on a torsion angle.
+
+    The function uses C1'–N1/N9 atoms of both residues and returns
+    'c' for cis, 't' for trans, or None if required atoms are missing.
+    """
     c1p_i = residue_i.find_atom("C1'")
     c1p_j = residue_j.find_atom("C1'")
 
@@ -88,6 +99,13 @@ def detect_cis_trans(residue_i: Residue3D, residue_j: Residue3D) -> Optional[str
 def detect_bph_br_classification(
     donor_residue: Residue3D, donor: Atom, acceptor: Atom
 ) -> Optional[int]:
+    """
+    Classify base-phosphate or base-ribose interactions.
+
+    The classification is based on donor/acceptor atom names, residue type
+    and a torsion angle around the relevant atoms. Returns an integer
+    code or None if the interaction does not match any class.
+    """
     # source: Classification and energetics of the base-phosphate interactions in RNA. Craig L. Zirbel, Judit E. Sponer, Jiri Sponer, Jesse Stombaugh and Neocles B. Leontis
     if donor_residue.one_letter_name == "A":
         if donor.name == "C2":
@@ -147,6 +165,12 @@ def detect_bph_br_classification(
 def merge_and_clean_bph_br(
     pairs: List[Tuple[Residue3D, Residue3D, int]],
 ) -> Dict[Tuple[Residue3D, Residue3D], OrderedSet[int]]:
+    """
+    Merge and simplify base-phosphate and base-ribose classifications.
+
+    Multiple classifications for the same residue pair are merged into
+    a set and then cleaned according to simple rules (e.g. 3+5 → 4).
+    """
     bph_br_map: Dict[Tuple[Residue3D, Residue3D], OrderedSet[int]] = defaultdict(
         OrderedSet
     )
@@ -172,6 +196,13 @@ def merge_and_clean_bph_br(
 def find_pairs(
     structure: Structure3D, model: Optional[int] = None
 ) -> Tuple[List[BasePair], List[BasePhosphate], List[BaseRibose]]:
+    """
+    Find base–base, base–phosphate and base–ribose interactions.
+
+    The function scans all residues in the structure, builds a KDTree
+    of donors and acceptors and applies simple geometric filters to
+    detect hydrogen bonds and classify them into interaction types.
+    """
     # put all donors and acceptors into a KDTree
     coordinates = []
     coordinates_atom_map: Dict[Tuple[float, float, float], Atom] = {}
@@ -396,6 +427,12 @@ def find_pairs(
 def find_stackings(
     structure: Structure3D, model: Optional[int] = None
 ) -> List[Stacking]:
+    """
+    Find base stacking interactions in a 3D structure.
+
+    Stacking is detected using geometric centers of bases, distance
+    thresholds and angles between base normals and connecting vectors.
+    """
     # put all nitrogen ring centers into a KDTree
     coordinates = []
     coordinates_residue_map: Dict[Tuple[float, float, float], Residue3D] = {}
@@ -474,6 +511,12 @@ def find_stackings(
 def extract_base_interactions(
     tertiary_structure: Structure3D, model: Optional[int] = None
 ) -> BaseInteractions:
+    """
+    Extract all base-level interactions from a 3D structure.
+
+    This includes base pairs, base–phosphate, base–ribose and stacking
+    interactions and wraps them in a BaseInteractions object.
+    """
     base_pairs, base_phosphate, base_ribose = find_pairs(tertiary_structure, model)
     stackings = find_stackings(tertiary_structure, model)
     return BaseInteractions.from_structure3d(
@@ -482,7 +525,11 @@ def extract_base_interactions(
 
 
 def generate_pymol_script(mapping: Mapping2D3D, stems: List[Stem]) -> str:
-    """Generates a PyMOL script to draw stems as cylinders."""
+    """Generate a simple PyMOL script to visualize stems as cylinders and dihedrals.
+
+    The script creates selections, pseudoatoms on stem centroids and
+    CGO cylinders between them, plus optional dihedral measurements.
+    """
     pymol_commands = []
     radius = 0.5
     r, g, b = 1.0, 0.0, 0.0  # Red color
@@ -574,6 +621,13 @@ def generate_pymol_script(mapping: Mapping2D3D, stems: List[Stem]) -> str:
 
 
 def write_json(path: str, structure2d: Structure2D):
+    """
+    Write a Structure2D object to JSON using orjson.
+
+    The function copies the object, replaces residues with simpler
+    Residue objects and serializes it with options that handle numpy
+    types and non-string dictionary keys.
+    """
     processed = copy.deepcopy(structure2d)
     processed.bpseq_index = {
         k: Residue(v.label, v.auth) for k, v in structure2d.bpseq_index.items()
@@ -590,6 +644,12 @@ def write_json(path: str, structure2d: Structure2D):
 
 
 def write_csv(path: str, structure2d: Structure2D):
+    """
+    Write base interactions from Structure2D to a simple CSV file.
+
+    The CSV contains base pairs, stacking, base–phosphate and
+    base–ribose interactions in a flat table.
+    """
     with open(path, "w") as f:
         writer = csv.writer(f)
         writer.writerow(["nt1", "nt2", "type", "classification-1", "classification-2"])
@@ -650,12 +710,22 @@ def write_csv(path: str, structure2d: Structure2D):
 
 
 def write_bpseq(path: str, bpseq: BpSeq):
+    """
+    Write a BpSeq object to a plain text file.
+
+    The BpSeq object is converted to string using its __str__ method.
+    """
     with open(path, "w") as f:
         f.write(str(bpseq))
 
 
 def add_common_output_arguments(parser: argparse.ArgumentParser):
-    """Adds common output and processing arguments to the parser."""
+    """
+    Add common output and formatting arguments to an ArgumentParser.
+
+    These options control where BPSEQ/CSV/JSON/DOT/PyMOL outputs
+    are written and enable extra CSV exports for stem parameters.
+    """
     parser.add_argument("-b", "--bpseq", help="(optional) path to output BPSEQ file")
     parser.add_argument("-c", "--csv", help="(optional) path to output CSV file")
     parser.add_argument(
@@ -689,7 +759,13 @@ def handle_output_arguments(
     mapping: Mapping2D3D,
     input_filename: str,
 ):
-    """Handles writing output based on provided arguments."""
+    """
+    Handle all output options based on parsed CLI arguments.
+
+    Depending on the flags, this function writes BPSEQ, CSV, JSON,
+    DOT, PyMOL scripts and optional CSV summaries for stems and
+    inter-stem parameters.
+    """
     input_basename = os.path.basename(input_filename)
     if args.csv:
         write_csv(args.csv, structure2d)
@@ -809,6 +885,12 @@ def handle_output_arguments(
 
 
 def main():
+    """
+    Command-line entry point for the annotator tool.
+
+    It reads a 3D structure, extracts all base-level interactions,
+    builds a secondary structure and writes outputs requested by the user.
+    """
     parser = argparse.ArgumentParser()
     parser.add_argument("input", help="Path to PDB or mmCIF file")
     parser.add_argument(
