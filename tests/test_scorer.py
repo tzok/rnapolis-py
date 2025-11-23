@@ -1,4 +1,4 @@
-from scorer import run_score
+from rnapolis.scorer import run_score
 
 def test_scorer(expected, target_path, model_path):
 
