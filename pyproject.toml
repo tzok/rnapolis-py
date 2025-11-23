@@ -1,3 +1,53 @@
-[build-system]
-requires = ["setuptools>=61.0"]
-build-backend = "setuptools.build_meta"
+[tool.poetry]
+name = "RNApolis"
+version = "0.12.0"
+description = "A Python library containing RNA-related bioinformatics functions and classes"
+authors = ["Tomasz Zok <tomasz.zok@cs.put.poznan.pl>"]
+readme = "README.md"
+packages = [{ include = "rnapolis", from = "src" }]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Console",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+]
+homepage = "https://github.com/tzok/rnapolis-py"
+repository = "https://github.com/tzok/rnapolis-py"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+appdirs = "*"
+faiss-cpu = "*"
+graphviz = "*"
+mmcif = "*"
+numpy = "*"
+ordered-set = "*"
+orjson = "*"
+pandas = "*"
+pulp = "*"
+requests = "*"
+scikit-learn = "*"
+scipy = "*"
+tqdm = "*"
+viennarna = "*"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "*"
+hypothesis = "*"
+
+[tool.poetry.scripts]
+annotator = "rnapolis.annotator:main"
+adapter = "rnapolis.adapter:main"
+aligner = "rnapolis.aligner:main"
+clashfinder = "rnapolis.clashfinder:main"
+distiller = "rnapolis.distiller:main"
+metareader = "rnapolis.metareader:main"
+molecule-filter = "rnapolis.molecule_filter:main"
+motif-extractor = "rnapolis.motif_extractor:main"
+transformer = "rnapolis.transformer:main"
+rfam-folder = "rnapolis.rfam_folder:main"
+unifier = "rnapolis.unifier:main"
+splitter = "rnapolis.splitter:main"

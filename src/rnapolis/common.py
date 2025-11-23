@@ -5,7 +5,7 @@ import re
 import string
 from collections import defaultdict
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import InitVar, dataclass
 from enum import Enum
 from functools import cache, cached_property, total_ordering
 from typing import Dict, List, Optional, Tuple
@@ -151,6 +151,18 @@ class Saenger(Enum):
             ("GT", "cWW"): "XXVIII",
             ("TG", "cWW"): "XXVIII",
         }
+
+    @classmethod
+    def from_leontis_westhof(
+        cls,
+        residue_i_one_letter_name: str,
+        residue_j_one_letter_name: str,
+        lw: LeontisWesthof,
+    ) -> Optional["Saenger"]:
+        key = (f"{residue_i_one_letter_name}{residue_j_one_letter_name}", lw.value)
+        if key in Saenger.table():
+            return Saenger[Saenger.table()[key]]
+        return None
 
     @property
     def is_canonical(self) -> bool:
@@ -1061,6 +1073,99 @@ class BaseInteractions:
     base_ribose_interactions: List[BaseRibose]
     base_phosphate_interactions: List[BasePhosphate]
     other_interactions: List[OtherInteraction]
+
+    @classmethod
+    def from_structure3d(
+        cls,
+        structure3d: "Structure3D",
+        base_pairs: List[BasePair],
+        stackings: List[Stacking],
+        base_ribose_interactions: List[BaseRibose],
+        base_phosphate_interactions: List[BasePhosphate],
+        other_interactions: List[OtherInteraction],
+    ) -> "BaseInteractions":
+        cni2residue = {}
+        cni2label = {}
+        cni2auth = {}
+
+        for residue3d in structure3d.residues:
+            cni = (residue3d.chain, residue3d.number, residue3d.icode or None)
+            cni2auth[cni] = residue3d.auth
+            cni2label[cni] = residue3d.label
+            cni2residue[cni] = residue3d
+
+        def unify_nt(nt: Residue) -> Residue:
+            if nt.auth is not None and nt.label is not None:
+                return nt
+            cni = (nt.chain, nt.number, nt.icode or None)
+            if nt.auth is not None:
+                return Residue(label=cni2label.get(cni, None), auth=nt.auth)
+            if nt.label is not None:
+                return Residue(label=nt.label, auth=cni2auth.get(cni, None))
+            return nt
+
+        base_pairs_new = []
+        for base_pair in base_pairs:
+            nt1 = unify_nt(base_pair.nt1)
+            nt2 = unify_nt(base_pair.nt2)
+
+            cni1 = (nt1.chain, nt1.number, nt1.icode or None)
+            cni2 = (nt2.chain, nt2.number, nt2.icode or None)
+            if cni1 not in cni2residue or cni2 not in cni2residue:
+                saenger = base_pair.saenger
+            else:
+                saenger = base_pair.saenger or Saenger.from_leontis_westhof(
+                    cni2residue[cni1].one_letter_name,
+                    cni2residue[cni2].one_letter_name,
+                    base_pair.lw,
+                )
+            if (
+                nt1 != base_pair.nt1
+                or nt2 != base_pair.nt2
+                or saenger != base_pair.saenger
+            ):
+                base_pair = BasePair(nt1=nt1, nt2=nt2, lw=base_pair.lw, saenger=saenger)
+            base_pairs_new.append(base_pair)
+
+        stackings_new = []
+        for stacking in stackings:
+            nt1 = unify_nt(stacking.nt1)
+            nt2 = unify_nt(stacking.nt2)
+            if nt1 != stacking.nt1 or nt2 != stacking.nt2:
+                stacking = Stacking(nt1=nt1, nt2=nt2, topology=stacking.topology)
+            stackings_new.append(stacking)
+
+        base_ribose_interactions_new = []
+        for base_ribose in base_ribose_interactions:
+            nt1 = unify_nt(base_ribose.nt1)
+            nt2 = unify_nt(base_ribose.nt2)
+            if nt1 != base_ribose.nt1 or nt2 != base_ribose.nt2:
+                base_ribose = BaseRibose(nt1=nt1, nt2=nt2, br=base_ribose.br)
+            base_ribose_interactions_new.append(base_ribose)
+
+        base_phosphate_interactions_new = []
+        for base_phosphate in base_phosphate_interactions:
+            nt1 = unify_nt(base_phosphate.nt1)
+            nt2 = unify_nt(base_phosphate.nt2)
+            if nt1 != base_phosphate.nt1 or nt2 != base_phosphate.nt2:
+                base_phosphate = BasePhosphate(nt1=nt1, nt2=nt2, bph=base_phosphate.bph)
+            base_phosphate_interactions_new.append(base_phosphate)
+
+        other_interactions_new = []
+        for other_interaction in other_interactions:
+            nt1 = unify_nt(other_interaction.nt1)
+            nt2 = unify_nt(other_interaction.nt2)
+            if nt1 != other_interaction.nt1 or nt2 != other_interaction.nt2:
+                other_interaction = OtherInteraction(nt1=nt1, nt2=nt2)
+            other_interactions_new.append(other_interaction)
+
+        return cls(
+            base_pairs=base_pairs_new,
+            stackings=stackings_new,
+            base_ribose_interactions=base_ribose_interactions_new,
+            base_phosphate_interactions=base_phosphate_interactions_new,
+            other_interactions=other_interactions_new,
+        )
 
 
 @dataclass(frozen=True, order=True)

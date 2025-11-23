@@ -8,6 +8,7 @@ from typing import Iterable, List, Set, Tuple
 from mmcif.io.IoAdapterPy import IoAdapterPy
 from mmcif.io.PdbxReader import DataCategory, DataContainer
 
+from rnapolis.parser_v2 import parse_cif_atoms, write_pdb
 from rnapolis.util import handle_input_file
 
 # Source: https://mmcif.wwpdb.org/dictionaries/mmcif_pdbx_v50.dic/Items/_entity_poly.type.html
@@ -160,6 +161,20 @@ def filter_by_poly_types(
     return filter_cif(data, entity_ids, asym_ids, auth_asym_ids, retain_categories)
 
 
+def filter_by_entity_ids(
+    file_content: str,
+    entity_ids: Iterable[str],
+    retain_categories: Iterable[str] = ["chem_comp"],
+) -> str:
+    data = read_cif(file_content)
+    entity_ids = set(entity_ids)
+    asym_ids = select_ids(data, "struct_asym", "id", "entity_id", entity_ids)
+    auth_asym_ids = select_ids(
+        data, "atom_site", "auth_asym_id", "label_asym_id", asym_ids
+    )
+    return filter_cif(data, entity_ids, asym_ids, auth_asym_ids, retain_categories)
+
+
 def filter_by_chains(
     file_content: str,
     chains: Iterable[str],
@@ -190,6 +205,12 @@ def main():
         default=[],
     )
     parser.add_argument(
+        "--filter-by-entity-ids",
+        help="filter by entity IDs, e.g. 1, 2, 3",
+        action="append",
+        default=[],
+    )
+    parser.add_argument(
         "--filter-by-chains",
         help="filter by chain IDs (label_asym_id), e.g. A, B, C",
         action="append",
@@ -201,28 +222,42 @@ def main():
         action="append",
         default=["chem_comp"],
     )
+    parser.add_argument(
+        "--pdb", help="change output format to PDB", action="store_true"
+    )
     parser.add_argument("path", help="path to a PDBx/mmCIF file")
     args = parser.parse_args()
 
     file = handle_input_file(args.path)
+    content = None
+
     if args.filter_by_poly_types:
-        print(
-            filter_by_poly_types(
-                file.read(),
-                entity_poly_types=args.filter_by_poly_types,
-                retain_categories=args.retain_categories,
-            )
+        content = filter_by_poly_types(
+            file.read(),
+            entity_poly_types=args.filter_by_poly_types,
+            retain_categories=args.retain_categories,
+        )
+    elif args.filter_by_entity_ids:
+        content = filter_by_entity_ids(
+            file.read(),
+            entity_ids=args.filter_by_entity_ids,
+            retain_categories=args.retain_categories,
         )
     elif args.filter_by_chains:
-        print(
-            filter_by_chains(
-                file.read(),
-                chains=args.filter_by_chains,
-                retain_categories=args.retain_categories,
-            )
+        content = filter_by_chains(
+            file.read(),
+            chains=args.filter_by_chains,
+            retain_categories=args.retain_categories,
         )
     else:
         parser.print_help()
+
+    if content:
+        if args.pdb:
+            df = parse_cif_atoms(content)
+            print(write_pdb(df))
+        else:
+            print(content)
 
 
 if __name__ == "__main__":
