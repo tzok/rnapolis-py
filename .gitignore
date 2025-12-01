@@ -14,3 +14,6 @@ devenv.local.nix
 
 # pre-commit
 .pre-commit-config.yaml
+
+.idea
+src/dnatco_process_all.sh
