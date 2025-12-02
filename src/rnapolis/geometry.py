@@ -235,9 +235,9 @@ def _get_glycosidic_atom(residue: Residue) -> Optional[Atom]:
     """
     Returns the glycosidic bond atom (N1 for pyrimidines, N9 for purines).
     """
-    res_name = residue.residue_name
-    is_purine = res_name in {"A", "G", "DA", "DG"}
-    is_pyrimidine = res_name in {"C", "U", "T", "DC", "DT"}
+    res_name = residue.one_letter_name.upper()
+    is_purine = res_name in {"A", "G"}
+    is_pyrimidine = res_name in {"C", "U", "T"}
 
     if is_purine:
         return residue.find_atom("N9")
