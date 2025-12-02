@@ -440,6 +440,78 @@ def get_hbond_parameters(
     }
 
 
+def read_config(config_path: str) -> configparser.ConfigParser:
+    """
+    Reads configuration parameters from a file.
+    """
+    config = configparser.ConfigParser()
+    config.read(config_path)
+    return config
+
+
+def is_stacking_valid(
+    stacking_params: Dict[str, Union[float, str]], config: configparser.ConfigParser
+) -> bool:
+    """
+    Checks if the calculated stacking parameters fall within the configured thresholds.
+    """
+    if "error" in stacking_params:
+        return False
+
+    section = config["stacking"]
+
+    # Helper to safely get float from config
+    def get_float(key):
+        return section.getfloat(key)
+
+    # Check inter_planar_distance
+    dist = stacking_params["inter_planar_distance"]
+    if not (get_float("inter_planar_distance_min") <= dist <= get_float("inter_planar_distance_max")):
+        return False
+
+    # Check dihedral_angle
+    angle = stacking_params["dihedral_angle"]
+    if not (get_float("dihedral_angle_min") <= angle <= get_float("dihedral_angle_max")):
+        return False
+
+    # Check lateral_displacement
+    disp = stacking_params["lateral_displacement"]
+    if not (get_float("lateral_displacement_min") <= disp <= get_float("lateral_displacement_max")):
+        return False
+
+    # Check overlap_area
+    area = stacking_params["overlap_area"]
+    if not (get_float("overlap_area_min") <= area <= get_float("overlap_area_max")):
+        return False
+
+    return True
+
+
+def is_hbond_valid(
+    hbond_params: Dict[str, float], config: configparser.ConfigParser
+) -> bool:
+    """
+    Checks if the calculated hydrogen bond parameters fall within the configured thresholds.
+    """
+    section = config["hbonds"]
+
+    # Helper to safely get float from config
+    def get_float(key):
+        return section.getfloat(key)
+
+    # Check donor_acceptor_distance
+    dist = hbond_params["donor_acceptor_distance"]
+    if not (get_float("donor_acceptor_distance_min") <= dist <= get_float("donor_acceptor_distance_max")):
+        return False
+
+    # Check antecedent_donor_acceptor_angle
+    angle = hbond_params["antecedent_donor_acceptor_angle"]
+    if not (get_float("antecedent_donor_acceptor_angle_min") <= angle <= get_float("antecedent_donor_acceptor_angle_max")):
+        return False
+
+    return True
+
+
 # Helper function to find all potential donor triplets (antecedent, donor)
 def _get_potential_donors(residue: Residue) -> List[Tuple[Atom, Atom]]:
     potential_donors = []
