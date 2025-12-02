@@ -439,9 +439,7 @@ def get_hbond_parameters(
     }
 
 
-def find_hbond_pairs(
-    res1: Residue, res2: Residue
-) -> List[Tuple[Atom, Atom, Atom]]:
+def find_hbond_pairs(res1: Residue, res2: Residue) -> List[Tuple[Atom, Atom, Atom]]:
     """
     Finds all possible hydrogen bond donor-acceptor pairs between two residues.
 
