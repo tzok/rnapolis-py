@@ -5,6 +5,7 @@ description = "A Python library containing RNA-related bioinformatics functions 
 authors = ["Tomasz Zok <tomasz.zok@cs.put.poznan.pl>"]
 readme = "README.md"
 packages = [{ include = "rnapolis", from = "src" }]
+include = ["src/rnapolis/default_config.ini"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Environment :: Console",
