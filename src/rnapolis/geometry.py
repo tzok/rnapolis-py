@@ -1,8 +1,8 @@
 import numpy as np
 from typing import Dict, List, Optional, Tuple, Union
 
-# Assuming Residue is importable from tertiary_v2
-from .tertiary_v2 import Residue
+# Assuming Residue and Atom are importable from tertiary_v2
+from .tertiary_v2 import Atom, Residue
 
 # --- Atom Definitions (Redefined from tertiary_v2 for local use) ---
 # Purines (A, G, DA, DG)
@@ -297,4 +297,65 @@ def get_stacking_parameters(
         "lateral_displacement": lateral_displacement,
         "overlap_area": overlap_area,
         "face_orientation": face_orientation,
+    }
+
+
+def get_hbond_parameters(
+    antecedent: Atom, donor: Atom, acceptor: Atom
+) -> Dict[str, float]:
+    """
+    Calculates geometric parameters for a potential hydrogen bond involving three atoms.
+
+    Parameters:
+    -----------
+    antecedent : Atom
+        The atom covalently bonded to the donor (e.g., C in C-H...O).
+    donor : Atom
+        The hydrogen bond donor atom (e.g., H in N-H...O, or N/O if H is implicit).
+    acceptor : Atom
+        The hydrogen bond acceptor atom (e.g., O in N-H...O).
+
+    Returns:
+    --------
+    Dict[str, float]
+        Dictionary containing:
+        - 'antecedent_donor_distance': Distance between antecedent and donor (Angstroms).
+        - 'donor_acceptor_distance': Distance between donor and acceptor (Angstroms).
+        - 'antecedent_donor_acceptor_angle': Angle A-D-A (Degrees).
+    """
+    # Get coordinates
+    coord_a = antecedent.coordinates
+    coord_d = donor.coordinates
+    coord_c = acceptor.coordinates
+
+    # 1. Antecedent-Donor distance (A-D)
+    dist_ad = np.linalg.norm(coord_a - coord_d).item()
+
+    # 2. Donor-Acceptor distance (D-C)
+    dist_dc = np.linalg.norm(coord_d - coord_c).item()
+
+    # 3. Antecedent-Donor-Acceptor angle (A-D-C)
+    # Vectors DA and DC
+    vec_da = coord_a - coord_d
+    vec_dc = coord_c - coord_d
+
+    # Calculate angle using dot product formula: cos(theta) = (v1 . v2) / (|v1| * |v2|)
+    dot_product = np.dot(vec_da, vec_dc)
+    norm_da = np.linalg.norm(vec_da)
+    norm_dc = np.linalg.norm(vec_dc)
+
+    if norm_da == 0 or norm_dc == 0:
+        # Should not happen with valid Atom objects, but as a safeguard
+        angle_degrees = np.nan
+    else:
+        cos_theta = dot_product / (norm_da * norm_dc)
+        # Clip to [-1, 1] to avoid floating point errors outside arccos domain
+        cos_theta = np.clip(cos_theta, -1.0, 1.0)
+        angle_radians = np.arccos(cos_theta)
+        angle_degrees = np.degrees(angle_radians)
+
+    return {
+        "antecedent_donor_distance": dist_ad,
+        "donor_acceptor_distance": dist_dc,
+        "antecedent_donor_acceptor_angle": angle_degrees,
     }
