@@ -68,6 +68,34 @@ DONORS = {
     ],
 }
 
+BASE_EDGES = {
+    "A": {
+        "Watson-Crick": ["N1", "C2", "N6"],
+        "Hoogsteen": ["N6", "N7", "C8"],
+        "Sugar": ["C2", "N3", "O2'"],
+    },
+    "G": {
+        "Watson-Crick": ["N1", "N2", "O6"],
+        "Hoogsteen": ["O6", "N7", "C8"],
+        "Sugar": ["N2", "N3", "O2'"],
+    },
+    "C": {
+        "Watson-Crick": ["O2", "N4", "N3"],
+        "Hoogsteen": ["N4", "C5", "C6"],
+        "Sugar": ["O2", "O2'"],
+    },
+    "U": {
+        "Watson-Crick": ["O2", "N3", "O4"],
+        "Hoogsteen": ["O4", "C5", "C6"],
+        "Sugar": ["O2", "O2'"],
+    },
+    "T": {
+        "Watson-Crick": ["O2", "N3", "O4"],
+        "Hoogsteen": ["O4", "C6", "C7"],
+        "Sugar": ["O2"],
+    },
+}
+
 
 def _get_base_atoms_coords(residue: Residue) -> Optional[np.ndarray]:
     """
