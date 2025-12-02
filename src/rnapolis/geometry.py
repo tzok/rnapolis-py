@@ -495,8 +495,9 @@ def is_stacking_valid(
 
     # Check overlap_area
     area = stacking_params["overlap_area"]
-    if not (get_float("overlap_area_min") <= area <= get_float("overlap_area_max")):
-        return False
+    if area > 0.0:  # Only validate if calculation succeeded
+        if not (get_float("overlap_area_min") <= area <= get_float("overlap_area_max")):
+            return False
 
     return True
 
@@ -681,18 +682,19 @@ def is_hbond_valid(
     return True
 
 
-def _get_edge_for_atom(residue: Residue, atom_name: str) -> Optional[str]:
+def _get_edge_for_atom(residue: Residue, atom_name: str) -> List[str]:
     """
-    Determines which base edge (WC, Hoogsteen, Sugar) an atom belongs to.
+    Determines which base edges (WC, Hoogsteen, Sugar) an atom belongs to.
     """
     res_name = residue.one_letter_name.upper()
     if res_name not in BASE_EDGES:
-        return None
+        return []
 
+    edges = []
     for edge, atoms in BASE_EDGES[res_name].items():
         if atom_name in atoms:
-            return edge
-    return None
+            edges.append(edge)
+    return edges
 
 
 def get_hbond_edge_counts(
@@ -747,14 +749,14 @@ def get_hbond_edge_counts(
             continue
 
         # Tally edges for donor residue
-        donor_edge = _get_edge_for_atom(donor_res, donor_atom.name)
-        if donor_edge:
-            edge_counts[donor_res][donor_edge] += 1
+        donor_edges = _get_edge_for_atom(donor_res, donor_atom.name)
+        for edge in donor_edges:
+            edge_counts[donor_res][edge] += 1
 
         # Tally edges for acceptor residue
-        acceptor_edge = _get_edge_for_atom(acceptor_res, acceptor_atom.name)
-        if acceptor_edge:
-            edge_counts[acceptor_res][acceptor_edge] += 1
+        acceptor_edges = _get_edge_for_atom(acceptor_res, acceptor_atom.name)
+        for edge in acceptor_edges:
+            edge_counts[acceptor_res][edge] += 1
 
     return edge_counts
 
