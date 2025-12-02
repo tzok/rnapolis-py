@@ -2,6 +2,8 @@ import numpy as np
 from typing import Dict, List, Optional, Tuple, Union
 
 # Assuming Residue and Atom are importable from tertiary_v2
+from collections import namedtuple
+
 from .tertiary_v2 import Atom, Residue
 
 # --- Atom Definitions (Redefined from tertiary_v2 for local use) ---
@@ -15,6 +17,56 @@ PYRIMIDINE_CORE_ATOMS = {"N1", "C2", "N3", "C4", "C5", "C6"}
 PURINE_FACE_ATOMS = ("N9", "C4", "C5")
 # Pyrimidine: N1 -> C6 -> C5 (Cross product of N1-C6 and N1-C5 vectors)
 PYRIMIDINE_FACE_ATOMS = ("N1", "C6", "C5")
+
+# --- Hydrogen Bond Definitions ---
+
+BASE_ACCEPTORS = {
+    "A": ["N1", "N3", "N7"],
+    "G": ["N3", "O6", "N7"],
+    "C": ["O2", "N3"],
+    "U": ["O2", "O4"],
+    "T": ["O2", "O4"],
+}
+
+PHOSPHATE_ACCEPTORS = ["OP1", "OP2", "O3'", "O5'"]
+
+SUGAR_ACCEPTORS = ["O2'", "O4'"]
+
+# antecedent: The reference atom (defines the angle).
+# atom: The interacting Donor atom.
+AtomPair = namedtuple("AtomPair", ["antecedent", "atom"])
+
+DONORS = {
+    "A": [
+        AtomPair("C6", "N6"),  # Exocyclic
+        AtomPair("N1", "C2"),  # Weak C-H
+        AtomPair("N7", "C8"),  # Weak C-H
+        AtomPair("C2'", "O2'"),  # Hydroxyl (RNA only)
+    ],
+    "G": [
+        AtomPair("C2", "N1"),  # Ring N-H
+        AtomPair("C2", "N2"),  # Exocyclic
+        AtomPair("N7", "C8"),  # Weak C-H
+        AtomPair("C2'", "O2'"),  # Hydroxyl (RNA only)
+    ],
+    "C": [
+        AtomPair("C4", "N4"),  # Exocyclic
+        AtomPair("C4", "C5"),  # Weak C-H
+        AtomPair("N1", "C6"),  # Weak C-H
+        AtomPair("C2'", "O2'"),  # Hydroxyl (RNA only)
+    ],
+    "U": [
+        AtomPair("C2", "N3"),  # Ring N-H
+        AtomPair("C4", "C5"),  # Weak C-H
+        AtomPair("N1", "C6"),  # Weak C-H
+        AtomPair("C2'", "O2'"),  # Hydroxyl
+    ],
+    "T": [
+        AtomPair("C2", "N3"),  # Ring N-H
+        AtomPair("N1", "C6"),  # Weak C-H
+        AtomPair("C5", "C7"),  # Methyl Group (Very weak/Variable)
+    ],
+}
 
 
 def _get_base_atoms_coords(residue: Residue) -> Optional[np.ndarray]:
