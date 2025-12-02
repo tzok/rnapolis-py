@@ -96,6 +96,15 @@ BASE_EDGES = {
 }
 
 
+def read_config(config_path: str) -> configparser.ConfigParser:
+    """
+    Reads configuration parameters from a file.
+    """
+    config = configparser.ConfigParser()
+    config.read(config_path)
+    return config
+
+
 def _get_base_atoms_coords(residue: Residue) -> Optional[np.ndarray]:
     """
     Extracts coordinates of core base atoms for a given residue.
@@ -379,76 +388,6 @@ def get_stacking_parameters(
     }
 
 
-def get_hbond_parameters(
-    antecedent: Atom, donor: Atom, acceptor: Atom
-) -> Dict[str, float]:
-    """
-    Calculates geometric parameters for a potential hydrogen bond involving three atoms.
-
-    Parameters:
-    -----------
-    antecedent : Atom
-        The atom covalently bonded to the donor (e.g., C in C-H...O).
-    donor : Atom
-        The hydrogen bond donor atom (e.g., H in N-H...O, or N/O if H is implicit).
-    acceptor : Atom
-        The hydrogen bond acceptor atom (e.g., O in N-H...O).
-
-    Returns:
-    --------
-    Dict[str, float]
-        Dictionary containing:
-        - 'antecedent_donor_distance': Distance between antecedent and donor (Angstroms).
-        - 'donor_acceptor_distance': Distance between donor and acceptor (Angstroms).
-        - 'antecedent_donor_acceptor_angle': Angle A-D-A (Degrees).
-    """
-    # Get coordinates
-    coord_a = antecedent.coordinates
-    coord_d = donor.coordinates
-    coord_c = acceptor.coordinates
-
-    # 1. Antecedent-Donor distance (A-D)
-    dist_ad = np.linalg.norm(coord_a - coord_d).item()
-
-    # 2. Donor-Acceptor distance (D-C)
-    dist_dc = np.linalg.norm(coord_d - coord_c).item()
-
-    # 3. Antecedent-Donor-Acceptor angle (A-D-C)
-    # Vectors DA and DC
-    vec_da = coord_a - coord_d
-    vec_dc = coord_c - coord_d
-
-    # Calculate angle using dot product formula: cos(theta) = (v1 . v2) / (|v1| * |v2|)
-    dot_product = np.dot(vec_da, vec_dc)
-    norm_da = np.linalg.norm(vec_da)
-    norm_dc = np.linalg.norm(vec_dc)
-
-    if norm_da == 0 or norm_dc == 0:
-        # Should not happen with valid Atom objects, but as a safeguard
-        angle_degrees = np.nan
-    else:
-        cos_theta = dot_product / (norm_da * norm_dc)
-        # Clip to [-1, 1] to avoid floating point errors outside arccos domain
-        cos_theta = np.clip(cos_theta, -1.0, 1.0)
-        angle_radians = np.arccos(cos_theta)
-        angle_degrees = np.degrees(angle_radians)
-
-    return {
-        "antecedent_donor_distance": dist_ad,
-        "donor_acceptor_distance": dist_dc,
-        "antecedent_donor_acceptor_angle": angle_degrees,
-    }
-
-
-def read_config(config_path: str) -> configparser.ConfigParser:
-    """
-    Reads configuration parameters from a file.
-    """
-    config = configparser.ConfigParser()
-    config.read(config_path)
-    return config
-
-
 def is_stacking_valid(
     stacking_params: Dict[str, Union[float, str]], config: configparser.ConfigParser
 ) -> bool:
@@ -492,39 +431,6 @@ def is_stacking_valid(
     # Check overlap_area
     area = stacking_params["overlap_area"]
     if not (get_float("overlap_area_min") <= area <= get_float("overlap_area_max")):
-        return False
-
-    return True
-
-
-def is_hbond_valid(
-    hbond_params: Dict[str, float], config: configparser.ConfigParser
-) -> bool:
-    """
-    Checks if the calculated hydrogen bond parameters fall within the configured thresholds.
-    """
-    section = config["hbonds"]
-
-    # Helper to safely get float from config
-    def get_float(key):
-        return section.getfloat(key)
-
-    # Check donor_acceptor_distance
-    dist = hbond_params["donor_acceptor_distance"]
-    if not (
-        get_float("donor_acceptor_distance_min")
-        <= dist
-        <= get_float("donor_acceptor_distance_max")
-    ):
-        return False
-
-    # Check antecedent_donor_acceptor_angle
-    angle = hbond_params["antecedent_donor_acceptor_angle"]
-    if not (
-        get_float("antecedent_donor_acceptor_angle_min")
-        <= angle
-        <= get_float("antecedent_donor_acceptor_angle_max")
-    ):
         return False
 
     return True
@@ -614,3 +520,97 @@ def find_hbond_pairs(res1: Residue, res2: Residue) -> List[Tuple[Atom, Atom, Ato
             hbond_pairs.append((antecedent, donor, acceptor))
 
     return hbond_pairs
+
+
+def get_hbond_parameters(
+    antecedent: Atom, donor: Atom, acceptor: Atom
+) -> Dict[str, float]:
+    """
+    Calculates geometric parameters for a potential hydrogen bond involving three atoms.
+
+    Parameters:
+    -----------
+    antecedent : Atom
+        The atom covalently bonded to the donor (e.g., C in C-H...O).
+    donor : Atom
+        The hydrogen bond donor atom (e.g., H in N-H...O, or N/O if H is implicit).
+    acceptor : Atom
+        The hydrogen bond acceptor atom (e.g., O in N-H...O).
+
+    Returns:
+    --------
+    Dict[str, float]
+        Dictionary containing:
+        - 'antecedent_donor_distance': Distance between antecedent and donor (Angstroms).
+        - 'donor_acceptor_distance': Distance between donor and acceptor (Angstroms).
+        - 'antecedent_donor_acceptor_angle': Angle A-D-A (Degrees).
+    """
+    # Get coordinates
+    coord_a = antecedent.coordinates
+    coord_d = donor.coordinates
+    coord_c = acceptor.coordinates
+
+    # 1. Antecedent-Donor distance (A-D)
+    dist_ad = np.linalg.norm(coord_a - coord_d).item()
+
+    # 2. Donor-Acceptor distance (D-C)
+    dist_dc = np.linalg.norm(coord_d - coord_c).item()
+
+    # 3. Antecedent-Donor-Acceptor angle (A-D-C)
+    # Vectors DA and DC
+    vec_da = coord_a - coord_d
+    vec_dc = coord_c - coord_d
+
+    # Calculate angle using dot product formula: cos(theta) = (v1 . v2) / (|v1| * |v2|)
+    dot_product = np.dot(vec_da, vec_dc)
+    norm_da = np.linalg.norm(vec_da)
+    norm_dc = np.linalg.norm(vec_dc)
+
+    if norm_da == 0 or norm_dc == 0:
+        # Should not happen with valid Atom objects, but as a safeguard
+        angle_degrees = np.nan
+    else:
+        cos_theta = dot_product / (norm_da * norm_dc)
+        # Clip to [-1, 1] to avoid floating point errors outside arccos domain
+        cos_theta = np.clip(cos_theta, -1.0, 1.0)
+        angle_radians = np.arccos(cos_theta)
+        angle_degrees = np.degrees(angle_radians)
+
+    return {
+        "antecedent_donor_distance": dist_ad,
+        "donor_acceptor_distance": dist_dc,
+        "antecedent_donor_acceptor_angle": angle_degrees,
+    }
+
+
+def is_hbond_valid(
+    hbond_params: Dict[str, float], config: configparser.ConfigParser
+) -> bool:
+    """
+    Checks if the calculated hydrogen bond parameters fall within the configured thresholds.
+    """
+    section = config["hbonds"]
+
+    # Helper to safely get float from config
+    def get_float(key):
+        return section.getfloat(key)
+
+    # Check donor_acceptor_distance
+    dist = hbond_params["donor_acceptor_distance"]
+    if not (
+        get_float("donor_acceptor_distance_min")
+        <= dist
+        <= get_float("donor_acceptor_distance_max")
+    ):
+        return False
+
+    # Check antecedent_donor_acceptor_angle
+    angle = hbond_params["antecedent_donor_acceptor_angle"]
+    if not (
+        get_float("antecedent_donor_acceptor_angle_min")
+        <= angle
+        <= get_float("antecedent_donor_acceptor_angle_max")
+    ):
+        return False
+
+    return True
