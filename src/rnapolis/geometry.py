@@ -231,6 +231,21 @@ def _calculate_dihedral_angle(n1: np.ndarray, n2: np.ndarray) -> float:
     return np.degrees(angle_rad)
 
 
+def _get_glycosidic_atom(residue: Residue) -> Optional[Atom]:
+    """
+    Returns the glycosidic bond atom (N1 for pyrimidines, N9 for purines).
+    """
+    res_name = residue.residue_name
+    is_purine = res_name in {"A", "G", "DA", "DG"}
+    is_pyrimidine = res_name in {"C", "U", "T", "DC", "DT"}
+
+    if is_purine:
+        return residue.find_atom("N9")
+    elif is_pyrimidine:
+        return residue.find_atom("N1")
+    return None
+
+
 def _calculate_lateral_displacement(
     c1: np.ndarray, n1: np.ndarray, c2: np.ndarray
 ) -> float:
@@ -251,6 +266,108 @@ def _calculate_lateral_displacement(
     # 3. Lateral displacement is the magnitude of the horizontal vector
     displacement = np.linalg.norm(horizontal_vector)
     return displacement
+
+
+def get_inter_base_parameters(
+    res1: Residue, res2: Residue
+) -> Dict[str, Union[float, str]]:
+    """
+    Calculates geometric parameters between two bases, including inter-base angle,
+    planar displacement, and a specific torsion angle.
+
+    Parameters:
+    -----------
+    res1 : Residue
+        The first residue.
+    res2 : Residue
+        The second residue.
+
+    Returns:
+    --------
+    Dict[str, Union[float, str]]
+        Dictionary containing calculated parameters:
+        - 'inter_base_angle': Angle between base planes (Degrees).
+        - 'planar_displacement': Vertical separation (Angstroms).
+        - 'torsion_angle_C1N_NC1': Torsion angle C1'(1)-N1/N9(1)-N1/N9(2)-C1'(2) (Radians).
+    """
+    # 1. Calculate Mean Plane and Centroid for both residues
+    coords1 = _get_base_atoms_coords(res1)
+    coords2 = _get_base_atoms_coords(res2)
+
+    if coords1 is None or coords2 is None:
+        return {
+            "error": "One or both residues are not recognized nucleotides or lack core atoms."
+        }
+
+    c1, n1_svd = _calculate_mean_plane(coords1)
+    c2, n2_svd = _calculate_mean_plane(coords2)
+
+    # 2. Unify Normal Vectors (ensure they point canonically 'up')
+    n1 = _unify_normal(res1, n1_svd)
+    n2 = _unify_normal(res2, n2_svd)
+
+    if n1 is None or n2 is None:
+        return {
+            "error": "Could not determine canonical face orientation for one or both residues."
+        }
+
+    # --- 1. Inter-base angle (Dihedral Angle) ---
+    inter_base_angle = _calculate_dihedral_angle(n1, n2)
+
+    # --- 2. Planar Displacement (Vertical Separation) ---
+    # Project the vector connecting centers onto the Normal of res1.
+    planar_displacement = _calculate_inter_planar_distance(c1, n1, c2)
+
+    # --- 3. Torsion Angle C1'(1)-N1/N9(1)-N1/N9(2)-C1'(2) ---
+    c1_prime_1 = res1.find_atom("C1'")
+    c1_prime_2 = res2.find_atom("C1'")
+    n_glycosidic_1 = _get_glycosidic_atom(res1)
+    n_glycosidic_2 = _get_glycosidic_atom(res2)
+
+    torsion_angle_C1N_NC1 = np.nan
+
+    if (
+        c1_prime_1
+        and n_glycosidic_1
+        and n_glycosidic_2
+        and c1_prime_2
+    ):
+        a1 = c1_prime_1.coordinates
+        a2 = n_glycosidic_1.coordinates
+        a3 = n_glycosidic_2.coordinates
+        a4 = c1_prime_2.coordinates
+
+        # Calculate vectors between points
+        v1 = a2 - a1
+        v2 = a3 - a2
+        v3 = a4 - a3
+
+        # Calculate normal vectors
+        n_1 = np.cross(v1, v2)
+        n_2 = np.cross(v2, v3)
+
+        # Normalize normal vectors
+        n1_norm = np.linalg.norm(n_1)
+        n2_norm = np.linalg.norm(n_2)
+
+        if n1_norm > 1e-6 and n2_norm > 1e-6:
+            n_1 = n_1 / n1_norm
+            n_2 = n_2 / n2_norm
+
+            # Calculate the angle using dot product
+            m1 = np.cross(n_1, v2 / np.linalg.norm(v2))
+            x = np.dot(n_1, n_2)
+            y = np.dot(m1, n_2)
+
+            # Return angle in radians
+            torsion_angle_C1N_NC1 = np.arctan2(y, x)
+
+
+    return {
+        "inter_base_angle": inter_base_angle,
+        "planar_displacement": planar_displacement,
+        "torsion_angle_C1N_NC1": torsion_angle_C1N_NC1,
+    }
 
 
 def _calculate_overlap_area(
