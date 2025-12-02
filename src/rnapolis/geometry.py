@@ -664,7 +664,7 @@ def get_hbond_edge_counts(
     for antecedent, donor, acceptor in valid_hbonds:
         # Determine which residue is the donor and which is the acceptor
         # The donor atom (donor) and acceptor atom (acceptor) belong to different residues.
-        
+
         # Check if donor is in res1 (meaning acceptor is in res2)
         if donor.data.name in res1.atoms["name"].values:
             donor_res = res1
