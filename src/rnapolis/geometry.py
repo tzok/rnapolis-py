@@ -326,12 +326,7 @@ def get_inter_base_parameters(
 
     torsion_angle_C1N_NC1 = np.nan
 
-    if (
-        c1_prime_1
-        and n_glycosidic_1
-        and n_glycosidic_2
-        and c1_prime_2
-    ):
+    if c1_prime_1 and n_glycosidic_1 and n_glycosidic_2 and c1_prime_2:
         a1 = c1_prime_1.coordinates
         a2 = n_glycosidic_1.coordinates
         a3 = n_glycosidic_2.coordinates
@@ -361,7 +356,6 @@ def get_inter_base_parameters(
 
             # Return angle in radians
             torsion_angle_C1N_NC1 = np.arctan2(y, x)
-
 
     return {
         "inter_base_angle": inter_base_angle,
