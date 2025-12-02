@@ -120,6 +120,41 @@ def read_config(config_path: Optional[str] = None) -> configparser.ConfigParser:
     return config
 
 
+def get_c1p_c1p_distance(res1: Residue, res2: Residue) -> Optional[float]:
+    """
+    Calculates the distance between the C1' atoms of two residues.
+    """
+    c1p_1 = res1.find_atom("C1'")
+    c1p_2 = res2.find_atom("C1'")
+
+    if c1p_1 is None or c1p_2 is None:
+        return None
+
+    dist = np.linalg.norm(c1p_1.coordinates - c1p_2.coordinates).item()
+    return dist
+
+
+def is_c1p_c1p_distance_valid(
+    distance: Optional[float], config: configparser.ConfigParser
+) -> bool:
+    """
+    Checks if the C1'-C1' distance falls within the configured thresholds.
+    """
+    if distance is None:
+        return False
+
+    section = config["general"]
+
+    # Helper to safely get float from config
+    def get_float(key):
+        return section.getfloat(key)
+
+    min_dist = get_float("c1p_c1p_distance_min")
+    max_dist = get_float("c1p_c1p_distance_max")
+
+    return min_dist <= distance <= max_dist
+
+
 def _get_base_atoms_coords(residue: Residue) -> Optional[np.ndarray]:
     """
     Extracts coordinates of core base atoms for a given residue.
