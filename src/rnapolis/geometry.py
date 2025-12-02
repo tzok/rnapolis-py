@@ -2,7 +2,7 @@ import configparser
 import numpy as np
 from typing import Dict, List, Optional, Tuple, Union
 
-from collections import namedtuple
+from collections import Counter, namedtuple
 
 from rnapolis.tertiary_v2 import Atom, Residue
 
@@ -614,3 +614,81 @@ def is_hbond_valid(
         return False
 
     return True
+
+
+def _get_edge_for_atom(residue: Residue, atom_name: str) -> Optional[str]:
+    """
+    Determines which base edge (WC, Hoogsteen, Sugar) an atom belongs to.
+    """
+    res_name = residue.one_letter_name.upper()
+    if res_name not in BASE_EDGES:
+        return None
+
+    for edge, atoms in BASE_EDGES[res_name].items():
+        if atom_name in atoms:
+            return edge
+    return None
+
+
+def get_hbond_edge_counts(
+    res1: Residue, res2: Residue, config: configparser.ConfigParser
+) -> Dict[Residue, Counter]:
+    """
+    Finds valid hydrogen bonds between two residues and returns a dictionary
+    containing the counts of involved base edges for each residue.
+
+    Parameters:
+    -----------
+    res1 : Residue
+        The first residue.
+    res2 : Residue
+        The second residue.
+    config : configparser.ConfigParser
+        Configuration object containing HBond validation thresholds.
+
+    Returns:
+    --------
+    Dict[Residue, Counter]
+        A dictionary mapping each residue to a Counter of involved base edges.
+    """
+    all_pairs = find_hbond_pairs(res1, res2)
+    valid_hbonds = []
+
+    for antecedent, donor, acceptor in all_pairs:
+        hbond_params = get_hbond_parameters(antecedent, donor, acceptor)
+        if is_hbond_valid(hbond_params, config):
+            valid_hbonds.append((antecedent, donor, acceptor))
+
+    edge_counts = {res1: Counter(), res2: Counter()}
+
+    for antecedent, donor, acceptor in valid_hbonds:
+        # Determine which residue is the donor and which is the acceptor
+        # The donor atom (donor) and acceptor atom (acceptor) belong to different residues.
+        
+        # Check if donor is in res1 (meaning acceptor is in res2)
+        if donor.data.name in res1.atoms["name"].values:
+            donor_res = res1
+            acceptor_res = res2
+            donor_atom = donor
+            acceptor_atom = acceptor
+        # Check if donor is in res2 (meaning acceptor is in res1)
+        elif donor.data.name in res2.atoms["name"].values:
+            donor_res = res2
+            acceptor_res = res1
+            donor_atom = donor
+            acceptor_atom = acceptor
+        else:
+            # Should not happen if find_hbond_pairs works correctly
+            continue
+
+        # Tally edges for donor residue
+        donor_edge = _get_edge_for_atom(donor_res, donor_atom.name)
+        if donor_edge:
+            edge_counts[donor_res][donor_edge] += 1
+
+        # Tally edges for acceptor residue
+        acceptor_edge = _get_edge_for_atom(acceptor_res, acceptor_atom.name)
+        if acceptor_edge:
+            edge_counts[acceptor_res][acceptor_edge] += 1
+
+    return edge_counts
