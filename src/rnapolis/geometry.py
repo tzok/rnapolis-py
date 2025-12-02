@@ -682,7 +682,7 @@ def is_hbond_valid(
     return True
 
 
-def _get_edge_for_atom(residue: Residue, atom_name: str) -> List[str]:
+def _get_edges_for_atom(residue: Residue, atom_name: str) -> List[str]:
     """
     Determines which base edges (WC, Hoogsteen, Sugar) an atom belongs to.
     """
@@ -749,12 +749,12 @@ def get_hbond_edge_counts(
             continue
 
         # Tally edges for donor residue
-        donor_edges = _get_edge_for_atom(donor_res, donor_atom.name)
+        donor_edges = _get_edges_for_atom(donor_res, donor_atom.name)
         for edge in donor_edges:
             edge_counts[donor_res][edge] += 1
 
         # Tally edges for acceptor residue
-        acceptor_edges = _get_edge_for_atom(acceptor_res, acceptor_atom.name)
+        acceptor_edges = _get_edges_for_atom(acceptor_res, acceptor_atom.name)
         for edge in acceptor_edges:
             edge_counts[acceptor_res][edge] += 1
 
