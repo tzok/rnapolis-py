@@ -451,70 +451,6 @@ def is_stacking_valid(
     return True
 
 
-def is_basepair_valid(
-    inter_base_params: Dict[str, Union[float, str]], config: configparser.ConfigParser
-) -> bool:
-    """
-    Checks if the calculated inter-base parameters fall within the configured thresholds
-    for a valid base pair.
-    """
-    if "error" in inter_base_params:
-        return False
-
-    section = config["basepair"]
-
-    # Helper to safely get float from config
-    def get_float(key):
-        return section.getfloat(key)
-
-    # Check inter_base_angle
-    angle = inter_base_params["inter_base_angle"]
-    if not (
-        get_float("inter_base_angle_min") <= angle <= get_float("inter_base_angle_max")
-    ):
-        return False
-
-    # Check planar_displacement
-    disp = inter_base_params["planar_displacement"]
-    if not (
-        get_float("planar_displacement_min")
-        <= disp
-        <= get_float("planar_displacement_max")
-    ):
-        return False
-
-    return True
-
-
-def is_cis(
-    inter_base_params: Dict[str, Union[float, str]], config: configparser.ConfigParser
-) -> bool:
-    """
-    Checks if the torsion angle indicates a cis conformation based on config thresholds.
-    """
-    if "error" in inter_base_params:
-        return False
-
-    section = config["basepair"]
-
-    # Helper to safely get float from config
-    def get_float(key):
-        return section.getfloat(key)
-
-    # Check torsion_angle_C1N_NC1
-    torsion = inter_base_params["torsion_angle_C1N_NC1"]
-
-    # Note: Torsion angle is in radians, config values should be in radians too.
-    if not (
-        get_float("torsion_angle_cis_min")
-        <= torsion
-        <= get_float("torsion_angle_cis_max")
-    ):
-        return False
-
-    return True
-
-
 # Helper function to find all potential donor triplets (antecedent, donor)
 def _get_potential_donors(residue: Residue) -> List[Tuple[Atom, Atom]]:
     potential_donors = []
@@ -867,3 +803,67 @@ def get_inter_base_parameters(
         "planar_displacement": planar_displacement,
         "torsion_angle_C1N_NC1": torsion_angle_C1N_NC1,
     }
+
+
+def is_basepair_valid(
+    inter_base_params: Dict[str, Union[float, str]], config: configparser.ConfigParser
+) -> bool:
+    """
+    Checks if the calculated inter-base parameters fall within the configured thresholds
+    for a valid base pair.
+    """
+    if "error" in inter_base_params:
+        return False
+
+    section = config["basepair"]
+
+    # Helper to safely get float from config
+    def get_float(key):
+        return section.getfloat(key)
+
+    # Check inter_base_angle
+    angle = inter_base_params["inter_base_angle"]
+    if not (
+        get_float("inter_base_angle_min") <= angle <= get_float("inter_base_angle_max")
+    ):
+        return False
+
+    # Check planar_displacement
+    disp = inter_base_params["planar_displacement"]
+    if not (
+        get_float("planar_displacement_min")
+        <= disp
+        <= get_float("planar_displacement_max")
+    ):
+        return False
+
+    return True
+
+
+def is_cis(
+    inter_base_params: Dict[str, Union[float, str]], config: configparser.ConfigParser
+) -> bool:
+    """
+    Checks if the torsion angle indicates a cis conformation based on config thresholds.
+    """
+    if "error" in inter_base_params:
+        return False
+
+    section = config["basepair"]
+
+    # Helper to safely get float from config
+    def get_float(key):
+        return section.getfloat(key)
+
+    # Check torsion_angle_C1N_NC1
+    torsion = inter_base_params["torsion_angle_C1N_NC1"]
+
+    # Note: Torsion angle is in radians, config values should be in radians too.
+    if not (
+        get_float("torsion_angle_cis_min")
+        <= torsion
+        <= get_float("torsion_angle_cis_max")
+    ):
+        return False
+
+    return True
