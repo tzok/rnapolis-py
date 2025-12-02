@@ -1,4 +1,5 @@
 import configparser
+import importlib.resources
 import numpy as np
 from typing import Dict, List, Optional, Tuple, Union
 
@@ -96,12 +97,26 @@ BASE_EDGES = {
 }
 
 
-def read_config(config_path: str) -> configparser.ConfigParser:
+def read_config(config_path: Optional[str] = None) -> configparser.ConfigParser:
     """
-    Reads configuration parameters from a file.
+    Reads configuration parameters from a file. If config_path is None,
+    the default configuration file is loaded.
     """
     config = configparser.ConfigParser()
-    config.read(config_path)
+
+    if config_path is None:
+        # Load default configuration from package resources
+        try:
+            with importlib.resources.path("rnapolis", "default_config.ini") as path:
+                config.read(path)
+        except FileNotFoundError:
+            # Fallback if path context manager fails (e.g., in zip file)
+            # Read content directly
+            content = importlib.resources.read_text("rnapolis", "default_config.ini")
+            config.read_string(content)
+    else:
+        config.read(config_path)
+
     return config
 
 
