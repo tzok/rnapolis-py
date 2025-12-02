@@ -439,6 +439,51 @@ def get_hbond_parameters(
     }
 
 
+# Helper function to find all potential donor triplets (antecedent, donor)
+def _get_potential_donors(residue: Residue) -> List[Tuple[Atom, Atom]]:
+    potential_donors = []
+    res_name = residue.one_letter_name.upper()
+
+    # Check base donors
+    if res_name in DONORS:
+        for pair in DONORS[res_name]:
+            antecedent = residue.find_atom(pair.antecedent)
+            donor = residue.find_atom(pair.donor)
+            if antecedent and donor:
+                potential_donors.append((antecedent, donor))
+
+    return potential_donors
+
+
+# Helper function to find all potential acceptor atoms
+def _get_potential_acceptors(residue: Residue) -> List[Atom]:
+    potential_acceptors = []
+    res_name = residue.one_letter_name.upper()
+
+    # Check base acceptors
+    if res_name in BASE_ACCEPTORS:
+        for name in BASE_ACCEPTORS[res_name]:
+            atom = residue.find_atom(name)
+            if atom:
+                potential_acceptors.append(atom)
+
+    # Check phosphate acceptors (P, OP1, OP2)
+    for name in PHOSPHATE_ACCEPTORS:
+        atom = residue.find_atom(name)
+        if atom:
+            potential_acceptors.append(atom)
+
+    # Check sugar acceptors (O2', O4')
+    for name in SUGAR_ACCEPTORS:
+        atom = residue.find_atom(name)
+        if atom:
+            # Avoid double counting O2' if it was already added as a base acceptor
+            if atom not in potential_acceptors:
+                potential_acceptors.append(atom)
+
+    return potential_acceptors
+
+
 def find_hbond_pairs(res1: Residue, res2: Residue) -> List[Tuple[Atom, Atom, Atom]]:
     """
     Finds all possible hydrogen bond donor-acceptor pairs between two residues.
@@ -460,53 +505,6 @@ def find_hbond_pairs(res1: Residue, res2: Residue) -> List[Tuple[Atom, Atom, Ato
         A list of potential hydrogen bond triplets: (antecedent, donor, acceptor).
     """
     hbond_pairs = []
-
-    # Helper function to find all potential donor triplets (antecedent, donor)
-    def _get_potential_donors(residue: Residue) -> List[Tuple[Atom, Atom]]:
-        potential_donors = []
-        res_name = residue.one_letter_name.upper()
-
-        # Check base donors
-        if res_name in DONORS:
-            for pair in DONORS[res_name]:
-                antecedent = residue.find_atom(pair.antecedent)
-                donor = residue.find_atom(pair.donor)
-                if antecedent and donor:
-                    potential_donors.append((antecedent, donor))
-
-        # Check sugar donors (O2' is the only explicit donor site listed)
-        # O2' is already included in the base donor lists for RNA (A, G, C, U)
-        # If the residue is DNA (a, g, c, t), O2' won't be found, which is correct.
-
-        return potential_donors
-
-    # Helper function to find all potential acceptor atoms
-    def _get_potential_acceptors(residue: Residue) -> List[Atom]:
-        potential_acceptors = []
-        res_name = residue.one_letter_name.upper()
-
-        # Check base acceptors
-        if res_name in BASE_ACCEPTORS:
-            for name in BASE_ACCEPTORS[res_name]:
-                atom = residue.find_atom(name)
-                if atom:
-                    potential_acceptors.append(atom)
-
-        # Check phosphate acceptors (P, OP1, OP2)
-        for name in PHOSPHATE_ACCEPTORS:
-            atom = residue.find_atom(name)
-            if atom:
-                potential_acceptors.append(atom)
-
-        # Check sugar acceptors (O2', O4')
-        for name in SUGAR_ACCEPTORS:
-            atom = residue.find_atom(name)
-            if atom:
-                # Avoid double counting O2' if it was already added as a base acceptor
-                if atom not in potential_acceptors:
-                    potential_acceptors.append(atom)
-
-        return potential_acceptors
 
     # --- Search Direction 1: res1 (Donor) -> res2 (Acceptor) ---
     donors1 = _get_potential_donors(res1)
