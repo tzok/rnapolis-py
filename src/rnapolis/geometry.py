@@ -466,17 +466,27 @@ def is_stacking_valid(
 
     # Check inter_planar_distance
     dist = stacking_params["inter_planar_distance"]
-    if not (get_float("inter_planar_distance_min") <= dist <= get_float("inter_planar_distance_max")):
+    if not (
+        get_float("inter_planar_distance_min")
+        <= dist
+        <= get_float("inter_planar_distance_max")
+    ):
         return False
 
     # Check dihedral_angle
     angle = stacking_params["dihedral_angle"]
-    if not (get_float("dihedral_angle_min") <= angle <= get_float("dihedral_angle_max")):
+    if not (
+        get_float("dihedral_angle_min") <= angle <= get_float("dihedral_angle_max")
+    ):
         return False
 
     # Check lateral_displacement
     disp = stacking_params["lateral_displacement"]
-    if not (get_float("lateral_displacement_min") <= disp <= get_float("lateral_displacement_max")):
+    if not (
+        get_float("lateral_displacement_min")
+        <= disp
+        <= get_float("lateral_displacement_max")
+    ):
         return False
 
     # Check overlap_area
@@ -501,12 +511,20 @@ def is_hbond_valid(
 
     # Check donor_acceptor_distance
     dist = hbond_params["donor_acceptor_distance"]
-    if not (get_float("donor_acceptor_distance_min") <= dist <= get_float("donor_acceptor_distance_max")):
+    if not (
+        get_float("donor_acceptor_distance_min")
+        <= dist
+        <= get_float("donor_acceptor_distance_max")
+    ):
         return False
 
     # Check antecedent_donor_acceptor_angle
     angle = hbond_params["antecedent_donor_acceptor_angle"]
-    if not (get_float("antecedent_donor_acceptor_angle_min") <= angle <= get_float("antecedent_donor_acceptor_angle_max")):
+    if not (
+        get_float("antecedent_donor_acceptor_angle_min")
+        <= angle
+        <= get_float("antecedent_donor_acceptor_angle_max")
+    ):
         return False
 
     return True
