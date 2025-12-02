@@ -952,10 +952,8 @@ class Residue:
         # Map the best match to the one-letter code
         if best_match in {"A", "G", "C", "U"}:
             return best_match
-        elif best_match == "DT":
-            return "T"
         elif best_match.startswith("D"):
-            # DA, DG, DC -> a, g, c
+            # DA, DG, DC, DT -> a, g, c, t
             return best_match[1].lower()
         else:
             # Fallback for unknown types, should not happen if RESIDUE_ATOMS_MAP is complete

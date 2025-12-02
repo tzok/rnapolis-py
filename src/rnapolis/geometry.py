@@ -1,12 +1,11 @@
 import numpy as np
 from typing import Dict, List, Optional, Tuple, Union
 
-# Assuming Residue and Atom are importable from tertiary_v2
 from collections import namedtuple
 
-from .tertiary_v2 import Atom, Residue
+from rnapolis.tertiary_v2 import Atom, Residue
 
-# --- Atom Definitions (Redefined from tertiary_v2 for local use) ---
+# --- Atom Definitions ---
 # Purines (A, G, DA, DG)
 PURINE_CORE_ATOMS = {"N9", "C8", "N7", "C5", "C6", "N1", "C2", "N3", "C4"}
 # Pyrimidines (C, T, U, DC, DT)
@@ -19,7 +18,6 @@ PURINE_FACE_ATOMS = ("N9", "C4", "C5")
 PYRIMIDINE_FACE_ATOMS = ("N1", "C6", "C5")
 
 # --- Hydrogen Bond Definitions ---
-
 BASE_ACCEPTORS = {
     "A": ["N1", "N3", "N7"],
     "G": ["N3", "O6", "N7"],
@@ -33,8 +31,8 @@ PHOSPHATE_ACCEPTORS = ["OP1", "OP2", "O3'", "O5'"]
 SUGAR_ACCEPTORS = ["O2'", "O4'"]
 
 # antecedent: The reference atom (defines the angle).
-# atom: The interacting Donor atom.
-AtomPair = namedtuple("AtomPair", ["antecedent", "atom"])
+# donor: The interacting Donor atom.
+AtomPair = namedtuple("AtomPair", ["antecedent", "donor"])
 
 DONORS = {
     "A": [
