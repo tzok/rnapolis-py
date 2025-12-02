@@ -729,7 +729,7 @@ def get_inter_base_parameters(
         Dictionary containing calculated parameters:
         - 'inter_base_angle': Angle between base planes (Degrees).
         - 'planar_displacement': Vertical separation (Angstroms).
-        - 'torsion_angle_C1N_NC1': Torsion angle C1'(1)-N1/N9(1)-N1/N9(2)-C1'(2) (Radians).
+        - 'torsion_angle_C1N_NC1': Torsion angle C1'(1)-N1/N9(1)-N1/N9(2)-C1'(2) (Degrees).
     """
     # 1. Calculate Mean Plane and Centroid for both residues
     coords1 = _get_base_atoms_coords(res1)
@@ -795,8 +795,8 @@ def get_inter_base_parameters(
             x = np.dot(n_1, n_2)
             y = np.dot(m1, n_2)
 
-            # Return angle in radians
-            torsion_angle_C1N_NC1 = np.arctan2(y, x)
+            # Return angle in degrees
+            torsion_angle_C1N_NC1 = np.degrees(np.arctan2(y, x))
 
     return {
         "inter_base_angle": inter_base_angle,
@@ -858,7 +858,7 @@ def is_cis(
     # Check torsion_angle_C1N_NC1
     torsion = inter_base_params["torsion_angle_C1N_NC1"]
 
-    # Note: Torsion angle is in radians, config values should be in radians too.
+    # Note: Torsion angle is in degrees, config values should be in degrees too.
     if not (
         get_float("torsion_angle_cis_min")
         <= torsion
