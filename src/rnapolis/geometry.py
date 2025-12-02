@@ -506,7 +506,9 @@ def is_cis(
 
     # Note: Torsion angle is in radians, config values should be in radians too.
     if not (
-        get_float("torsion_angle_cis_min") <= torsion <= get_float("torsion_angle_cis_max")
+        get_float("torsion_angle_cis_min")
+        <= torsion
+        <= get_float("torsion_angle_cis_max")
     ):
         return False
 
