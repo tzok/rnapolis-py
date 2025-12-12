@@ -917,6 +917,49 @@ class Residue:
         return ""
 
     @cached_property
+    def one_letter_name(self) -> str:
+        """
+        Get the one-letter name for the residue.
+
+        If the residue is a nucleotide, it attempts to match the atom set
+        against known RNA/DNA bases (A, C, G, U, DA, DC, DG, DT).
+        Returns lowercase for DNA bases (a, c, g, t).
+        Returns the first letter of the residue name otherwise.
+        """
+        if not self.is_nucleotide:
+            return self.residue_name[0] if self.residue_name else "?"
+
+        # Get the set of atom names present in this residue
+        present_atom_names = set(self._atom_dict.keys())
+
+        best_match = None
+        max_overlap = -1
+
+        # Iterate over all known nucleotide types
+        for res_type, required_atoms in RESIDUE_ATOMS_MAP.items():
+            # Calculate overlap: number of required atoms that are present
+            overlap = len(present_atom_names.intersection(required_atoms))
+
+            # We prioritize the match that has the highest number of required atoms present.
+            # If overlap is equal, we keep the first one found (which is fine for this purpose).
+            if overlap > max_overlap:
+                max_overlap = overlap
+                best_match = res_type
+
+        if best_match is None:
+            return self.residue_name[0] if self.residue_name else "?"
+
+        # Map the best match to the one-letter code
+        if best_match in {"A", "G", "C", "U"}:
+            return best_match
+        elif best_match.startswith("D"):
+            # DA, DG, DC, DT -> a, g, c, t
+            return best_match[1].lower()
+        else:
+            # Fallback for unknown types, should not happen if RESIDUE_ATOMS_MAP is complete
+            return best_match[0]
+
+    @cached_property
     def atoms_list(self) -> List["Atom"]:
         """Get a list of all atoms in this residue."""
         return [Atom(self.atoms.iloc[i], self.format) for i in range(len(self.atoms))]

@@ -1,10 +1,11 @@
 [tool.poetry]
 name = "RNApolis"
-version = "0.12.0"
+version = "0.12.1"
 description = "A Python library containing RNA-related bioinformatics functions and classes"
 authors = ["Tomasz Zok <tomasz.zok@cs.put.poznan.pl>"]
 readme = "README.md"
 packages = [{ include = "rnapolis", from = "src" }]
+include = ["src/rnapolis/default_config.ini"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Environment :: Console",
@@ -31,6 +32,7 @@ pulp = "*"
 requests = "*"
 scikit-learn = "*"
 scipy = "*"
+shapely = "*"
 tqdm = "*"
 viennarna = "*"
 
