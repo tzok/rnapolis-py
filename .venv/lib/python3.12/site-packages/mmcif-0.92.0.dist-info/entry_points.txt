@@ -1,0 +1,2 @@
+[console_scripts]
+build_dict_cli = mmcif.io.BuildDictionaryExec:main

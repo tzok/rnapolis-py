@@ -22,6 +22,8 @@ logging.basicConfig(level=os.getenv("LOGLEVEL", "INFO").upper())
 
 
 class AtomType(Enum):
+    """Simple atom type enum used to map atoms to approximate vdW radii."""
+
     C = "C"
     N = "N"
     O = "O"
@@ -29,6 +31,7 @@ class AtomType(Enum):
 
     @cached_property
     def radius(self) -> float:
+        """Return an approximate van der Waals radius for this atom type."""
         if self.value == "C":
             return CARBON_RADIUS
         elif self.value == "N":
@@ -40,7 +43,17 @@ class AtomType(Enum):
         raise RuntimeError(f"Unknown atom type: {self}")
 
     def matches(self, atom: Atom):
+        """
+        Check whether a given atom belongs to this atom type.
+
+        Args:
+            atom: Atom to test.
+
+        Returns:
+            True if the atom name starts with this atom type symbol.
+        """
         return atom.name.strip().startswith(self.value)
+
 
 
 def find_clashes(
@@ -51,6 +64,25 @@ def find_clashes(
     require_same_atom_name: bool,
     enable_molprobity_mode: bool,
 ):
+    """
+    Find steric clashes between atoms in a list of residues.
+
+    The function collects carbon, nitrogen, oxygen and phosphorus atoms,
+    builds a KDTree and looks for pairs that are closer than the sum of
+    their vdW radii (optionally using a MolProbity-like cutoff).
+
+    Args:
+        residues: List of 3D residues to analyse.
+        ignore_occupancy: If True, ignore atom occupancies when reporting clashes.
+        ignore_autoclashes: If True, skip clashes within the same residue.
+        nucleic_acid_only: If True, consider only residues marked as nucleotides.
+        require_same_atom_name: If True, report only clashes of atoms with the same name.
+        enable_molprobity_mode: If True, add a 0.5 Å margin as in MolProbity.
+
+    Returns:
+        A list of tuples ``((res_i, atom_i), (res_j, atom_j), occupancy_sum)`` describing each clash.
+    """
+    
     reference_residues = []
     reference_atoms = []
     coordinates = []
@@ -96,6 +128,20 @@ def find_clashes(
 
 
 def classify_clash(atom_i: Atom, atom_j: Atom, occupancy: float) -> Optional[str]:
+    """
+    Classify a clash into a simple text label.
+
+    Currently this function detects O3' clashes with phosphate atoms
+    and labels them as ``"O3'"``; all other clashes are left unclassified.
+
+    Args:
+        atom_i: First atom in the clashing pair.
+        atom_j: Second atom in the clashing pair.
+        occupancy: Sum of occupancies for the two atoms.
+
+    Returns:
+        Short label for the clash type, or ``None`` if it does not match any known category.
+    """
     if atom_i.name == "O3'" and atom_j.name in (
         "OP1",
         "OP2",
@@ -109,6 +155,13 @@ def classify_clash(atom_i: Atom, atom_j: Atom, occupancy: float) -> Optional[str
 
 
 def main():
+    """
+    Command-line entry point for the clash finder tool.
+
+    It reads a PDB or mmCIF file, detects atomic clashes using the
+    chosen options, prints a human-readable summary and optionally
+    writes a CSV report with detailed clash information.
+    """
     parser = argparse.ArgumentParser()
     parser.add_argument("input", help="Path to PDB or mmCIF file")
     parser.add_argument(

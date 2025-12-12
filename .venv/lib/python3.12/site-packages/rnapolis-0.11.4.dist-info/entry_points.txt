@@ -1,0 +1,13 @@
+[console_scripts]
+adapter = rnapolis.adapter:main
+aligner = rnapolis.aligner:main
+annotator = rnapolis.annotator:main
+clashfinder = rnapolis.clashfinder:main
+distiller = rnapolis.distiller:main
+metareader = rnapolis.metareader:main
+molecule-filter = rnapolis.molecule_filter:main
+motif-extractor = rnapolis.motif_extractor:main
+rfam-folder = rnapolis.rfam_folder:main
+splitter = rnapolis.splitter:main
+transformer = rnapolis.transformer:main
+unifier = rnapolis.unifier:main

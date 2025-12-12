@@ -29,7 +29,11 @@ from rnapolis.tertiary_v2 import (
 
 
 def parse_arguments():
-    """Parse command line arguments."""
+    """Parse command-line arguments for the RNA structure clustering CLI.
+
+    Returns:
+        argparse.Namespace: Parsed command-line arguments.
+    """
     parser = argparse.ArgumentParser(
         description="Find clusters of almost identical RNA structures from mmCIF or PDB files"
     )
@@ -106,9 +110,15 @@ def parse_arguments():
 
 
 class NRMSDCache:
-    """Cache for storing computed nRMSD values with file metadata."""
+    """Cache for nRMSD values keyed by file metadata and RMSD method."""
 
     def __init__(self, cache_file: str, save_interval: int = 100):
+        """Initialize the nRMSD cache and load existing values from disk.
+
+        Args:
+            cache_file (str): Path to the JSON file used for persisting cache.
+            save_interval (int): Number of new computations between automatic cache saves.
+        """
         self.cache_file = cache_file
         self.save_interval = save_interval
         self.cache: Dict[str, float] = {}
@@ -116,12 +126,28 @@ class NRMSDCache:
         self.load_cache()
 
     def _get_file_key(self, file_path: Path) -> str:
-        """Generate a unique key for a file based on path and modification time."""
+        """Build a unique key for a file using its absolute path and stat information.
+
+        Args:
+            file_path (Path): Path to the structure file.
+
+        Returns:
+            str: Stable identifier for this file including mtime and size.
+        """
         stat = file_path.stat()
         return f"{file_path.absolute()}:{stat.st_mtime}:{stat.st_size}"
 
     def _get_pair_key(self, file1: Path, file2: Path, rmsd_method: str) -> str:
-        """Generate a unique key for a file pair and method."""
+        """Build a unique cache key for a pair of files and an RMSD method.
+
+        Args:
+            file1 (Path): Path to the first structure file.
+            file2 (Path): Path to the second structure file.
+            rmsd_method (str): RMSD method name used for this comparison.
+
+        Returns:
+            str: Hash key identifying this file pair and method.
+        """
         key1 = self._get_file_key(file1)
         key2 = self._get_file_key(file2)
         # Ensure consistent ordering
@@ -132,7 +158,7 @@ class NRMSDCache:
         return hashlib.md5(combined.encode()).hexdigest()
 
     def load_cache(self):
-        """Load cache from disk if it exists."""
+        """Load cached nRMSD values from disk if a cache file exists."""
         if os.path.exists(self.cache_file):
             try:
                 with open(self.cache_file, "r") as f:
@@ -150,7 +176,11 @@ class NRMSDCache:
             print(f"No existing cache file found at {self.cache_file}")
 
     def save_cache(self, silent: bool = False):
-        """Save cache to disk."""
+        """Persist the cache to disk as JSON.
+
+        Args:
+            silent (bool): If True, suppress confirmation message.
+        """
         try:
             with open(self.cache_file, "w") as f:
                 json.dump(self.cache, f, indent=2)
@@ -163,12 +193,28 @@ class NRMSDCache:
             )
 
     def get(self, file1: Path, file2: Path, rmsd_method: str) -> Optional[float]:
-        """Get cached nRMSD value if available."""
+        """Retrieve a cached nRMSD value for the given file pair and method.
+
+        Args:
+            file1 (Path): Path to the first structure file.
+            file2 (Path): Path to the second structure file.
+            rmsd_method (str): RMSD method name used for this comparison.
+
+        Returns:
+            Cached nRMSD value if present, otherwise None.
+        """
         key = self._get_pair_key(file1, file2, rmsd_method)
         return self.cache.get(key)
 
     def set(self, file1: Path, file2: Path, rmsd_method: str, value: float):
-        """Store nRMSD value in cache."""
+        """Store a newly computed nRMSD value in the cache.
+
+        Args:
+            file1 (Path): Path to the first structure file.
+            file2 (Path): Path to the second structure file.
+            rmsd_method (str): RMSD method name used for this comparison.
+            value (float): Computed nRMSD value.
+        """
         key = self._get_pair_key(file1, file2, rmsd_method)
         self.cache[key] = value
         self.computation_count += 1
@@ -179,7 +225,14 @@ class NRMSDCache:
 
 
 def validate_input_files(files: List[Path]) -> List[Path]:
-    """Validate that input files exist and have appropriate extensions."""
+    """Filter and validate input files by existence and supported extension.
+
+    Args:
+        files (List[Path]): List of input file paths provided by the user.
+
+    Returns:
+        List of existing files with recognized structure extensions.
+    """
     valid_files = []
     valid_extensions = {".pdb", ".cif", ".mmcif"}
 
@@ -203,18 +256,16 @@ def validate_input_files(files: List[Path]) -> List[Path]:
 
 
 def parse_structure_file(file_path: Path) -> Structure:
-    """
-    Parse a structure file (PDB or mmCIF) into a Structure object.
+    """Parse a PDB or mmCIF file into a Structure object.
 
-    Parameters:
-    -----------
-    file_path : Path
-        Path to the structure file
+    Args:
+        file_path (Path): Path to the structure file.
 
     Returns:
-    --------
-    Structure
-        Parsed structure object
+        Structure: Parsed structure built from atom coordinates.
+
+    Raises:
+        Exception: Propagates parsing errors after logging.
     """
     try:
         with open(file_path, "r") as f:
@@ -236,20 +287,14 @@ def parse_structure_file(file_path: Path) -> Structure:
 def validate_nucleotide_counts(
     structures: List[Structure], file_paths: List[Path]
 ) -> None:
-    """
-    Validate that all structures have the same number of nucleotides.
+    """Check that all parsed structures have the same number of nucleotides.
 
-    Parameters:
-    -----------
-    structures : List[Structure]
-        List of parsed structures
-    file_paths : List[Path]
-        Corresponding file paths for error reporting
+    Args:
+        structures (List[Structure]): Parsed structures to validate.
+        file_paths (List[Path]): Paths corresponding to the structures.
 
     Raises:
-    -------
-    SystemExit
-        If structures have different numbers of nucleotides
+        SystemExit: If any structure has a different nucleotide count.
     """
     nucleotide_counts = []
 
@@ -293,9 +338,12 @@ def validate_nucleotide_counts(
 
 
 def run_exact(structures: List[Structure], valid_files: List[Path], args) -> None:
-    """
-    Exact mode: nRMSD-based clustering workflow (previously in main).
-    Produces the same outputs/visualisations as before.
+    """Run exact nRMSD-based clustering workflow and optional visualization.
+
+    Args:
+        structures (List[Structure]): List of parsed structures.
+        valid_files (List[Path]): File paths corresponding to the structures.
+        args: Parsed CLI arguments controlling mode, cache and visualization.
     """
     # Initialize cache
     print("\nInitializing nRMSD cache...")
@@ -459,15 +507,17 @@ def run_exact(structures: List[Structure], valid_files: List[Path], args) -> Non
 # Approximate mode helper functions and workflow
 # ----------------------------------------------------------------------
 def _select_base_atoms(residue) -> List[Optional[np.ndarray]]:
-    """
-    Select four canonical base atoms for a nucleotide residue.
+    """Select four canonical base atoms for a nucleotide residue.
 
-    Purines (A/G/DA/DG): N9, N3, N1, C5
-    Pyrimidines (C/U/DC/DT): N1, O2, N3, C5
+    For purines (A/G/DA/DG) uses N9, N3, N1, C5.
+    For pyrimidines (C/U/DC/DT) uses N1, O2, N3, C5.
+    Falls back between schemes for unknown residue names.
 
-    If residue name is unknown, we try purine mapping first and, if incomplete,
-    fall back to pyrimidine mapping. Returned list always has length 4 and may
-    contain ``None`` when coordinates are missing.
+    Args:
+        residue: Residue3D-like object providing `residue_name` and `find_atom()`.
+
+    Returns:
+        List[Optional[np.ndarray]]: List of up to four atom coordinates, with None for missing atoms.
     """
     purines = {"A", "G", "DA", "DG"}
     pyrimidines = {"C", "U", "DC", "DT"}
@@ -493,9 +543,16 @@ def _select_base_atoms(residue) -> List[Optional[np.ndarray]]:
 
 
 def featurize_structure(structure: Structure) -> np.ndarray:
-    """
-    Convert a Structure into a fixed-length feature vector.
-    For n residues the length is 34 * n * (n-1) / 2.
+    """Convert a structure into a fixed-length feature vector.
+
+    For n nucleotide residues the feature length is 34 * n * (n - 1) / 2,
+    combining inter-base distances and torsion-based sine/cosine terms.
+
+    Args:
+        structure (Structure): Structure whose nucleotide residues will be featurized.
+
+    Returns:
+        np.ndarray: 1D float32 array of pairwise geometric features.
     """
     residues = [r for r in structure.residues if r.is_nucleotide]
     n = len(residues)
@@ -540,9 +597,16 @@ def run_approximate_multiple(
     radii: List[float],
     output_json: Optional[str],
 ) -> None:
-    """
-    Approximate mode (multi-radius): compute PCA once, then perform clustering
-    for each radius value provided. This avoids redundant dimensionality reduction.
+    """Run approximate PCA + FAISS-based redundancy detection for multiple radii.
+
+    Features are computed once, PCA is fitted once, and clustering is repeated
+    for every radius value.
+
+    Args:
+        structures (List[Structure]): Parsed structures to analyze.
+        file_paths (List[Path]): Paths corresponding to the structures.
+        radii (List[float]): Radii in reduced space for grouping similar structures.
+        output_json (Optional[str]): Optional path to save clustering summary as JSON.
     """
     if not radii:
         print("Error: No radius values supplied", file=sys.stderr)
@@ -642,22 +706,15 @@ def run_approximate_multiple(
 def find_all_thresholds_and_clusters(
     distance_matrix: np.ndarray, linkage_matrix: np.ndarray, file_paths: List[Path]
 ) -> List[dict]:
-    """
-    Find all threshold values where cluster assignments change and generate cluster data.
+    """Enumerate all merge distances and build clustering summaries for each threshold.
 
-    Parameters:
-    -----------
-    distance_matrix : np.ndarray
-        Square distance matrix
-    linkage_matrix : np.ndarray
-        Linkage matrix from hierarchical clustering
-    file_paths : List[Path]
-        List of file paths corresponding to structures
+    Args:
+        distance_matrix (np.ndarray): Square nRMSD distance matrix.
+        linkage_matrix (np.ndarray): Hierarchical clustering linkage matrix.
+        file_paths (List[Path]): Paths corresponding to the structures.
 
     Returns:
-    --------
-    List[dict]
-        List of threshold cluster data
+        List of clustering descriptions for each threshold value.
     """
     print("Finding all threshold values where cluster assignments change...")
 
@@ -718,27 +775,24 @@ def find_structure_clusters(
     visualize: bool = False,
     rmsd_method: str = "quaternions",
 ) -> np.ndarray:
-    """
-    Find clusters of almost identical structures using hierarchical clustering.
+    """Compute pairwise nRMSD distance matrix for a set of structures.
 
-    Parameters:
-    -----------
-    structures : List[Structure]
-        List of parsed structures to analyze
-    visualize : bool
-        Whether to show dendrogram and scatter plot visualization
-    rmsd_method : str
-        RMSD calculation method ("quaternions" or "svd")
+    Distances are cached on disk to avoid recomputation between runs.
+
+    Args:
+        structures (List[Structure]): Structures to compare.
+        file_paths (List[Path]): Paths corresponding to the structures.
+        cache (NRMSDCache): Cache object storing previously computed nRMSD values.
+        visualize (bool): Unused here, kept for interface compatibility.
+        rmsd_method (str): RMSD method name ("quaternions", "svd", "qcp", "validate").
 
     Returns:
-    --------
-    np.ndarray
-        Distance matrix between all structures
+        np.ndarray: Square matrix of nRMSD distances between all structures.
     """
     n_structures = len(structures)
 
     if n_structures == 1:
-        return [[0]], np.zeros((1, 1))
+        return np.zeros((1, 1))
 
     # Get nucleotide residues for each structure
     nucleotide_lists = []
@@ -826,12 +880,6 @@ def find_structure_clusters(
     # Save cache after all computations
     cache.save_cache()
 
-    # Convert to condensed distance matrix for scipy
-    condensed_distances = squareform(distance_matrix)
-
-    # Perform hierarchical clustering with complete linkage
-    linkage_matrix = linkage(condensed_distances, method="complete")
-
     # Return distance matrix for further processing
     return distance_matrix
 
@@ -842,24 +890,16 @@ def get_clustering_at_threshold(
     file_paths: List[Path],
     threshold: float,
 ) -> dict:
-    """
-    Get clustering results at a specific threshold.
+    """Compute clustering summary for a chosen nRMSD threshold.
 
-    Parameters:
-    -----------
-    linkage_matrix : np.ndarray
-        Linkage matrix from hierarchical clustering
-    distance_matrix : np.ndarray
-        Square distance matrix
-    file_paths : List[Path]
-        List of file paths corresponding to structures
-    threshold : float
-        nRMSD threshold for clustering
+    Args:
+        linkage_matrix (np.ndarray): Hierarchical clustering linkage matrix.
+        distance_matrix (np.ndarray): Square nRMSD distance matrix.
+        file_paths (List[Path]): Paths corresponding to the structures.
+        threshold (float): nRMSD cut-off defining clusters.
 
     Returns:
-    --------
-    dict
-        Dictionary with clustering information at the given threshold
+        dict: Dictionary with cluster counts, sizes and representatives.
     """
     # Get cluster assignments at this threshold
     labels = fcluster(linkage_matrix, threshold, criterion="distance")
@@ -898,24 +938,16 @@ def get_clustering_at_threshold(
 
 
 def exponential_decay(x: np.ndarray, a: float, b: float, c: float) -> np.ndarray:
-    """
-    Exponential decay function: y = a * exp(-b * x) + c
+    """Evaluate an exponential decay model y = a * exp(-b * x) + c.
 
-    Parameters:
-    -----------
-    x : np.ndarray
-        Input values
-    a : float
-        Amplitude parameter
-    b : float
-        Decay rate parameter
-    c : float
-        Offset parameter
+    Args:
+        x (np.ndarray): Input x-coordinates.
+        a (float): Amplitude parameter.
+        b (float): Decay rate parameter.
+        c (float): Offset parameter.
 
     Returns:
-    --------
-    np.ndarray
-        Function values
+        np.ndarray: Model values for each x.
     """
     return a * np.exp(-b * x) + c
 
@@ -923,23 +955,22 @@ def exponential_decay(x: np.ndarray, a: float, b: float, c: float) -> np.ndarray
 def fit_exponential_decay(
     x: np.ndarray, y: np.ndarray
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """
-    Fit exponential decay function to data and find inflection points.
+    """Fit an exponential decay to threshold–cluster data and locate key points.
 
-    Parameters:
-    -----------
-    x : np.ndarray
-        X coordinates (thresholds)
-    y : np.ndarray
-        Y coordinates (cluster counts)
+    The fit is used to generate a smooth curve and identify "knee"-like
+    inflection candidates in the decay.
+
+    Args:
+        x (np.ndarray): Threshold values.
+        y (np.ndarray): Cluster counts for each threshold.
 
     Returns:
-    --------
-    Tuple[np.ndarray, np.ndarray, np.ndarray]
-        Tuple of (x_smooth, y_smooth, inflection_x) where:
-        - x_smooth: smooth x values for plotting the fitted curve
-        - y_smooth: smooth y values for plotting the fitted curve
-        - inflection_x: x coordinates of inflection points
+        tuple:
+            A tuple ``(x_smooth, y_smooth, inflection_x)`` containing:
+
+            - **x_smooth**: smooth x grid for plotting the fitted curve.
+            - **y_smooth**: model values evaluated on ``x_smooth``.
+            - **inflection_x**: one or more x positions of key curvature points.
     """
     if len(x) < 4:
         return x, y, np.array([])
@@ -1034,20 +1065,17 @@ def fit_exponential_decay(
 def determine_optimal_threshold(
     distance_matrix: np.ndarray, linkage_matrix: np.ndarray
 ) -> float:
-    """
-    Determine optimal threshold from exponential decay inflection point.
+    """Automatically choose an nRMSD threshold from the decay of cluster counts.
 
-    Parameters:
-    -----------
-    distance_matrix : np.ndarray
-        Square distance matrix
-    linkage_matrix : np.ndarray
-        Linkage matrix from hierarchical clustering
+    The method computes cluster counts over all merge distances and uses the
+    fitted exponential decay to identify a suitable "knee" as optimal threshold.
+
+    Args:
+        distance_matrix (np.ndarray): Square nRMSD distance matrix (unused here).
+        linkage_matrix (np.ndarray): Hierarchical clustering linkage matrix.
 
     Returns:
-    --------
-    float
-        Optimal threshold value
+        float: Selected threshold value (or a fallback default).
     """
     # Extract merge distances from linkage matrix
     merge_distances = linkage_matrix[:, 2]
@@ -1083,20 +1111,14 @@ def determine_optimal_threshold(
 def find_cluster_medoids(
     clusters: List[List[int]], distance_matrix: np.ndarray
 ) -> List[int]:
-    """
-    Find the medoid (representative) for each cluster.
+    """Find medoid indices (best representatives) for each cluster.
 
-    Parameters:
-    -----------
-    clusters : List[List[int]]
-        List of clusters, where each cluster is a list of structure indices
-    distance_matrix : np.ndarray
-        Square distance matrix between all structures
+    Args:
+        clusters (List[List[int]]): Cluster membership as lists of indices.
+        distance_matrix (np.ndarray): Square nRMSD distance matrix.
 
     Returns:
-    --------
-    List[int]
-        List of medoid indices, one for each cluster
+        Index of the medoid structure for each cluster.
     """
     medoids = []
 
@@ -1125,7 +1147,7 @@ def find_cluster_medoids(
 
 
 def main():
-    """Main entry point for the distiller CLI tool."""
+    """Entry point for the distiller CLI: parse args, load structures and run clustering."""
     args = parse_arguments()
 
     # Combine file paths from CLI arguments and/or stdin

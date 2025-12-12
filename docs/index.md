@@ -1,17 +1,28 @@
-# Welcome to MkDocs
+# RNApolis
 
-For full documentation visit [mkdocs.org](https://www.mkdocs.org).
+**RNApolis** is a Python library providing tools, algorithms,  
+and command-line utilities for structural RNA bioinformatics.
 
-## Commands
+It includes:
 
-* `mkdocs new [dir-name]` - Create a new project.
-* `mkdocs serve` - Start the live-reloading docs server.
-* `mkdocs build` - Build the documentation site.
-* `mkdocs -h` - Print help message and exit.
+* parsing of PDB/mmCIF RNA structures  
+* secondary and tertiary interaction analysis  
+* 3D–2D mapping  
+* structure alignment utilities  
+* clash detection  
+* clustering of RNA structures  
+* multiple annotation adapters (FR3D, DSSR, RNAView, MC-Annotate, Barnaba…)
 
-## Project layout
+---
 
-    mkdocs.yml    # The configuration file.
-    docs/
-        index.md  # The documentation homepage.
-        ...       # Other markdown pages, images and other files.
+## About this documentation
+
+This site is generated using **MkDocs + Material theme + mkdocstrings**  
+and provides:
+
+* Python API reference  
+* CLI tool documentation  
+* developer-friendly source-linked function descriptions  
+
+---
+

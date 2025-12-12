@@ -105,6 +105,18 @@ AVERAGE_OXYGEN_PHOSPHORUS_DISTANCE_COVALENT = 1.6
 
 @dataclass(frozen=True, order=True)
 class Atom:
+    """Representation of a single atom with 3D coordinates.
+
+    Attributes:
+        entity_id: Optional entity identifier from mmCIF.
+        label: Label-style residue identifier (label_asym_id, label_seq_id, etc.).
+        auth: Author-style residue identifier (auth_asym_id, auth_seq_id, etc.).
+        model: Model number in the structure (for multi-model files).
+        name: Atom name (e.g. "C1'", "N1").
+        x, y, z: Cartesian coordinates in Ångströms.
+        occupancy: Optional occupancy value (None if not present).
+    """
+
     entity_id: Optional[str]
     label: Optional[ResidueLabel]
     auth: Optional[ResidueAuth]
@@ -117,12 +129,24 @@ class Atom:
 
     @cached_property
     def coordinates(self) -> numpy.typing.NDArray[numpy.floating]:
+        """Return atom coordinates as a NumPy vector [x, y, z]."""
         return numpy.array([self.x, self.y, self.z])
 
 
 @dataclass(frozen=True)
 @total_ordering
 class Residue3D(Residue):
+    """3D nucleotide residue with helper methods for geometry and classification.
+
+    This class extends the 2D Residue with:
+
+    - model id and one-letter code,
+    - full list of Atom objects,
+    - detection of glycosidic torsion (chi) and its class (syn/anti),
+    - classification as nucleotide based on phosphate/sugar/base features,
+    - utilities for getting base normals, connectivity, and representative atoms.
+    """
+
     model: int
     one_letter_name: str
     atoms: Tuple[Atom, ...]
@@ -144,6 +168,7 @@ class Residue3D(Residue):
     }
 
     def __lt__(self, other):
+        """Order residues by (model, chain, residue number, insertion code)."""
         return (self.model, self.chain, self.number, self.icode or " ") < (
             other.model,
             other.chain,
@@ -152,13 +177,22 @@ class Residue3D(Residue):
         )
 
     def __hash__(self):
+        """Hash residue by model and residue identifiers."""
         return hash((self.model, self.label, self.auth))
 
     def __repr__(self):
+        """Return a human-readable representation of the residue."""
         return f"{self.full_name}"
 
     @cached_property
     def chi(self) -> float:
+        """Return glycosidic torsion angle (in radians) for this residue.
+
+        For purines (A, G) the angle is defined as O4'-C1'-N9-C4.
+        For pyrimidines (C, U, T) as O4'-C1'-N1-C2.
+
+        If the required atoms are missing, returns NaN.
+        """
         if self.one_letter_name.upper() in ("A", "G"):
             return self.__chi_purine()
         elif self.one_letter_name.upper() in ("C", "U", "T"):
@@ -171,6 +205,7 @@ class Residue3D(Residue):
 
     @cached_property
     def chi_class(self) -> Optional[GlycosidicBond]:
+        """Classify the glycosidic bond as syn/anti (or None if undefined)."""
         if math.isnan(self.chi):
             return None
         # syn is between -30 and 120 degress
@@ -182,14 +217,35 @@ class Residue3D(Residue):
 
     @cached_property
     def outermost_atom(self) -> Atom:
+        """Return a representative 'outermost' atom of the base.
+
+        This is used e.g. for coarse-grained representations of nucleotides.
+        A series of fallbacks is used if the expected atom is missing.
+        """
         return next(filter(None, self.__outer_generator()))
 
     @cached_property
     def innermost_atom(self) -> Atom:
+        """Return a representative 'innermost' atom of the base.
+
+        Typically an atom close to the base center, used for tetrads and
+        other coarse-grained geometric descriptors.
+        """
         return next(filter(None, self.__inner_generator()))
 
     @cached_property
     def is_nucleotide(self) -> bool:
+        """Heuristically determine whether this residue behaves like a nucleotide.
+
+        The decision is based on:
+
+        - presence of phosphate atoms,
+        - presence of sugar atoms,
+        - match to expected nucleobase heavy atoms,
+        - connectivity scores between sugar and base/phosphate.
+
+        Returns True if the combined score exceeds 0.5.
+        """
         scores = {"phosphate": 0.0, "sugar": 0.0, "base": 0.0, "connections": 0.0}
         weights = {"phosphate": 0.25, "sugar": 0.25, "base": 0.25, "connections": 0.25}
 
@@ -246,6 +302,7 @@ class Residue3D(Residue):
 
     @cached_property
     def base_normal_vector(self) -> Optional[numpy.typing.NDArray[numpy.floating]]:
+        """Return a unit vector normal to the base plane, or None if undefined."""
         if self.one_letter_name in "AG":
             n9 = self.find_atom("N9")
             n7 = self.find_atom("N7")
@@ -267,6 +324,7 @@ class Residue3D(Residue):
 
     @cached_property
     def has_all_nucleobase_heavy_atoms(self) -> bool:
+        """Return True if all expected heavy base atoms for this nucleotide are present."""
         if self.one_letter_name in "ACGU":
             present_atom_names = set([atom.name for atom in self.atoms])
             expected_atom_names = Residue3D.nucleobase_heavy_atoms[self.one_letter_name]
@@ -274,12 +332,18 @@ class Residue3D(Residue):
         return False
 
     def find_atom(self, atom_name: str) -> Optional[Atom]:
+        """Find an atom with the given name in this residue, or return None."""
         for atom in self.atoms:
             if atom.name == atom_name:
                 return atom
         return None
 
     def is_connected(self, next_residue_candidate) -> bool:
+        """Check whether this residue is covalently connected to the next one.
+
+        The check is based on the O3'-P distance compared to a covalent
+        O–P reference distance.
+        """
         o3p = self.find_atom("O3'")
         p = next_residue_candidate.find_atom("P")
 
@@ -365,6 +429,8 @@ class Residue3D(Residue):
 
 @dataclass(frozen=True, order=True)
 class BasePair3D(BasePair):
+    """3D extension of BasePair with explicit 3D residue references and helpers."""
+
     nt1_3d: Residue3D
     nt2_3d: Residue3D
 
@@ -391,6 +457,7 @@ class BasePair3D(BasePair):
 
     @cached_property
     def reverse(self):
+        """Return the same base-pair with swapped nucleotides and reversed LW class."""
         return BasePair3D(
             self.nt2,
             self.nt1,
@@ -402,10 +469,12 @@ class BasePair3D(BasePair):
 
     @cached_property
     def score(self) -> int:
+        """Return an integer score describing LW geometry for ordering purposes."""
         return self.score_table.get(self.lw, 20)
 
     @cached_property
     def is_canonical(self) -> bool:
+        """Return True if the base pair is Watson–Crick or wobble-like."""
         if self.saenger is not None:
             return self.saenger.is_canonical
 
@@ -424,11 +493,14 @@ class BasePair3D(BasePair):
 
 @dataclass(frozen=True, order=True)
 class Stacking3D(Stacking):
+    """3D extension of Stacking with explicit 3D residues and reversible topology."""
+
     nt1_3d: Residue3D
     nt2_3d: Residue3D
 
     @cached_property
     def reverse(self):
+        """Return the same stacking interaction with swapped nucleotides."""
         if self.topology is None:
             return self
         return Stacking3D(
@@ -438,10 +510,19 @@ class Stacking3D(Stacking):
 
 @dataclass
 class Structure3D:
+    """Container for a 3D structure composed of Residue3D objects.
+
+    Attributes:
+        residues: List of Residue3D objects in the structure.
+        residue_map: Mapping from ResidueLabel/ResidueAuth to Residue3D, filled in
+            automatically in __post_init__.
+    """
+
     residues: List[Residue3D]
     residue_map: Dict[Union[ResidueLabel, ResidueAuth], Residue3D] = field(init=False)
 
     def __post_init__(self):
+        """Populate residue_map for fast residue lookup by label/auth identifiers."""
         self.residue_map = {}
         for residue in self.residues:
             if residue.label is not None:
@@ -452,6 +533,7 @@ class Structure3D:
     def find_residue(
         self, label: Optional[ResidueLabel], auth: Optional[ResidueAuth]
     ) -> Optional[Residue3D]:
+        """Find a residue by label or author-style identifier."""
         if label is not None and label in self.residue_map:
             return self.residue_map.get(label)
         if auth is not None and auth in self.residue_map:
@@ -505,6 +587,17 @@ class Structure3D:
 
 @dataclass
 class Mapping2D3D:
+    """Mapping between 2D base interactions and 3D structural data.
+
+    This class:
+
+    - connects 2D BasePair/Stacking objects with Residue3D instances,
+    - builds 3D-aware base-pair and stacking graphs,
+    - constructs a BpSeq representation consistent with the 3D structure,
+    - derives dot-bracket and extended dot-bracket notations per strand,
+    - and provides utilities for computing inter-stem parameters.
+    """
+
     structure3d: Structure3D
     base_pairs2d: List[BasePair]
     stackings2d: List[Stacking]
@@ -512,6 +605,7 @@ class Mapping2D3D:
 
     @cached_property
     def base_pairs(self) -> List[BasePair3D]:
+        """Return all 3D base pairs, including forward and reverse directions."""
         result = []
         used = set()
         for base_pair in self.base_pairs2d:
@@ -538,6 +632,7 @@ class Mapping2D3D:
     def base_pair_graph(
         self,
     ) -> Dict[Residue3D, Set[Residue3D]]:
+        """Return an undirected graph of base-pair neighbors between residues."""
         graph = defaultdict(set)
         for pair in self.base_pairs:
             graph[pair.nt1_3d].add(pair.nt2_3d)
@@ -546,6 +641,7 @@ class Mapping2D3D:
 
     @cached_property
     def base_pair_dict(self) -> Dict[Tuple[Residue3D, Residue3D], BasePair3D]:
+        """Return a lookup from (residue_i, residue_j) to the corresponding BasePair3D."""
         result = {}
         for base_pair in self.base_pairs:
             residue_i = base_pair.nt1_3d
@@ -556,6 +652,7 @@ class Mapping2D3D:
 
     @cached_property
     def stackings(self) -> List[Stacking3D]:
+        """Return all 3D stacking interactions, including reverse directions."""
         result = []
         used = set()
         for stacking in self.stackings2d:
@@ -573,6 +670,7 @@ class Mapping2D3D:
 
     @cached_property
     def stacking_graph(self) -> Dict[Residue3D, Set[Residue3D]]:
+        """Return an undirected graph of stacking neighbors between residues."""
         graph = defaultdict(set)
         for pair in self.stackings:
             graph[pair.nt1_3d].add(pair.nt2_3d)
@@ -581,6 +679,11 @@ class Mapping2D3D:
 
     @cached_property
     def strands_sequences(self) -> List[Tuple[str, str]]:
+        """Return sequences per chain as (chain_id, sequence) tuples.
+
+        If find_gaps=True, gaps between non-connected residues are
+        represented with '?' characters.
+        """
         nucleotides = list(filter(lambda r: r.is_nucleotide, self.structure3d.residues))
 
         if not nucleotides:
@@ -605,6 +708,7 @@ class Mapping2D3D:
 
     @cached_property
     def bpseq(self) -> BpSeq:
+        """Return the BpSeq representation derived from 3D base pairs."""
         return self._generated_bpseq_data[0]
 
     @cached_property
@@ -714,6 +818,14 @@ class Mapping2D3D:
 
     @cached_property
     def dot_bracket(self) -> str:
+        """Return dot-bracket notation per strand in a FASTA-like text block.
+
+        The output contains:
+
+        - a header line per strand (">strand_chain"),
+        - the nucleotide sequence,
+        - the corresponding dot-bracket line.
+        """
         dbns = self.__generate_dot_bracket_per_strand(self.bpseq.dot_bracket.structure)
         i = 0
         result = []
@@ -763,9 +875,7 @@ class Mapping2D3D:
             stem: The Stem object.
 
         Returns:
-            A list of numpy arrays, where each array is the centroid of a
-            base pair in the stem. Returns an empty list if no centroids
-            can be calculated.
+            A list of numpy arrays, where each array is the centroid of a base pair in the stem. Returns an empty list if no centroids can be calculated.
         """
         all_pair_centroids = []
         stem_len = stem.strand5p.last - stem.strand5p.first + 1
@@ -792,28 +902,34 @@ class Mapping2D3D:
     ) -> Optional[Dict[str, Union[str, float]]]:
         """
         Calculates geometric parameters between two stems based on closest endpoints
-        and the probability of the observed torsion angle based on an expected
-        A-RNA twist using a von Mises distribution.
+        and the probability of the observed torsion angle given the expected A-RNA
+        twist using a von Mises distribution.
 
         Args:
             stem1: The first Stem object.
             stem2: The second Stem object.
-            kappa: Concentration parameter for the von Mises distribution (default: 10.0).
+            kappa: Concentration parameter for the von Mises distribution
+                (default: 10.0).
 
         Returns:
-            A dictionary containing:
-            - 'type': The type of closest endpoint pair ('cs55', 'cs53', 'cs35', 'cs33').
-            - 'torsion_angle': The calculated torsion angle in degrees.
-            - 'min_endpoint_distance': The minimum distance between the endpoints.
-            - 'torsion_angle_pdf': The probability density function (PDF) value of the
-              torsion angle under the von Mises distribution.
-            - 'min_endpoint_distance_pdf': The probability density function (PDF) value
-              based on the minimum endpoint distance using a Lennard-Jones-like function.
-            - 'coaxial_probability': The normalized product of the torsion angle PDF and
-              distance PDF, indicating the likelihood of coaxial stacking (0-1).
-            Returns None if either stem has fewer than 2 base pairs or centroids
-            cannot be calculated.
+            dict | None:
+                A dictionary containing:
+
+                - **type** (str): the type of closest endpoint pair
+                (``'cs55'``, ``'cs53'``, ``'cs35'``, ``'cs33'``).
+                - **torsion_angle** (float): calculated torsion angle in degrees.
+                - **min_endpoint_distance** (float): minimum distance between endpoints.
+                - **torsion_angle_pdf** (float): PDF value for the torsion angle under
+                the von Mises distribution.
+                - **min_endpoint_distance_pdf** (float): PDF value based on the minimum
+                endpoint distance using a Lennard-Jones-like function.
+                - **coaxial_probability** (float): normalized product of torsion-angle
+                PDF and distance PDF (0–1), indicating coaxial-stacking likelihood.
+
+                Returns ``None`` if either stem has fewer than two base pairs or
+                centroids cannot be calculated.
         """
+
         stem1_centroids = self.get_stem_coordinates(stem1)
         stem2_centroids = self.get_stem_coordinates(stem2)
 
@@ -917,6 +1033,7 @@ class Mapping2D3D:
         }
 
     def __generate_dot_bracket_per_strand(self, dbn_structure: str) -> List[str]:
+        """Split a global dot-bracket string into a list of per-strand strings."""
         dbn = dbn_structure
         i = 0
         result = []
@@ -928,6 +1045,7 @@ class Mapping2D3D:
 
     @cached_property
     def all_dot_brackets(self) -> List[str]:
+        """Return all compatible dot-bracket assignments, per strand, as text blocks."""
         dot_brackets = []
 
         for dot_bracket in self.bpseq.all_dot_brackets:
@@ -947,6 +1065,11 @@ class Mapping2D3D:
 
     @cached_property
     def extended_dot_bracket(self) -> str:
+        """Return an extended dot-bracket representation with LW layers per strand.
+
+        For each strand, lines are added for every Leontis–Westhof class, showing
+        how that particular pattern of base pairs maps onto the sequence.
+        """
         result = [
             [f"    >strand_{chain}", f"seq {sequence}"]
             for chain, sequence in self.strands_sequences

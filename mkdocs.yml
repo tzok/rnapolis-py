@@ -2,6 +2,11 @@ site_name: rnapolis-py documentation
 
 theme:
   name: material
+  features:
+    - navigation.expand
+    - navigation.indexes
+    - content.code.annotate
+    - content.code.copy
 
 plugins:
   - search
@@ -14,4 +19,16 @@ nav:
       - Annotator: api/annotator.md
       - Adapter: api/adapter.md
       - Aligner: api/aligner.md
+      - Clashfinder: api/clashfinder.md
+      - Common: api/common.md
+      - Distiller: api/distiller.md
+      - Metareader: api/metareader.md
+      - Molecule Filter: api/molecule_filter.md
+      - Motif Extractor: api/motif_extractor.md
+      - Parser: api/parser.md
+      - Parser v2: api/parser_v2.md
+      - Rfam Folder: api/rfam_folder.md
+      - Splitter: api/splitter.md
+      - Tertiary: api/tertiary.md
+      - Tertiary v2: api/tertiary_v2.md
 

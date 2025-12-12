@@ -12,9 +12,20 @@ from rnapolis.parser_v2 import (
     write_pdb,
 )
 
-
 def main():
-    """Main function to run the splitter tool."""
+    """Command-line entry point for the multi-model splitter.
+
+    The script:
+
+    - loads a PDB or mmCIF file,
+    - determines whether the file contains multiple 3D models,
+    - groups atom records by model number,
+    - optionally converts each model to PDB-compatible format,
+    - writes every model to a separate file in the output directory.
+
+    This tool is useful for processing NMR ensembles or any structure
+    that contains multiple frames in a single file.
+    """
     parser = argparse.ArgumentParser(
         description="Split a multi-model PDB or mmCIF file into separate files per model."
     )
@@ -118,8 +129,6 @@ def main():
                 f"Error writing file {output_path} for model {model_num}: {e}",
                 file=sys.stderr,
             )
-            # Optionally continue to next model or exit
-            # sys.exit(1)
 
     print("Splitting complete.")
 

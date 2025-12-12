@@ -15,6 +15,20 @@ logger = logging.getLogger(__name__)
 def read_3d_structure(
     cif_or_pdb: IO[str], model: Optional[int] = None, nucleic_acid_only: bool = False
 ) -> Structure3D:
+    """Read a PDB or mmCIF structure into a Structure3D object.
+
+    The function auto-detects whether the input is mmCIF or PDB, parses atoms,
+    groups them into residues and optionally filters to nucleic-acid residues only.
+
+    Args:
+        cif_or_pdb (IO[str]): Open file-like object with PDB or mmCIF content.
+        model (Optional[int]): Model number to extract (1-based). If None, the
+            first model encountered is used.
+        nucleic_acid_only (bool): If True, keep only nucleic-acid residues.
+
+    Returns:
+        Structure3D: Parsed 3D structure.
+    """
     atoms, modified, sequence_by_entity, is_nucleic_acid_by_entity = (
         parse_cif(cif_or_pdb) if is_cif(cif_or_pdb) else parse_pdb(cif_or_pdb)
     )
@@ -40,6 +54,16 @@ def read_3d_structure(
 
 
 def is_cif(cif_or_pdb: IO[str]) -> bool:
+    """Heuristically check if a file-like object contains mmCIF data.
+
+    The function rewinds the stream and looks for ``_atom_site`` records.
+
+    Args:
+        cif_or_pdb (IO[str]): Open file-like object with structural data.
+
+    Returns:
+        bool: True if the content looks like mmCIF, False if it is assumed to be PDB.
+    """
     cif_or_pdb.seek(0)
     for line in cif_or_pdb.readlines():
         if line.startswith("_atom_site"):
@@ -55,6 +79,23 @@ def parse_cif(
     Dict[str, str],
     Dict[str, bool],
 ]:
+    """Parse a mmCIF file into atoms and entity-level metadata.
+
+    Args:
+        cif (IO[str]): Open file-like object with mmCIF content.
+
+    Returns:
+        tuple:
+            A tuple containing:
+
+            - **List[Atom]**: list of Atom objects.
+            - **Dict[Union[ResidueLabel, ResidueAuth], str]**:
+              mapping of modified residues to their parent (standard) names.
+            - **Dict[str, str]**:
+              mapping from entity ID to one-letter sequence (if present).
+            - **Dict[str, bool]**:
+              mapping from entity ID to nucleic-acid flag.
+    """
     cif.seek(0)
 
     io_adapter = IoAdapterPy()
@@ -263,6 +304,23 @@ def parse_pdb(
     Dict[str, str],
     Dict[str, bool],
 ]:
+    """Parse a PDB file into atoms and modification information.
+
+    Args:
+        pdb (IO[str]): Open file-like object with PDB content.
+
+    Returns:
+        tuple:
+            A tuple containing:
+
+            - **List[Atom]**: list of Atom objects.
+            - **Dict[Union[ResidueLabel, ResidueAuth], str]**:
+              mapping of modified residues to standard residue names.
+            - **Dict[str, str]**:
+              empty sequence-by-entity dictionary.
+            - **Dict[str, bool]**:
+              empty is-nucleic-acid-by-entity dictionary.
+    """
     pdb.seek(0)
     atoms_to_process: List[Atom] = []
     modified: Dict[Union[ResidueLabel, ResidueAuth], str] = {}
@@ -310,6 +368,24 @@ def group_atoms(
     is_nucleic_acid_by_entity: Dict[str, bool],
     nucleic_acid_only: bool,
 ) -> Structure3D:
+    """Group atoms into residues and build a Structure3D.
+
+    This function merges atoms with the same residue identifiers, infers
+    one-letter residue codes (using entity sequences and heuristics for
+    nucleotides) and optionally filters to nucleic-acid residues only.
+
+    Args:
+        atoms (List[Atom]): Atoms to group.
+        modified (Dict[Union[ResidueLabel, ResidueAuth], str]): Mapping for
+            modified residues to their standard names.
+        sequence_by_entity (Dict[str, str]): Mapping from entity ID to sequence.
+        is_nucleic_acid_by_entity (Dict[str, bool]): Mapping from entity ID to
+            nucleic-acid flag.
+        nucleic_acid_only (bool): If True, keep only nucleic-acid residues.
+
+    Returns:
+        Structure3D: Assembled structure.
+    """
     if not atoms:
         return Structure3D([])
 
@@ -373,6 +449,17 @@ def get_residue_name(
     label: Optional[ResidueLabel],
     modified: Dict[Union[ResidueAuth, ResidueLabel], str],
 ) -> str:
+    """Resolve residue name based on modification annotations and auth/label data.
+
+    Args:
+        auth (Optional[ResidueAuth]): Author-style residue identifier.
+        label (Optional[ResidueLabel]): Label-style residue identifier.
+        modified (Dict[Union[ResidueAuth, ResidueLabel], str]): Mapping of
+            modified residues to standard names.
+
+    Returns:
+        str: Residue name (possibly standardised) or a generic placeholder.
+    """
     if auth is not None and auth in modified:
         name = modified[auth].lower()
     elif label is not None and label in modified:
@@ -393,6 +480,20 @@ def get_one_letter_name(
     sequence_by_entity: Dict[str, str],
     name: str,
 ) -> str:
+    """Infer a one-letter residue code from entity sequence and residue name.
+
+    The function first tries to read from the entity-level sequence, then falls
+    back to simple heuristics based on residue name (RNA, DNA, last letter).
+
+    Args:
+        entity_id (Optional[str]): Entity ID for this residue.
+        label (Optional[ResidueLabel]): Label-style residue identifier.
+        sequence_by_entity (Dict[str, str]): Mapping from entity ID to sequence.
+        name (str): Residue name candidate.
+
+    Returns:
+        str: One-letter residue code or a generic placeholder.
+    """
     # try getting the value from _entity_poly first
     if entity_id is not None and label is not None and entity_id in sequence_by_entity:
         return sequence_by_entity[entity_id][label.number - 1]
@@ -410,6 +511,17 @@ def get_one_letter_name(
 
 
 def detect_one_letter_name(atoms: List[Atom]) -> str:
+    """Guess a nucleotide one-letter code based on expected base atoms.
+
+    A simple scoring scheme compares the observed atom names with expected
+    base-atom sets in ``BASE_ATOMS`` for A, C, G, U, T.
+
+    Args:
+        atoms (List[Atom]): Atoms belonging to a single residue.
+
+    Returns:
+        str: Best-scoring nucleotide (A/C/G/U/T) or '?' if no match is found.
+    """
     atom_names_present = {atom.name for atom in atoms}
     score = {}
     for candidate in "ACGUT":
@@ -425,6 +537,14 @@ def detect_one_letter_name(atoms: List[Atom]) -> str:
 
 
 def try_parse_int(s: str) -> Optional[int]:
+    """Try to convert a string to int, returning None on failure.
+
+    Args:
+        s (str): String to parse.
+
+    Returns:
+        Parsed integer, or None if conversion fails.
+    """
     try:
         return int(s)
     except ValueError:
@@ -432,6 +552,19 @@ def try_parse_int(s: str) -> Optional[int]:
 
 
 def filter_clashing_atoms(atoms: List[Atom], clash_distance: float = 0.5) -> List[Atom]:
+    """Remove duplicate and clashing atoms, keeping the higher-occupancy ones.
+
+    The function first deduplicates atoms by (label, auth, atom name) using
+    occupancy, and then uses a KDTree to detect close contacts below the given
+    distance and resolves them according to occupancy.
+
+    Args:
+        atoms (List[Atom]): Input list of atoms.
+        clash_distance (float): Distance threshold (in Å) for detecting clashes.
+
+    Returns:
+        Filtered list of atoms.
+    """
     # First, remove duplicate atoms
     unique_atoms = {}
 
