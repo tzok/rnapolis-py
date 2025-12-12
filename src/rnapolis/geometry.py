@@ -1,9 +1,9 @@
 import configparser
 import importlib.resources
 import numpy as np
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, NamedTuple, Optional, Tuple, Union
 
-from collections import Counter, namedtuple
+from collections import Counter
 
 from rnapolis.tertiary_v2 import Atom, Residue
 
@@ -32,11 +32,15 @@ PHOSPHATE_ACCEPTORS = ["OP1", "OP2", "O3'", "O5'"]
 
 SUGAR_ACCEPTORS = ["O2'", "O4'"]
 
+
 # antecedent: The reference atom (defines the angle).
 # donor: The interacting Donor atom.
-AtomPair = namedtuple("AtomPair", ["antecedent", "donor"])
+class AtomPair(NamedTuple):
+    antecedent: str
+    donor: str
 
-DONORS = {
+
+DONORS: Dict[str, List[AtomPair]] = {
     "A": [
         AtomPair("C6", "N6"),  # Exocyclic
         AtomPair("N1", "C2"),  # Weak C-H
@@ -146,11 +150,11 @@ def is_c1p_c1p_distance_valid(
     section = config["general"]
 
     # Helper to safely get float from config
-    def get_float(key):
-        return section.getfloat(key)
+    def get_float(key: str, fallback: float) -> float:
+        return section.getfloat(key, fallback=fallback)
 
-    min_dist = get_float("c1p_c1p_distance_min")
-    max_dist = get_float("c1p_c1p_distance_max")
+    min_dist = get_float("c1p_c1p_distance_min", 8.0)
+    max_dist = get_float("c1p_c1p_distance_max", 15.0)
 
     return min_dist <= distance <= max_dist
 
@@ -168,7 +172,7 @@ def _get_base_atoms_coords(residue: Residue) -> Optional[np.ndarray]:
 
     target_atoms = PURINE_CORE_ATOMS if is_purine else PYRIMIDINE_CORE_ATOMS
 
-    coords_list = []
+    coords_list: List[np.ndarray] = []
     for atom_name in target_atoms:
         atom = residue.find_atom(atom_name)
         if atom is not None:
@@ -188,7 +192,7 @@ def _calculate_mean_plane(coords: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         Tuple[np.ndarray, np.ndarray]: (Centroid, Normal Vector)
     """
     # 1. Calculate Centroid
-    centroid = np.mean(coords, axis=0)
+    centroid: np.ndarray = np.mean(coords, axis=0)
 
     # 2. Center coordinates
     centered_coords = coords - centroid
@@ -315,7 +319,7 @@ def _calculate_lateral_displacement(
 
     # 3. Lateral displacement is the magnitude of the horizontal vector
     displacement = np.linalg.norm(horizontal_vector)
-    return displacement
+    return float(displacement)
 
 
 def _calculate_overlap_area(
@@ -465,38 +469,48 @@ def is_stacking_valid(
     section = config["stacking"]
 
     # Helper to safely get float from config
-    def get_float(key):
-        return section.getfloat(key)
+    def get_float(key: str, fallback: float) -> float:
+        return section.getfloat(key, fallback=fallback)
 
     # Check inter_planar_distance
     dist = stacking_params["inter_planar_distance"]
+    assert isinstance(dist, float)
     if not (
-        get_float("inter_planar_distance_min")
+        get_float("inter_planar_distance_min", 3.0)
         <= dist
-        <= get_float("inter_planar_distance_max")
+        <= get_float("inter_planar_distance_max", 4.5)
     ):
         return False
 
     # Check dihedral_angle
     angle = stacking_params["dihedral_angle"]
+    assert isinstance(angle, float)
     if not (
-        get_float("dihedral_angle_min") <= angle <= get_float("dihedral_angle_max")
+        get_float("dihedral_angle_min", 0.0)
+        <= angle
+        <= get_float("dihedral_angle_max", 30.0)
     ):
         return False
 
     # Check lateral_displacement
     disp = stacking_params["lateral_displacement"]
+    assert isinstance(disp, float)
     if not (
-        get_float("lateral_displacement_min")
+        get_float("lateral_displacement_min", 0.0)
         <= disp
-        <= get_float("lateral_displacement_max")
+        <= get_float("lateral_displacement_max", 3.0)
     ):
         return False
 
     # Check overlap_area
     area = stacking_params["overlap_area"]
+    assert isinstance(area, float)
     if area > 0.0:  # Only validate if calculation succeeded
-        if not (get_float("overlap_area_min") <= area <= get_float("overlap_area_max")):
+        if not (
+            get_float("overlap_area_min", 5.0)
+            <= area
+            <= get_float("overlap_area_max", 100.0)
+        ):
             return False
 
     return True
@@ -504,7 +518,7 @@ def is_stacking_valid(
 
 # Helper function to find all potential donor triplets (antecedent, donor)
 def _get_potential_donors(residue: Residue) -> List[Tuple[Atom, Atom]]:
-    potential_donors = []
+    potential_donors: List[Tuple[Atom, Atom]] = []
     res_name = residue.one_letter_name.upper()
 
     # Check base donors
@@ -512,7 +526,7 @@ def _get_potential_donors(residue: Residue) -> List[Tuple[Atom, Atom]]:
         for pair in DONORS[res_name]:
             antecedent = residue.find_atom(pair.antecedent)
             donor = residue.find_atom(pair.donor)
-            if antecedent and donor:
+            if antecedent is not None and donor is not None:
                 potential_donors.append((antecedent, donor))
 
     return potential_donors
@@ -520,26 +534,26 @@ def _get_potential_donors(residue: Residue) -> List[Tuple[Atom, Atom]]:
 
 # Helper function to find all potential acceptor atoms
 def _get_potential_acceptors(residue: Residue) -> List[Atom]:
-    potential_acceptors = []
+    potential_acceptors: List[Atom] = []
     res_name = residue.one_letter_name.upper()
 
     # Check base acceptors
     if res_name in BASE_ACCEPTORS:
         for name in BASE_ACCEPTORS[res_name]:
             atom = residue.find_atom(name)
-            if atom:
+            if atom is not None:
                 potential_acceptors.append(atom)
 
     # Check phosphate acceptors (P, OP1, OP2)
     for name in PHOSPHATE_ACCEPTORS:
         atom = residue.find_atom(name)
-        if atom:
+        if atom is not None:
             potential_acceptors.append(atom)
 
     # Check sugar acceptors (O2', O4')
     for name in SUGAR_ACCEPTORS:
         atom = residue.find_atom(name)
-        if atom:
+        if atom is not None:
             # Avoid double counting O2' if it was already added as a base acceptor
             if atom not in potential_acceptors:
                 potential_acceptors.append(atom)
@@ -567,7 +581,7 @@ def find_hbond_pairs(res1: Residue, res2: Residue) -> List[Tuple[Atom, Atom, Ato
     List[Tuple[Atom, Atom, Atom]]
         A list of potential hydrogen bond triplets: (antecedent, donor, acceptor).
     """
-    hbond_pairs = []
+    hbond_pairs: List[Tuple[Atom, Atom, Atom]] = []
 
     # --- Search Direction 1: res1 (Donor) -> res2 (Acceptor) ---
     donors1 = _get_potential_donors(res1)
@@ -658,24 +672,26 @@ def is_hbond_valid(
     section = config["hbonds"]
 
     # Helper to safely get float from config
-    def get_float(key):
-        return section.getfloat(key)
+    def get_float(key: str, fallback: float) -> float:
+        return section.getfloat(key, fallback=fallback)
 
     # Check donor_acceptor_distance
     dist = hbond_params["donor_acceptor_distance"]
+    assert isinstance(dist, float)
     if not (
-        get_float("donor_acceptor_distance_min")
+        get_float("donor_acceptor_distance_min", 2.5)
         <= dist
-        <= get_float("donor_acceptor_distance_max")
+        <= get_float("donor_acceptor_distance_max", 3.5)
     ):
         return False
 
     # Check antecedent_donor_acceptor_angle
     angle = hbond_params["antecedent_donor_acceptor_angle"]
+    assert isinstance(angle, float)
     if not (
-        get_float("antecedent_donor_acceptor_angle_min")
+        get_float("antecedent_donor_acceptor_angle_min", 100.0)
         <= angle
-        <= get_float("antecedent_donor_acceptor_angle_max")
+        <= get_float("antecedent_donor_acceptor_angle_max", 180.0)
     ):
         return False
 
@@ -690,7 +706,7 @@ def _get_edges_for_atom(residue: Residue, atom_name: str) -> List[str]:
     if res_name not in BASE_EDGES:
         return []
 
-    edges = []
+    edges: List[str] = []
     for edge, atoms in BASE_EDGES[res_name].items():
         if atom_name in atoms:
             edges.append(edge)
@@ -699,7 +715,7 @@ def _get_edges_for_atom(residue: Residue, atom_name: str) -> List[str]:
 
 def get_hbond_edge_counts(
     res1: Residue, res2: Residue, config: configparser.ConfigParser
-) -> Dict[Residue, Counter]:
+) -> Dict[Residue, Counter[str]]:
     """
     Finds valid hydrogen bonds between two residues and returns a dictionary
     containing the counts of involved base edges for each residue.
@@ -719,14 +735,14 @@ def get_hbond_edge_counts(
         A dictionary mapping each residue to a Counter of involved base edges.
     """
     all_pairs = find_hbond_pairs(res1, res2)
-    valid_hbonds = []
+    valid_hbonds: List[Tuple[Atom, Atom, Atom]] = []
 
     for antecedent, donor, acceptor in all_pairs:
         hbond_params = get_hbond_parameters(antecedent, donor, acceptor)
         if is_hbond_valid(hbond_params, config):
             valid_hbonds.append((antecedent, donor, acceptor))
 
-    edge_counts = {res1: Counter(), res2: Counter()}
+    edge_counts: Dict[Residue, Counter[str]] = {res1: Counter(), res2: Counter()}
 
     for antecedent, donor, acceptor in valid_hbonds:
         # Determine which residue is the donor and which is the acceptor
@@ -870,22 +886,26 @@ def is_basepair_valid(
     section = config["basepair"]
 
     # Helper to safely get float from config
-    def get_float(key):
-        return section.getfloat(key)
+    def get_float(key: str, fallback: float) -> float:
+        return section.getfloat(key, fallback=fallback)
 
     # Check inter_base_angle
     angle = inter_base_params["inter_base_angle"]
+    assert isinstance(angle, float)
     if not (
-        get_float("inter_base_angle_min") <= angle <= get_float("inter_base_angle_max")
+        get_float("inter_base_angle_min", 0.0)
+        <= angle
+        <= get_float("inter_base_angle_max", 30.0)
     ):
         return False
 
     # Check planar_displacement
     disp = inter_base_params["planar_displacement"]
+    assert isinstance(disp, float)
     if not (
-        get_float("planar_displacement_min")
+        get_float("planar_displacement_min", 0.0)
         <= disp
-        <= get_float("planar_displacement_max")
+        <= get_float("planar_displacement_max", 3.0)
     ):
         return False
 
@@ -904,17 +924,18 @@ def is_cis(
     section = config["basepair"]
 
     # Helper to safely get float from config
-    def get_float(key):
-        return section.getfloat(key)
+    def get_float(key: str, fallback: float) -> float:
+        return section.getfloat(key, fallback=fallback)
 
     # Check torsion_angle_C1N_NC1
     torsion = inter_base_params["torsion_angle_C1N_NC1"]
+    assert isinstance(torsion, float)
 
     # Note: Torsion angle is in degrees, config values should be in degrees too.
     if not (
-        get_float("torsion_angle_cis_min")
+        get_float("torsion_angle_cis_min", -30.0)
         <= torsion
-        <= get_float("torsion_angle_cis_max")
+        <= get_float("torsion_angle_cis_max", 30.0)
     ):
         return False
 
