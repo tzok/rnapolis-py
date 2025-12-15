@@ -56,7 +56,7 @@ def _parse_residues(row: pd.Series):
         chain = row[f"chain{i}"]
         number = int(row[f"nr{i}"])
         res_name = row[f"res{i}"]
-        i_code = row.get(f"ins{i}").strip() or None
+        i_code = row.get(f"ins{i}", "").strip() or None
         res.append(ResidueAuth(chain, number, i_code, res_name))
 
     return Residue(None, res[0]), Residue(None, res[1])
