@@ -1,6 +1,5 @@
 import logging
-import os
-from typing import List, Dict
+from typing import List
 from enum import Enum
 import pandas as pd
 
@@ -13,25 +12,28 @@ from rnapolis.common import (
 )
 from rnapolis.tertiary import Structure3D
 
+
 class InteractionType(Enum):
     BASE_PAIR = "base-pair"
     OTHER = "other"
 
 
-def _has_alt_or_symmetry(row):
+def _has_alt_or_symmetry(row: pd.Series) -> bool:
     """Return True if any of the alternative location or symmetry fields are non-empty."""
     fields = ["alt1", "symmetry_operation1", "alt2", "symmetry_operation2"]
-    return any(str(row.get(field, "")).strip() not in ("", "None", "nan") for field in fields)
+    return any(
+        str(row.get(field, "")).strip() not in ("", "None", "nan") for field in fields
+    )
 
 
-def _classify_interaction(row):
+def _classify_interaction(row: pd.Series):
     """
     Classifies interaction based on DNATCO metrics.
 
     Returns:
         base-pair, LeontisWesthof
     """
-    family = row.get("family", '')
+    family = row.get("family", "")
     try:
         # Convert to the format expected by LeontisWesthof
         edge_type = family[0].lower()  # c or t
@@ -40,21 +42,21 @@ def _classify_interaction(row):
 
         lw_format = f"{edge_type}{edge1}{edge2}"
         return InteractionType.BASE_PAIR, LeontisWesthof[lw_format]
-    except:
+    except KeyError:
         logging.warning(f"DNATCO unknown interaction from family: {family}")
     return InteractionType.OTHER, None
 
 
-def _parse_residues(row):
+def _parse_residues(row: pd.Series):
     """
     Parse DNATCO row into 2 Residue objects.
     """
-    res = []
-    for i in range(1,3):
+    res: List[ResidueAuth] = []
+    for i in range(1, 3):
         chain = row[f"chain{i}"]
         number = int(row[f"nr{i}"])
         res_name = row[f"res{i}"]
-        i_code = row.get(f"ins{i}") or None
+        i_code = row.get(f"ins{i}").strip() or None
         res.append(ResidueAuth(chain, number, i_code, res_name))
 
     return Residue(None, res[0]), Residue(None, res[1])
@@ -78,21 +80,25 @@ def parse_dnatco_output(
     # Process each input file
     for file_path in file_paths:
         logging.info(f"Processing DNATCO file: {file_path}")
-        df = pd.read_csv(file_path)
+        df = pd.read_csv(file_path)  # pyright: ignore[reportUnknownMemberType]
         for index, row in df.iterrows():
+            assert isinstance(index, int)
             line_number = index + 2
             if _has_alt_or_symmetry(row):
-                logging.warning(f"Non-empty alt or symmetry_operation in {file_path} line: {line_number}")
+                logging.warning(
+                    f"Non-empty alt or symmetry_operation in {file_path} line: {line_number}"
+                )
                 continue
 
             r1, r2 = _parse_residues(row)
             interaction_type, interaction_subtype = _classify_interaction(row)
             if interaction_type == InteractionType.OTHER:
                 continue
+            assert interaction_subtype is not None
             interaction = BasePair(r1, r2, interaction_subtype, None)
             bp_interactions.append(interaction)
 
-    return BaseInteractions.from_structure3d(
+    return BaseInteractions.from_structure3d(  # pyright: ignore[reportUnknownMemberType]
         structure3d,
         bp_interactions,
         [],
@@ -100,10 +106,3 @@ def parse_dnatco_output(
         [],
         [],
     )
-
-
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
-    test_dir = "/mnt/c/Users/janba/Desktop/RS_35/"
-    files = [test_dir + file for file in os.listdir(test_dir)]
-    parse_dnatco_output(files, None)
