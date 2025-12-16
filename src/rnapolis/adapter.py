@@ -12,6 +12,7 @@ from rnapolis.adapters.fr3d import parse_fr3d_output
 from rnapolis.adapters.maxit import parse_maxit_output
 from rnapolis.adapters.mc_annotate import parse_mcannotate_output
 from rnapolis.adapters.rnaview import parse_rnaview_output
+from rnapolis.adapters.dnatco import parse_dnatco_output
 from rnapolis.annotator import (
     add_common_output_arguments,
     handle_output_arguments,
@@ -33,6 +34,7 @@ class ExternalTool(Enum):
     MAXIT = "maxit"
     BARNABA = "barnaba"
     MCANNOTATE = "mc-annotate"
+    DNATCO = "dnatco"
 
 
 logging.basicConfig(level=os.getenv("LOGLEVEL", "INFO").upper())
@@ -78,6 +80,13 @@ def auto_detect_tool(external_files: List[str]) -> ExternalTool:
         if basename.endswith(".json"):
             return ExternalTool.DSSR
 
+        # Check header of .csv file for DNATCO
+        if basename.endswith(".csv"):
+            with open(file_path, "r") as f:
+                line = f.readline().strip()
+                if line == "pdbid,model,family,class,chain1,nr1,res1,alt1,ins1,symmetry_operation1,chain2,nr2,res2,alt2,ins2,symmetry_operation2,confit,rmsd,curated_file,knn_metric,coplanarity_angle,coplanarity_shift1,coplanarity_shift2,coplanarity_edge_angle1,coplanarity_edge_angle2,C1_C1_yaw1,C1_C1_pitch1,C1_C1_roll1,C1_C1_yaw2,C1_C1_pitch2,C1_C1_roll2,hb_0_length,hb_0_donor_angle,hb_0_acceptor_angle,hb_0_OOPA1,hb_0_OOPA2,hb_1_length,hb_1_donor_angle,hb_1_acceptor_angle,hb_1_OOPA1,hb_1_OOPA2,hb_2_length,hb_2_donor_angle,hb_2_acceptor_angle,hb_2_OOPA1,hb_2_OOPA2,hb_3_length,hb_3_donor_angle,hb_3_acceptor_angle,hb_3_OOPA1,hb_3_OOPA2":
+                    return ExternalTool.DNATCO
+
     # Default to MAXIT if no patterns match
     return ExternalTool.MAXIT
 
@@ -110,6 +119,8 @@ def parse_external_output(
         return parse_barnaba_output(file_paths, structure3d)
     elif tool == ExternalTool.MCANNOTATE:
         return parse_mcannotate_output(file_paths, structure3d)
+    elif tool == ExternalTool.DNATCO:
+        return parse_dnatco_output(file_paths, structure3d)
     else:
         raise ValueError(f"Unsupported external tool: {tool}")
 
