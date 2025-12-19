@@ -860,7 +860,7 @@ def handle_output_arguments(
         print(structure2d.dot_bracket)
 
     if args.dot:
-        print(BpSeq.from_string(structure2d.bpseq).graphviz)
+        print(structure2d.bpseq.graphviz)
 
     if args.pml:
         pml_script = generate_pymol_script(mapping, structure2d.stems)

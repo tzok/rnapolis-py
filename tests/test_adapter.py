@@ -1,3 +1,5 @@
+import csv
+
 from pathlib import Path
 
 from rnapolis.adapter import ExternalTool, process_external_tool_output
@@ -16,7 +18,7 @@ def test_adapter_fr3d():
     structure3d = read_3d_structure(file, None)
 
     # Process external tool output
-    structure2d, mapping = process_external_tool_output(
+    _, mapping = process_external_tool_output(
         structure3d,
         [str(fr3d_path)],
         ExternalTool.FR3D,
@@ -46,7 +48,7 @@ def test_adapter_bpnet():
     structure3d = read_3d_structure(file, None)
 
     # Process external tool output
-    structure2d, mapping = process_external_tool_output(
+    _, mapping = process_external_tool_output(
         structure3d,
         [str(bpnet_path)],
         ExternalTool.BPNET,
@@ -76,7 +78,7 @@ def test_adapter_rnaview():
     structure3d = read_3d_structure(file, None)
 
     # Process external tool output
-    structure2d, mapping = process_external_tool_output(
+    _, mapping = process_external_tool_output(
         structure3d,
         [str(rnaview_path)],
         ExternalTool.RNAVIEW,
@@ -106,7 +108,7 @@ def test_adapter_maxit():
     structure3d = read_3d_structure(file, None)
 
     # Process external tool output
-    structure2d, mapping = process_external_tool_output(
+    _, mapping = process_external_tool_output(
         structure3d,
         [str(maxit_path)],
         ExternalTool.MAXIT,
@@ -136,7 +138,7 @@ def test_adapter_dssr():
     structure3d = read_3d_structure(file, None)
 
     # Process external tool output
-    structure2d, mapping = process_external_tool_output(
+    _, mapping = process_external_tool_output(
         structure3d,
         [str(dssr_path)],
         ExternalTool.DSSR,
@@ -158,11 +160,6 @@ UCCCCAUGCGAGAGUAGGCC
 def test_adapter_auto_detection():
     """Test that auto-detection works correctly for different file types."""
     test_dir = Path(__file__).parent
-    cif_path = test_dir / "1A4D_1_A-B.cif"
-
-    # Read 3D structure once
-    file = handle_input_file(str(cif_path))
-    structure3d = read_3d_structure(file, None)
 
     # Test auto-detection for each tool
     test_cases = [
@@ -171,6 +168,7 @@ def test_adapter_auto_detection():
         (test_dir / "1A4D_1_A-B-input.cif.out", ExternalTool.RNAVIEW),
         (test_dir / "1A4D_1_A-B-output.cif", ExternalTool.MAXIT),
         (test_dir / "1A4D_1_A-B-dssr.json", ExternalTool.DSSR),
+        (test_dir / "dnatco/1ehz/1ehz.csv", ExternalTool.DNATCO),
     ]
 
     from rnapolis.adapter import auto_detect_tool
@@ -203,3 +201,44 @@ def test_adapter_empty_files_maxit():
     # Should still produce some output (even if empty interactions)
     assert mapping.dot_bracket is not None
     assert structure2d is not None
+
+
+def test_adapter_dnatco():
+    """Test adapter with DNATCO output for 1EHZ structure."""
+    test_dir = Path(__file__).parent
+    cif_path = test_dir / "dnatco/1ehz/1ehz.cif"
+    dnatco_path = test_dir / "dnatco/1ehz/1ehz.csv"
+
+    # Read 3D structure
+    file = handle_input_file(str(cif_path))
+    structure3d = read_3d_structure(file, None)
+
+    # Process external tool output
+    _, mapping = process_external_tool_output(
+        structure3d,
+        [str(dnatco_path)],
+        ExternalTool.DNATCO,
+        str(cif_path),
+        find_gaps=False,
+    )
+
+    # Check the dot-bracket output
+    expected_dot_bracket = """>strand_A
+GCGGAUUUAGCUCAGUUGGGAGAGCGCCAGACUGAAGAUCUGGAGGUCCUGUGUUCGAUCCACAGAAUUCGCACCA
+(((((((...(((.....[..)))..(((...........)))......((((..]....)))).)))))))...."""
+
+    assert mapping.dot_bracket == expected_dot_bracket
+
+    with open(dnatco_path) as csvfile:
+        reader = csv.DictReader(csvfile)
+        i = 0
+        while True:
+            try:
+                next(reader)
+                i += 1
+            except StopIteration:
+                break
+
+    # Check that the number of base pairs matches
+    assert len(mapping.base_pairs2d) == i
+    assert len(mapping.base_pairs) == i * 2

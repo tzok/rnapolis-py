@@ -1,2 +1,0 @@
-# Include the entire adapters subpackage (including non-.py assets) in sdists
-graft src/rnapolis/adapters

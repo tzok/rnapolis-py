@@ -4,6 +4,7 @@
 RNApolis.egg-info
 __pycache__
 dist
+build
 
 # Devenv
 .devenv*
@@ -14,3 +15,6 @@ devenv.local.nix
 
 # pre-commit
 .pre-commit-config.yaml
+
+.idea
+src/dnatco_process_all.sh
