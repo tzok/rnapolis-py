@@ -42,7 +42,7 @@ class AtomType(Enum):
             return PHOSPHORUS_RADIUS
         raise RuntimeError(f"Unknown atom type: {self}")
 
-    def matches(self, atom: Atom):
+    def matches(self, atom: Atom) -> bool:
         """
         Check whether a given atom belongs to this atom type.
 
@@ -50,7 +50,8 @@ class AtomType(Enum):
             atom: Atom to test.
 
         Returns:
-            True if the atom name starts with this atom type symbol.
+            ``True`` if the atom name starts with this atom type symbol,
+            ``False`` otherwise.
         """
         return atom.name.strip().startswith(self.value)
 
@@ -63,7 +64,7 @@ def find_clashes(
     nucleic_acid_only: bool,
     require_same_atom_name: bool,
     enable_molprobity_mode: bool,
-):
+) -> list[tuple[tuple[Residue3D, Atom], tuple[Residue3D, Atom], float]]:
     """
     Find steric clashes between atoms in a list of residues.
 
@@ -80,7 +81,13 @@ def find_clashes(
         enable_molprobity_mode: If True, add a 0.5 Å margin as in MolProbity.
 
     Returns:
-        A list of tuples ``((res_i, atom_i), (res_j, atom_j), occupancy_sum)`` describing each clash.
+        list:
+            A list of clashes. Each clash is represented as a tuple:
+
+            - **((res_i, atom_i), (res_j, atom_j), occupancy_sum)**, where:
+              - **res_i**, **res_j** (Residue3D): clashing residues,
+              - **atom_i**, **atom_j** (Atom): clashing atoms,
+              - **occupancy_sum** (float): sum of occupancies for the atom pair.
     """
     
     reference_residues = []

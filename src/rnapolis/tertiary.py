@@ -549,11 +549,9 @@ class Structure3D:
         Args:
             base_interactions: Interactions
             find_gaps: Whether to detect gaps in the structure
-            all_dot_brackets: Whether to return all possible dot-bracket notations
 
         Returns:
-            A tuple containing the Structure2D object, a list of dot-bracket notations,
-            and the Mapping2D3D object.
+            A tuple containing the Structure2D object and the Mapping2D3D object.
         """
         mapping = Mapping2D3D(
             self,

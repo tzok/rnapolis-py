@@ -430,8 +430,7 @@ class Strand:
 
     @staticmethod
     def from_bpseq_entries(
-        entries: List[Entry], dotbracket: str, reverse: bool = False
-    ):
+        entries: List[Entry], dotbracket: str, reverse: bool = False) -> "Strand":
         """Build a Strand from a list of BPSEQ entries.
 
         Args:
@@ -491,8 +490,8 @@ class Stem:
 
     @staticmethod
     def from_bpseq_entries(
-        strand5p_entries: List[Entry], all_entries: List, dotbracket: str
-    ):
+        strand5p_entries: List[Entry], all_entries: List[Entry], dotbracket: str
+    ) -> "Stem":
         """Build a Stem from 5' strand entries and full BPSEQ list.
 
         Args:
@@ -570,7 +569,7 @@ class BpSeq:
     entries: List[Entry]
 
     @staticmethod
-    def from_string(bpseq_str: str):
+    def from_string(bpseq_str: str) -> "BpSeq":
         """Parse BPSEQ-formatted text into a BpSeq object.
 
         Args:
@@ -593,7 +592,7 @@ class BpSeq:
         return BpSeq(entries)
 
     @staticmethod
-    def from_file(bpseq_path: str):
+    def from_file(bpseq_path: str) -> "BpSeq":
         """Read BPSEQ data from a file path.
 
         Args:
@@ -606,7 +605,7 @@ class BpSeq:
             return BpSeq.from_string(f.read())
 
     @staticmethod
-    def from_dotbracket(dot_bracket):
+    def from_dotbracket(dot_bracket: "DotBracket") -> "BpSeq":
         """Convert dot-bracket representation to BPSEQ entries.
 
         Args:
@@ -647,7 +646,7 @@ class BpSeq:
         """Return the nucleotide sequence as a string."""
         return "".join(entry.sequence for entry in self.entries)
 
-    def paired(self, only5to3: bool = False):
+    def paired(self, only5to3: bool = False) -> "Iterator[Entry]":
         """Iterate over paired entries.
 
         Args:
@@ -876,7 +875,7 @@ class BpSeq:
             solver.msg = False
         return self.convert_to_dot_bracket(solver)
 
-    def convert_to_dot_bracket(self, solver: pulp.LpSolver):
+    def convert_to_dot_bracket(self, solver: pulp.LpSolver) -> "DotBracket":
         """Convert BPSEQ to dot-bracket using a given PuLP solver.
 
         If the solver is not available or the problem is infeasible,
@@ -989,7 +988,7 @@ class BpSeq:
 
         return self.__make_dot_bracket(regions, orders)
 
-    def __make_dot_bracket(self, regions, orders):
+    def __make_dot_bracket(self, regions, orders) -> "DotBracket":
         """Internal helper: build final dot-bracket object from regions and orders.
 
         Returns:
@@ -1017,7 +1016,7 @@ class BpSeq:
         return DotBracket.from_string(sequence, structure)
 
     @cached_property
-    def fcfs(self):
+    def fcfs(self) -> "DotBracket":
         """Greedy FCFS (first-come, first-served) conversion to dot-bracket.
 
         Returns:
@@ -1046,11 +1045,11 @@ class BpSeq:
         return self.__make_dot_bracket(regions, orders)
 
     @cached_property
-    def all_dot_brackets(self):
+    def all_dot_brackets(self) -> list[str]:
         """Enumerate all valid dot-bracket solutions for pseudoknotted structures.
 
-        Returns:
-            List of possible dot-bracket assignments.
+    Returns:
+        List of possible dot-bracket assignments.
         """
         # build conflict graph
         regions = self.__regions
@@ -1130,7 +1129,7 @@ class BpSeq:
             solutions.add(self.__make_dot_bracket(regions, orders))
         return list(solutions)
 
-    def without_pseudoknots(self):
+    def without_pseudoknots(self) -> "BpSeq":
         """Return BPSEQ converted to dot-bracket with pseudoknots removed.
 
         Returns:
@@ -1138,7 +1137,7 @@ class BpSeq:
         """
         return BpSeq.from_dotbracket(self.dot_bracket.without_pseudoknots())
 
-    def without_isolated(self):
+    def without_isolated(self) -> "BpSeq":
         """Return BpSeq with isolated base pairs unpaired.
 
         Returns:
@@ -1170,7 +1169,7 @@ class DotBracket:
     structure: str
 
     @staticmethod
-    def from_file(path: str):
+    def from_file(path: str) -> "DotBracket":
         """Read DotBracket from a file with 2–3 lines.
 
         Args:
@@ -1188,7 +1187,7 @@ class DotBracket:
         raise RuntimeError(f"Failed to read DotBracket from file: {path}")
 
     @staticmethod
-    def from_string(sequence: str, structure: str):
+    def from_string(sequence: str, structure: str) -> "DotBracket":
         """Create a DotBracket object from raw sequence and structure strings.
 
         Args:
@@ -1237,7 +1236,7 @@ class DotBracket:
         """Hash dot-bracket based on sequence and structure."""
         return hash((self.sequence, self.structure))
 
-    def without_pseudoknots(self):
+    def without_pseudoknots(self) -> "DotBracket":
         """Return a copy with pseudoknot brackets replaced by dots.
 
         Returns:
@@ -1254,7 +1253,7 @@ class MultiStrandDotBracket(DotBracket):
     strands: List[Strand]
 
     @staticmethod
-    def from_string(sequence: str, structure: str):
+    def from_string(sequence: str, structure: str) -> "DotBracket":
         """Create MultiStrandDotBracket from a single sequence/structure.
 
         For compatibility with DotBracket, this creates a single strand
@@ -1272,7 +1271,7 @@ class MultiStrandDotBracket(DotBracket):
         return MultiStrandDotBracket(sequence, structure, [strand])
 
     @staticmethod
-    def from_multiline_string(input: str):
+    def from_multiline_string(input: str) -> "DotBracket":
         """Parse multi-strand dot-bracket from a multi-line string.
 
         The format expects optional header lines starting with '>', followed
@@ -1305,7 +1304,7 @@ class MultiStrandDotBracket(DotBracket):
         )
 
     @staticmethod
-    def from_file(path: str):
+    def from_file(path: str) -> "DotBracket":
         """Read MultiStrandDotBracket from a file.
 
         Args:

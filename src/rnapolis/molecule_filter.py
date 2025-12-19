@@ -28,7 +28,7 @@ Link = namedtuple(
 )
 
 
-def load_pdbx_item_linked_group_list():
+def load_pdbx_item_linked_group_list() -> dict[str, set["Link"]]:
     """Load linked item groups from the PDBx/mmCIF dictionary.
 
     Returns:
@@ -133,7 +133,13 @@ def read_cif(file_content: str) -> DataContainer:
         return adapter.readFile(f.name)
 
 
-def filter_cif(data, entity_ids, asym_ids, auth_asym_ids, retain_categories):
+def filter_cif(
+    data: list[DataContainer],
+    entity_ids: list[str],
+    asym_ids: list[str],
+    auth_asym_ids: list[str],
+    retain_categories: list[str],
+) -> str: 
     """Build a filtered PDBx/mmCIF text containing only selected entities and categories.
 
     Args:

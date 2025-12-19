@@ -61,7 +61,7 @@ def parse_fasta(fasta_path: str) -> List[FASTA]:
     return fastas
 
 
-def ensure_cm(family: str = None):
+def ensure_cm(family: str = None) -> str:
     """Ensure that the appropriate Rfam covariance model is downloaded and indexed.
 
     If no family is given, downloads and prepares the combined Rfam covariance model.
@@ -72,7 +72,7 @@ def ensure_cm(family: str = None):
         family (str, optional): Rfam family accession/name. If None, use the combined model.
 
     Returns:
-        str: Path to the prepared covariance model file (without index extensions).
+        Path to the prepared covariance model file (without index extensions).
 
     Raises:
         RuntimeError: If the family-specific covariance model cannot be found after extraction.
@@ -130,7 +130,7 @@ def ensure_cm(family: str = None):
     return cm_path
 
 
-def analyze_cmsearch(cmsearch: str, fasta: FASTA, count: int = 1):
+def analyze_cmsearch(cmsearch: str, fasta: FASTA, count: int = 1) -> list[list[str]]:
     """Parse cmsearch output and extract sequence/structure consensus matches.
 
     This function scans Infernal ``cmsearch`` textual output, reconstructs the aligned
@@ -287,7 +287,7 @@ def generate_consensus_secondary_structure(
     count: int = 1,
     no_rfam_defaults: bool = False,
     lock: threading.Lock = None,
-):
+) -> list[str]:
     """Generate Rfam-based consensus secondary structure(s) for a given sequence.
 
     The function:
