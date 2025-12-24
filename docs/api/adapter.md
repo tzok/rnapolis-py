@@ -1,0 +1,4 @@
+# Adapter
+
+::: rnapolis.adapter
+
