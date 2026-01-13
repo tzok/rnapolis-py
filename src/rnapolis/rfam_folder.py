@@ -21,6 +21,11 @@ SEPARATE_CM = "https://ftp.ebi.ac.uk/pub/databases/Rfam/CURRENT/Rfam.tar.gz"
 
 
 class FASTA:
+    """Simple container for a single FASTA entry (header + RNA sequence).
+
+    The sequence is normalized to uppercase and any thymine (T) is converted to uracil (U).
+    """
+
     header: str
     sequence: str
 
@@ -33,14 +38,13 @@ class FASTA:
 
 
 def parse_fasta(fasta_path: str) -> List[FASTA]:
-    """
-    Read FASTA entries from a file.
+    """Read FASTA entries from a file.
 
     Args:
-        fasta_path (str): The path to the FASTA file.
+        fasta_path (str): Path to the FASTA file.
 
     Returns:
-        List[Fasta]: A list of FASTA objects representing the entries in the file.
+        List of FASTA objects representing all entries in the file.
     """
     with open(fasta_path) as f:
         content = f.read()
@@ -57,7 +61,23 @@ def parse_fasta(fasta_path: str) -> List[FASTA]:
     return fastas
 
 
-def ensure_cm(family: str = None):
+def ensure_cm(family: str = None) -> str:
+    """Ensure that the appropriate Rfam covariance model is downloaded and indexed.
+
+    If no family is given, downloads and prepares the combined Rfam covariance model.
+    If a family is provided, downloads the Rfam tarball with separate CMs and extracts
+    the model for the given family. In both cases runs ``cmpress`` when necessary.
+
+    Args:
+        family (str, optional): Rfam family accession/name. If None, use the combined model.
+
+    Returns:
+        Path to the prepared covariance model file (without index extensions).
+
+    Raises:
+        RuntimeError: If the family-specific covariance model cannot be found after extraction.
+        subprocess.CalledProcessError: If ``cmpress`` fails.
+    """
     if not os.path.exists(appdirs.user_data_dir("rnapolis")):
         os.makedirs(appdirs.user_data_dir("rnapolis"))
 
@@ -110,7 +130,21 @@ def ensure_cm(family: str = None):
     return cm_path
 
 
-def analyze_cmsearch(cmsearch: str, fasta: FASTA, count: int = 1):
+def analyze_cmsearch(cmsearch: str, fasta: FASTA, count: int = 1) -> list[list[str]]:
+    """Parse cmsearch output and extract sequence/structure consensus matches.
+
+    This function scans Infernal ``cmsearch`` textual output, reconstructs the aligned
+    subsequences and consensus secondary structures, expands them back to the full
+    sequence coordinates, and converts the structures to cleaned dot-bracket form.
+
+    Args:
+        cmsearch (str): Raw stdout text produced by ``cmsearch --notextw``.
+        fasta (FASTA): Original FASTA sequence object that was searched.
+        count (int, optional): Maximum number of hits to return. Defaults to 1.
+
+    Returns:
+        List of ``[sequence, dot_bracket_structure]`` pairs. If no hit is found, returns a single entry with the full input sequence and a structure of dots.
+    """
     result = []
     lines = cmsearch.splitlines()
     begins = [i for i, line in enumerate(lines) if line.startswith(">>")]
@@ -253,7 +287,29 @@ def generate_consensus_secondary_structure(
     count: int = 1,
     no_rfam_defaults: bool = False,
     lock: threading.Lock = None,
-):
+) -> list[str]:
+    """Generate Rfam-based consensus secondary structure(s) for a given sequence.
+
+    The function:
+    * ensures the required covariance model is available and indexed,
+    * runs Infernal ``cmsearch`` against the model,
+    * parses hits into sequence/structure pairs,
+    * optionally refines the structure by constrained folding with ViennaRNA (RNAfold).
+
+    Args:
+        fasta (FASTA): Input sequence in FASTA-like container.
+        family (str, optional): Rfam family accession/name to restrict the search.
+            If None, the whole Rfam CM file is used.
+        fold (bool, optional): If True, refine consensus structure with RNAfold constraints.
+        count (int, optional): Maximum number of consensus structures per sequence.
+        no_rfam_defaults (bool, optional): If True, run cmsearch with global defaults
+            instead of Rfam-specific options (``--nohmmonly --rfam --cut_ga``).
+        lock (threading.Lock, optional): Lock used to synchronize access to CM preparation
+            in multithreaded contexts.
+
+    Returns:
+        List of FASTA-like blocks (header, sequence, structure) as strings.
+    """
     if shutil.which("cmpress") is None or shutil.which("cmsearch") is None:
         raise RuntimeError(
             "cmpress/cmsearch not found in PATH, please install Infernal first."
@@ -302,6 +358,15 @@ def generate_consensus_secondary_structure(
 
 
 def main():
+    """Command-line entry point for the Rfam-based consensus structure generator.
+
+    The script:
+
+    - takes an RNA sequence or a FASTA file with multiple sequences,
+    - runs Infernal (cmsearch) against Rfam covariance models,
+    - optionally refines consensus structures using RNAfold with constraints,
+    - prints resulting sequence/structure FASTA-like blocks to stdout.
+    """
     parser = argparse.ArgumentParser(
         description="Generate consensus secondary structure for a given sequence. IMPORTANT! You need to have Infernal software installed to use this script."
     )

@@ -6,6 +6,18 @@ from rnapolis.common import BpSeq, DotBracket
 
 
 def main():
+    """Command-line entry point for the ``motif_extractor`` tool.
+
+    The script:
+
+    - reads secondary structure in DotBracket or BPSEQ format,
+    - optionally removes pseudoknots and/or isolated base pairs,
+    - extracts basic RNA secondary-structure elements (stems, single strands,
+      hairpins, loops),
+    - and prints them to stdout.
+
+    Useful for quick inspection or preprocessing of RNA secondary structures.
+    """
     parser = argparse.ArgumentParser()
     parser.add_argument("--dbn", help="path to DotBracket file")
     parser.add_argument("--bpseq", help="path to BpSeq file")

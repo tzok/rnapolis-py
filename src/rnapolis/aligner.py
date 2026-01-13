@@ -11,7 +11,19 @@ from rnapolis.tertiary_v2 import Structure
 
 
 def main():
-    """Main function to run the unifier tool."""
+    """Align two PDB or mmCIF structures and write aligned copies.
+
+    This function is used as a command-line entry point for the aligner tool.
+    It:
+
+    * loads two input structure files,
+    * uses PyMOL to align them,
+    * compares the aligned residues,
+    * removes residues that do not match between the two structures, and
+    * writes two new aligned structure files in the selected format.
+
+    All arguments are read from the command line using :mod:`argparse`.
+    """
     parser = argparse.ArgumentParser(description="Align two PDB or mmCIF files.")
     parser.add_argument("--output", "-o", help="Output directory", required=True)
     parser.add_argument(
