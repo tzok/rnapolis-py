@@ -13,6 +13,7 @@ from rnapolis.parser_v2 import (
     write_pdb,
 )
 from rnapolis.tertiary_v2 import Structure, calculate_torsion_angle
+from rnapolis.geometry import are_bases_coplanar
 
 
 def compare_structures(df1: pd.DataFrame, df2: pd.DataFrame, rtol=1e-5, atol=1e-8):
@@ -446,3 +447,34 @@ def test_is_nucleotide(data_dir):
     structure = Structure(df_atoms)
     residues = [residue for residue in structure.residues if residue.is_nucleotide]
     assert len(residues) == 76
+
+
+def test_are_bases_coplanar_examples(data_dir):
+    cif_path = os.path.join(data_dir, "1ehz-assembly-1.cif")
+    if not os.path.exists(cif_path):
+        pytest.skip(f"Test file not found: {cif_path}")
+
+    with open(cif_path, "r") as f:
+        df_atoms = parse_cif_atoms(f)
+    assert not df_atoms.empty, "Original CIF parsing failed"
+
+    structure = Structure(df_atoms)
+
+    by_id = {
+        (r.chain_id, r.residue_name, r.residue_number, r.insertion_code): r
+        for r in structure.residues
+    }
+
+    coplanar = [
+        by_id[("A", "2MG", 10, None)],
+        by_id[("A", "C", 25, None)],
+        by_id[("A", "G", 45, None)],
+    ]
+    assert are_bases_coplanar(coplanar, max_distance=1.0, max_angle_deg=30.0)
+
+    not_coplanar = [
+        by_id[("A", "G", 18, None)],
+        by_id[("A", "PSU", 55, None)],
+        by_id[("A", "G", 57, None)],
+    ]
+    assert not are_bases_coplanar(not_coplanar, max_distance=1.0, max_angle_deg=30.0)

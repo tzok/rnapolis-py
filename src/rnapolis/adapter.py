@@ -84,7 +84,10 @@ def auto_detect_tool(external_files: List[str]) -> ExternalTool:
         if basename.endswith(".csv"):
             with open(file_path, "r") as f:
                 line = f.readline().strip()
-                if line == "pdbid,model,family,class,chain1,nr1,res1,alt1,ins1,symmetry_operation1,chain2,nr2,res2,alt2,ins2,symmetry_operation2,confit,rmsd,curated_file,knn_metric,coplanarity_angle,coplanarity_shift1,coplanarity_shift2,coplanarity_edge_angle1,coplanarity_edge_angle2,C1_C1_yaw1,C1_C1_pitch1,C1_C1_roll1,C1_C1_yaw2,C1_C1_pitch2,C1_C1_roll2,hb_0_length,hb_0_donor_angle,hb_0_acceptor_angle,hb_0_OOPA1,hb_0_OOPA2,hb_1_length,hb_1_donor_angle,hb_1_acceptor_angle,hb_1_OOPA1,hb_1_OOPA2,hb_2_length,hb_2_donor_angle,hb_2_acceptor_angle,hb_2_OOPA1,hb_2_OOPA2,hb_3_length,hb_3_donor_angle,hb_3_acceptor_angle,hb_3_OOPA1,hb_3_OOPA2":
+                if (
+                    line
+                    == "pdbid,model,family,class,chain1,nr1,res1,alt1,ins1,symmetry_operation1,chain2,nr2,res2,alt2,ins2,symmetry_operation2,confit,rmsd,curated_file,knn_metric,coplanarity_angle,coplanarity_shift1,coplanarity_shift2,coplanarity_edge_angle1,coplanarity_edge_angle2,C1_C1_yaw1,C1_C1_pitch1,C1_C1_roll1,C1_C1_yaw2,C1_C1_pitch2,C1_C1_roll2,hb_0_length,hb_0_donor_angle,hb_0_acceptor_angle,hb_0_OOPA1,hb_0_OOPA2,hb_1_length,hb_1_donor_angle,hb_1_acceptor_angle,hb_1_OOPA1,hb_1_OOPA2,hb_2_length,hb_2_donor_angle,hb_2_acceptor_angle,hb_2_OOPA1,hb_2_OOPA2,hb_3_length,hb_3_donor_angle,hb_3_acceptor_angle,hb_3_OOPA1,hb_3_OOPA2"
+                ):
                     return ExternalTool.DNATCO
 
     # Default to MAXIT if no patterns match
