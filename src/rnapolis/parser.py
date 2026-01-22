@@ -1,4 +1,7 @@
 import logging
+import os
+import re
+import tempfile
 from typing import IO, Dict, List, Optional, Tuple, Union
 
 import numpy as np
@@ -57,8 +60,27 @@ def parse_cif(
 ]:
     cif.seek(0)
 
+    content = cif.read()
+    if isinstance(content, bytes):
+        content = content.decode("utf-8")
+
+    content = re.sub(r"(^\s*data_)\s*$", r"\1unnamed", content, flags=re.MULTILINE)
+    for axis in ("x", "y", "z"):
+        content = re.sub(
+            rf"(_atom_site\.)cartn_{axis}\b",
+            rf"\1Cartn_{axis}",
+            content,
+            flags=re.IGNORECASE,
+        )
+
     io_adapter = IoAdapterPy()
-    data = io_adapter.readFile(cif.name)
+    with tempfile.NamedTemporaryFile(mode="w+", suffix=".cif", delete=False) as temp:
+        temp.write(content)
+        temp_path = temp.name
+    try:
+        data = io_adapter.readFile(temp_path)
+    finally:
+        os.remove(temp_path)
     atoms_to_process: List[Atom] = []
     modified: Dict[Union[ResidueLabel, ResidueAuth], str] = {}
     sequence_by_entity: Dict[str, str] = {}

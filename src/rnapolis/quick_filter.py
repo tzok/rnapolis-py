@@ -2,6 +2,7 @@
 import argparse
 import io
 import os
+import re
 import tempfile
 from typing import Iterable, Optional, Set
 
@@ -193,8 +194,21 @@ def _format_cif_value(value) -> str:
     return str(value)
 
 
+def _normalize_cif_content(content: str) -> str:
+    content = re.sub(r"(^\s*data_)\s*$", r"\1unnamed", content, flags=re.MULTILINE)
+    for axis in ("x", "y", "z"):
+        content = re.sub(
+            rf"(_atom_site\.)cartn_{axis}\b",
+            rf"\1Cartn_{axis}",
+            content,
+            flags=re.IGNORECASE,
+        )
+    return content
+
+
 def _read_cif_data(content: str):
     adapter = IoAdapterPy()
+    content = _normalize_cif_content(content)
     with tempfile.NamedTemporaryFile(mode="wt", suffix=".cif", delete=False) as tmp:
         tmp.write(content)
         tmp_path = tmp.name
@@ -286,6 +300,7 @@ def filter_content(
     """Filter PDB or mmCIF content and return the filtered file content."""
     format_is_cif = is_cif(io.StringIO(content))
     if format_is_cif:
+        content = _normalize_cif_content(content)
         atoms = parse_cif_atoms(content)
     else:
         atoms = parse_pdb_atoms(content)
