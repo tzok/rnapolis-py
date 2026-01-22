@@ -62,6 +62,45 @@ RESIDUE_ATOMS_MAP = {
     "DC": ATOMS_DC,
     "DT": ATOMS_DT,
 }
+REQUIRED_NUCLEOTIDE_ATOMS = frozenset({
+    "C1'",
+    "C2'",
+    "C3'",
+    "C4'",
+    "O4'",
+    "N1",
+    "C2",
+    "N3",
+    "C4",
+    "C5",
+    "C6",
+})
+AMINO_ACID_NAMES = {
+    "ALA",
+    "ARG",
+    "ASN",
+    "ASP",
+    "CYS",
+    "GLN",
+    "GLU",
+    "GLY",
+    "HIS",
+    "ILE",
+    "LEU",
+    "LYS",
+    "MET",
+    "PHE",
+    "PRO",
+    "SER",
+    "THR",
+    "TRP",
+    "TYR",
+    "VAL",
+    "SEC",
+    "PYL",
+    "MSE",
+    "UNK",
+}
 
 
 def calculate_torsion_angle(
@@ -988,6 +1027,32 @@ class Residue:
 
         return atom_dict
 
+    @cached_property
+    def _atom_names(self) -> set[str]:
+        """Cache the set of atom names in this residue."""
+        if self.format == "PDB":
+            column = "name"
+        elif self.format == "mmCIF":
+            if "auth_atom_id" in self.atoms.columns:
+                column = "auth_atom_id"
+            else:
+                column = "label_atom_id"
+        else:
+            return set()
+
+        atom_names = set()
+        series = self.atoms[column]
+
+        for atom_name in series:
+            if pd.isna(atom_name):
+                continue
+            atom_name = str(atom_name)
+            if not atom_name or atom_name in {"?", "."}:
+                continue
+            atom_names.add(atom_name)
+
+        return atom_names
+
     def find_atom(self, atom_name: str) -> Optional["Atom"]:
         """
         Find an atom by name in this residue.
@@ -1018,22 +1083,17 @@ class Residue:
         bool
             True if the residue is a nucleotide, False otherwise
         """
-        # Early check: if less than 11 atoms, can't be a nucleotide
-        if len(self.atoms) < 11:
+        atom_names = self._atom_names
+        if len(atom_names) < len(REQUIRED_NUCLEOTIDE_ATOMS):
             return False
 
-        # Required sugar atoms
-        sugar_atoms = ["C1'", "C2'", "C3'", "C4'", "O4'"]
+        return REQUIRED_NUCLEOTIDE_ATOMS.issubset(atom_names)
 
-        # Required base atoms
-        base_atoms = ["N1", "C2", "N3", "C4", "C5", "C6"]
-
-        # Check for all required atoms
-        for atom_name in sugar_atoms + base_atoms:
-            if self.find_atom(atom_name) is None:
-                return False
-
-        return True
+    @cached_property
+    def is_amino_acid(self) -> bool:
+        """Check if this residue is a standard amino acid."""
+        residue_name = self.residue_name.strip().upper()
+        return residue_name in AMINO_ACID_NAMES
 
     def is_connected(self, next_residue_candidate: "Residue") -> bool:
         """
