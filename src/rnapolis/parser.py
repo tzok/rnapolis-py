@@ -1,8 +1,9 @@
+import io
 import logging
 import os
 import re
 import tempfile
-from typing import IO, Dict, List, Optional, Tuple, Union
+from typing import IO, Dict, List, Optional, Tuple, Union, cast
 
 import numpy as np
 from mmcif.io.IoAdapterPy import IoAdapterPy
@@ -60,7 +61,14 @@ def parse_cif(
 ]:
     cif.seek(0)
 
-    content = cif.read()
+    try:
+        content = cif.read()
+    except io.UnsupportedOperation:
+        if hasattr(cif, "name"):
+            with open(cif.name, "r", encoding="utf-8") as handle:
+                content = handle.read()
+        else:
+            raise
     if isinstance(content, bytes):
         content = content.decode("utf-8")
 
@@ -382,7 +390,8 @@ def group_atoms(
             residues = [
                 residue
                 for residue in residues
-                if is_nucleic_acid_by_entity[residue.atoms[0].entity_id]
+                if (entity_id := residue.atoms[0].entity_id) is not None
+                and is_nucleic_acid_by_entity.get(entity_id, False)
             ]
         else:
             residues = [residue for residue in residues if residue.is_nucleotide]
@@ -417,7 +426,8 @@ def get_one_letter_name(
 ) -> str:
     # try getting the value from _entity_poly first
     if entity_id is not None and label is not None and entity_id in sequence_by_entity:
-        return sequence_by_entity[entity_id][label.number - 1]
+        entity_id_str = cast(str, entity_id)
+        return sequence_by_entity[entity_id_str][label.number - 1]
     # RNA
     if len(name) == 1:
         return name
@@ -446,7 +456,9 @@ def detect_one_letter_name(atoms: List[Atom]) -> str:
     return items[0][0]
 
 
-def try_parse_int(s: str) -> Optional[int]:
+def try_parse_int(s: Optional[str]) -> Optional[int]:
+    if s is None:
+        return None
     try:
         return int(s)
     except ValueError:
