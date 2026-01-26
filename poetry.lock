@@ -231,14 +231,14 @@ test = ["coverage", "pytest (>=7,<8.1)", "pytest-cov", "pytest-mock (>=3)"]
 
 [[package]]
 name = "hypothesis"
-version = "6.150.2"
+version = "6.151.0"
 description = "The property-based testing library for Python"
 optional = false
 python-versions = ">=3.10"
 groups = ["dev"]
 files = [
-    {file = "hypothesis-6.150.2-py3-none-any.whl", hash = "sha256:648d6a2be435889e713ba3d335b0fb5e7a250f569b56e6867887c1e7a0d1f02f"},
-    {file = "hypothesis-6.150.2.tar.gz", hash = "sha256:deb043c41c53eaf0955f4a08739c2a34c3d8040ee3d9a2da0aa5470122979f75"},
+    {file = "hypothesis-6.151.0-py3-none-any.whl", hash = "sha256:e5d2a9d178192d00f7a7fa6717cc1c63883acb918ac8d3a2604a1cea45b3e89b"},
+    {file = "hypothesis-6.151.0.tar.gz", hash = "sha256:25c7f1105fa5f46bbf499d7204f128e26278073efc2adf15939f40b8fbdc4fad"},
 ]
 
 [package.dependencies]
