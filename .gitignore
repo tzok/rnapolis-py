@@ -1,4 +1,5 @@
 .aider*
+.venv
 .env
 .hypothesis
 RNApolis.egg-info
