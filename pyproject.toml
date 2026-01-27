@@ -40,6 +40,11 @@ viennarna = "*"
 pytest = "*"
 hypothesis = "*"
 
+[tool.poetry.group.docs.dependencies]
+mkdocs = "*"
+mkdocs-material = "*"
+mkdocstrings = { extras = ["python"], version = "*" }
+
 [tool.poetry.scripts]
 annotator = "rnapolis.annotator:main"
 adapter = "rnapolis.adapter:main"
