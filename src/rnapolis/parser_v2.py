@@ -11,18 +11,18 @@ from mmcif.io.PdbxReader import DataCategory, DataContainer
 
 
 def parse_pdb_atoms(content: Union[str, IO[str]]) -> pd.DataFrame:
-    """
-    Parse PDB file content and extract ATOM and HETATM records into a pandas DataFrame.
+    """Parse PDB content and extract ATOM/HETATM records into a DataFrame.
 
-    Parameters:
-    -----------
-    content : Union[str, IO[str]]
-        Content of a PDB file as a string or file-like object
+    Handles both plain strings and file-like objects, collects atom-level fields
+    and returns them as a typed pandas DataFrame.
+
+    Args:
+        content (Union[str, IO[str]]): PDB content as a string or an open
+            text file-like object.
 
     Returns:
-    --------
-    pd.DataFrame
-        DataFrame containing parsed ATOM and HETATM records with columns corresponding to PDB format
+        pd.DataFrame: DataFrame with parsed ATOM/HETATM records and a
+            ``format`` attribute set to ``"PDB"``.
     """
     records = []
 
@@ -141,18 +141,20 @@ def parse_pdb_atoms(content: Union[str, IO[str]]) -> pd.DataFrame:
 
 
 def parse_cif_atoms(content: Union[str, IO[str]]) -> pd.DataFrame:
-    """
-    Parse mmCIF file content and extract atom_site records into a pandas DataFrame.
+    """Parse mmCIF content and extract ``atom_site`` records into a DataFrame.
 
-    Parameters:
-    -----------
-    content : Union[str, IO[str]]
-        Content of a mmCIF file as a string or file-like object
+    Supports string input, StringIO and file-like objects with a ``name``
+    attribute. Missing values marked as ``?`` or ``.`` are converted to None
+    and selected columns are cast to numeric or categorical dtypes.
+
+    Args:
+        content (Union[str, IO[str]]): mmCIF content as a string, StringIO or
+            an open file-like object.
 
     Returns:
-    --------
-    pd.DataFrame
-        DataFrame containing parsed atom_site records with columns corresponding to mmCIF format
+        pd.DataFrame: DataFrame with parsed ``atom_site`` records and a
+            ``format`` attribute set to ``"mmCIF"``. Empty if no ``atom_site``
+            category is present.
     """
     adapter = IoAdapterPy()
 
@@ -339,23 +341,17 @@ def parse_cif_atoms(content: Union[str, IO[str]]) -> pd.DataFrame:
 
 
 def can_write_pdb(df: pd.DataFrame) -> bool:
-    """
-    Check if the DataFrame can be losslessly represented in PDB format.
+    """Check whether atom data can be represented in PDB format without truncation.
 
-    PDB format has limitations on field widths:
-    - Atom serial number (id): max 99999
-    - Chain identifier (auth_asym_id): max 1 character
-    - Residue sequence number (auth_seq_id): max 9999
+    For mmCIF-derived DataFrames, this enforces classic PDB limits on:
+    atom serial numbers, chain identifiers and residue sequence numbers.
 
-    Parameters:
-    -----------
-    df : pd.DataFrame
-        DataFrame containing atom records, as created by parse_pdb_atoms or parse_cif_atoms.
+    Args:
+        df (pd.DataFrame): DataFrame with atom records and a ``format`` attribute
+            set to ``"PDB"`` or ``"mmCIF"``.
 
     Returns:
-    --------
-    bool
-        True if the DataFrame can be written to PDB format without data loss/truncation, False otherwise.
+        bool: True if the DataFrame fits PDB constraints, False otherwise.
     """
     format_type = df.attrs.get("format")
 
@@ -395,30 +391,24 @@ def can_write_pdb(df: pd.DataFrame) -> bool:
 
 
 def fit_to_pdb(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Attempts to fit the atom data in a DataFrame to comply with PDB format limitations.
+    """Try to renumber chains, residues and atoms so that data fits PDB limits.
 
-    If the data already fits (checked by can_write_pdb), returns the original DataFrame.
-    Otherwise, checks if fitting is possible based on total atoms, unique chains,
-    and residues per chain. If fitting is possible, it renumbers atoms, renames chains,
-    and renumbers residues within each chain sequentially starting from 1.
+    If the DataFrame already satisfies PDB constraints, it is returned unchanged.
+    Otherwise, the function checks feasibility (atoms, chains, residues/chain)
+    and, if possible, remaps chain IDs, residue numbers and serials to safe
+    ranges.
 
-    Parameters:
-    -----------
-    df : pd.DataFrame
-        DataFrame containing atom records, as created by parse_pdb_atoms or parse_cif_atoms.
+    Args:
+        df (pd.DataFrame): DataFrame with atom records and a valid ``format``
+            attribute (``\"PDB\"`` or ``\"mmCIF\"``).
 
     Returns:
-    --------
-    pd.DataFrame
-        A new DataFrame with data potentially modified to fit PDB constraints.
-        The 'format' attribute of the returned DataFrame will be set to 'PDB'.
+        pd.DataFrame: New DataFrame adjusted to comply with PDB constraints and
+        with ``format`` attribute set to ``"PDB"``.
 
     Raises:
-    -------
-    ValueError
-        If the data cannot be fitted into PDB format constraints (too many atoms,
-        chains, or residues per chain).
+        ValueError: If the data cannot be made to fit PDB limits (too many
+            atoms, chains or residues per chain, or unsupported format).
     """
     format_type = df.attrs.get("format")
 
@@ -709,7 +699,20 @@ def fit_to_pdb(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _format_pdb_atom_line(atom_data: dict) -> str:
-    """Formats a dictionary of atom data into a PDB ATOM/HETATM line."""
+    """Format a single atom record dictionary into an 80-char PDB line.
+
+    Applies PDB column layout, alignment and numeric formatting for all
+    standard ATOM/HETATM fields.
+
+    Args:
+        atom_data (dict): Mapping with keys such as ``record_name``, ``serial``,
+            ``name``, ``altLoc``, ``resName``, ``chainID``, ``resSeq``,
+            ``iCode``, ``x``, ``y``, ``z``, ``occupancy``, ``tempFactor``,
+            ``element`` and ``charge``.
+
+    Returns:
+        str: Properly formatted PDB line of length 80.
+    """
     # PDB format specification:
     # COLUMNS        DATA TYPE     FIELD         DEFINITION
     # -----------------------------------------------------------------------
@@ -808,21 +811,20 @@ def _format_pdb_atom_line(atom_data: dict) -> str:
 def write_pdb(
     df: pd.DataFrame, output: Union[str, TextIO, None] = None
 ) -> Union[str, None]:
-    """
-    Write a DataFrame of atom records to PDB format.
+    """Write atom records stored in a DataFrame to PDB format.
 
-    Parameters:
-    -----------
-    df : pd.DataFrame
-        DataFrame containing atom records, as created by parse_pdb_atoms or parse_cif_atoms.
-        Must contain columns mappable to PDB format fields.
-    output : Union[str, TextIO, None], optional
-        Output file path or file-like object. If None, returns the PDB content as a string.
+    Supports both data originating from PDB and mmCIF (via the ``format``
+    attribute). Can either return a string with PDB content or write to a file.
+
+    Args:
+        df (pd.DataFrame): DataFrame with atom records, typically produced by
+            :func:`parse_pdb_atoms` or :func:`parse_cif_atoms`.
+        output (Union[str, TextIO, None], optional): File path, open text handle
+            or None. If None, the function returns the PDB string.
 
     Returns:
-    --------
-    Union[str, None]
-        If output is None, returns the PDB content as a string. Otherwise, returns None.
+        Union[str, None]: PDB content as a string if ``output`` is None,
+        otherwise None.
     """
     buffer = io.StringIO()
     format_type = df.attrs.get("format", "PDB")  # Assume PDB if not specified
@@ -994,20 +996,21 @@ def write_pdb(
 def write_cif(
     df: pd.DataFrame, output: Union[str, TextIO, None] = None
 ) -> Union[str, None]:
-    """
-    Write a DataFrame of atom records to mmCIF format.
+    """Write atom records stored in a DataFrame to mmCIF format.
 
-    Parameters:
-    -----------
-    df : pd.DataFrame
-        DataFrame containing atom records, as created by parse_pdb_atoms or parse_cif_atoms
-    output : Union[str, TextIO, None], optional
-        Output file path or file-like object. If None, returns the mmCIF content as a string.
+    Depending on the DataFrame ``format`` attribute, either passes through
+    existing mmCIF-style columns or maps PDB-style columns to an ``atom_site``
+    category.
+
+    Args:
+        df (pd.DataFrame): DataFrame with atom records, usually created by
+            :func:`parse_pdb_atoms` or :func:`parse_cif_atoms`.
+        output (Union[str, TextIO, None], optional): File path, open text handle
+            or None. If None, the mmCIF content is returned as a string.
 
     Returns:
-    --------
-    Union[str, None]
-        If output is None, returns the mmCIF content as a string. Otherwise, returns None.
+        Union[str, None]: mmCIF content as a string if ``output`` is None,
+        otherwise None.
     """
     # Get the format of the DataFrame
     format_type = df.attrs.get("format", "PDB")

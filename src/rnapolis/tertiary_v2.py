@@ -106,18 +106,16 @@ AMINO_ACID_NAMES = {
 def calculate_torsion_angle(
     a1: np.ndarray, a2: np.ndarray, a3: np.ndarray, a4: np.ndarray
 ) -> float:
-    """
-    Calculate the torsion angle between four points in 3D space.
+    """Calculate the torsion (dihedral) angle between four 3D points.
 
-    Parameters:
-    -----------
-    a1, a2, a3, a4 : np.ndarray
-        3D coordinates of the four atoms
+    Args:
+        a1: Coordinates of the first atom (x, y, z).
+        a2: Coordinates of the second atom (x, y, z).
+        a3: Coordinates of the third atom (x, y, z).
+        a4: Coordinates of the fourth atom (x, y, z).
 
     Returns:
-    --------
-    float
-        Torsion angle in radians
+        Torsion angle in radians.
     """
     # Calculate vectors between points
     v1 = a2 - a1
@@ -153,20 +151,18 @@ def calculate_torsion_angle(
 def find_paired_coordinates(
     residues1: List["Residue"], residues2: List["Residue"]
 ) -> Tuple[np.ndarray, np.ndarray]:
-    """
-    Find paired coordinates of matching atoms between two residues.
+    """Find matching atom coordinates between two residue lists.
 
-    Parameters:
-    -----------
-    residues1 : List[Residue]
-        List of residues from the first structure
-    residues2 : List[Residue]
-        List of residues from the second structure
+    For each pair of residues, the function selects a consistent set of atoms
+    (RNA/DNA backbone + base core) and returns coordinates of matching atoms
+    from both structures.
+
+    Args:
+        residues1: List of residues from the first structure.
+        residues2: List of residues from the second structure.
 
     Returns:
-    --------
-    Tuple[np.ndarray, np.ndarray]
-        Tuple of two numpy arrays containing coordinates of matching atom pairs
+        A tuple (coords_1, coords_2) with two arrays of shape (N, 3) containing coordinates of corresponding atoms.
     """
     all_paired_dfs = []
 
@@ -245,15 +241,14 @@ def find_paired_coordinates(
 
 
 def rmsd_quaternions(coords1: np.ndarray, coords2: np.ndarray) -> float:
-    """
-    Calculates RMSD using the Quaternion method.
+    """Calculate RMSD using the quaternion-based method.
 
-    Parameters:
-    -----------
-    coords1 : np.ndarray
-        Nx3 array of coordinates for the first structure
-    coords2 : np.ndarray
-        Nx3 array of coordinates for the second structure
+    Args:
+        coords1: Array of shape (N, 3) with coordinates of the first structure.
+        coords2: Array of shape (N, 3) with coordinates of the second structure.
+
+    Returns:
+        Root mean square deviation between coords1 and coords2.
     """
     P, Q = coords1, coords2
 
@@ -294,15 +289,14 @@ def rmsd_quaternions(coords1: np.ndarray, coords2: np.ndarray) -> float:
 
 
 def rmsd_svd(coords1: np.ndarray, coords2: np.ndarray) -> float:
-    """
-    Calculates RMSD using SVD decomposition (Kabsch algorithm).
+    """Calculate RMSD using SVD (Kabsch algorithm).
 
-    Parameters:
-    -----------
-    coords1 : np.ndarray
-        Nx3 array of coordinates for the first structure
-    coords2 : np.ndarray
-        Nx3 array of coordinates for the second structure
+    Args:
+        coords1: Array of shape (N, 3) with coordinates of the first structure.
+        coords2: Array of shape (N, 3) with coordinates of the second structure.
+
+    Returns:
+        Root mean square deviation between coords1 and coords2.
     """
     P, Q = coords1, coords2
 
@@ -337,17 +331,17 @@ def rmsd_svd(coords1: np.ndarray, coords2: np.ndarray) -> float:
 
 
 def rmsd_qcp(coords1: np.ndarray, coords2: np.ndarray) -> float:
-    """
-    Calculates RMSD using the QCP (Quaternion Characteristic Polynomial) method.
-    This implementation follows the BioPython QCP algorithm but uses np.linalg.eigh
-    instead of Newton-Raphson for simplicity.
+    """Calculate RMSD using the QCP (Quaternion Characteristic Polynomial) method.
 
-    Parameters:
-    -----------
-    coords1 : np.ndarray
-        Nx3 array of coordinates for the first structure
-    coords2 : np.ndarray
-        Nx3 array of coordinates for the second structure
+    This implementation follows the BioPython QCP algorithm but uses
+    ``np.linalg.eigh`` to find the largest eigenvalue.
+
+    Args:
+        coords1: Array of shape (N, 3) with coordinates of the first structure.
+        coords2: Array of shape (N, 3) with coordinates of the second structure.
+
+    Returns:
+        Root mean square deviation between coords1 and coords2.
     """
 
     # Center coordinates at origin
@@ -393,90 +387,75 @@ def rmsd_qcp(coords1: np.ndarray, coords2: np.ndarray) -> float:
 
 
 def rmsd_to_nrmsd(rmsd: float, num_atoms: int) -> float:
-    """
-    Convert RMSD to normalized RMSD (nRMSD).
+    """Convert RMSD to normalized RMSD (nRMSD).
 
-    Parameters:
-    -----------
-    rmsd : float
-        Root Mean Square Deviation value
-    num_atoms : int
-        Number of atoms used in the RMSD calculation
+    Args:
+        rmsd: RMSD value.
+        num_atoms: Number of atoms used to compute the RMSD.
 
     Returns:
-    --------
-    float
-        Normalized RMSD value
+        Normalized RMSD.
     """
     return rmsd / np.sqrt(num_atoms)
 
 
 def nrmsd_quaternions(coords1: np.ndarray, coords2: np.ndarray) -> float:
-    """
-    Calculates nRMSD using the Quaternion method.
+    """Calculate nRMSD using the quaternion method.
 
-    Parameters:
-    -----------
-    coords1 : np.ndarray
-        Nx3 array of coordinates for the first structure
-    coords2 : np.ndarray
-        Nx3 array of coordinates for the second structure
+    Args:
+        coords1: Array of shape (N, 3) with coordinates of the first structure.
+        coords2: Array of shape (N, 3) with coordinates of the second structure.
+
+    Returns:
+        Normalized RMSD value.
     """
     rmsd = rmsd_quaternions(coords1, coords2)
     return rmsd_to_nrmsd(rmsd, coords1.shape[0])
 
 
 def nrmsd_svd(coords1: np.ndarray, coords2: np.ndarray) -> float:
-    """
-    Calculates nRMSD using SVD decomposition (Kabsch algorithm).
+    """Calculate nRMSD using the SVD (Kabsch) method.
 
-    Parameters:
-    -----------
-    coords1 : np.ndarray
-        Nx3 array of coordinates for the first structure
-    coords2 : np.ndarray
-        Nx3 array of coordinates for the second structure
+    Args:
+        coords1: Array of shape (N, 3) with coordinates of the first structure.
+        coords2: Array of shape (N, 3) with coordinates of the second structure.
+
+    Returns:
+        Normalized RMSD value.
     """
     rmsd = rmsd_svd(coords1, coords2)
     return rmsd_to_nrmsd(rmsd, coords1.shape[0])
 
 
 def nrmsd_qcp(coords1: np.ndarray, coords2: np.ndarray) -> float:
-    """
-    Calculates nRMSD using the QCP (Quaternion Characteristic Polynomial) method.
+    """Calculate nRMSD using the QCP method.
 
-    Parameters:
-    -----------
-    coords1 : np.ndarray
-        Nx3 array of coordinates for the first structure
-    coords2 : np.ndarray
-        Nx3 array of coordinates for the second structure
+    Args:
+        coords1: Array of shape (N, 3) with coordinates of the first structure.
+        coords2: Array of shape (N, 3) with coordinates of the second structure.
+
+    Returns:
+        Normalized RMSD value.
     """
     rmsd = rmsd_qcp(coords1, coords2)
     return rmsd_to_nrmsd(rmsd, coords1.shape[0])
 
 
 def nrmsd_validate(coords1: np.ndarray, coords2: np.ndarray) -> float:
-    """
-    Validates that all nRMSD methods produce the same result.
-    Uses quaternions method as the primary result after validation.
+    """Validate that all nRMSD implementations agree.
 
-    Parameters:
-    -----------
-    coords1 : np.ndarray
-        Nx3 array of coordinates for the first structure
-    coords2 : np.ndarray
-        Nx3 array of coordinates for the second structure
+    Calculates nRMSD using three methods (quaternions, SVD, QCP) and checks
+    that they are numerically consistent. Returns the quaternion result.
+
+    Args:
+        coords1: Array of shape (N, 3) with coordinates of the first structure.
+        coords2: Array of shape (N, 3) with coordinates of the second structure.
 
     Returns:
-    --------
-    float
-        nRMSD value (from quaternions method after validation)
+        nRMSD value from the quaternion method.
 
     Raises:
-    -------
-    ValueError
-        If any methods produce significantly different results
+        ValueError: If any pair of methods differs by more than the tolerance.
     """
     # Calculate using all methods
     result_quaternions = nrmsd_quaternions(coords1, coords2)
@@ -514,27 +493,42 @@ def nrmsd_validate(coords1: np.ndarray, coords2: np.ndarray) -> float:
 def nrmsd_quaternions_residues(
     residues1: List["Residue"], residues2: List["Residue"]
 ) -> float:
-    """
-    Calculates nRMSD using the Quaternion method from residue lists.
-    residues1 and residues2 are lists of Residue objects.
+    """Calculate nRMSD (quaternion) directly from residue lists.
+
+    Args:
+        residues1: Residues from the first structure.
+        residues2: Residues from the second structure.
+
+    Returns:
+        Normalized RMSD value.
     """
     coords1, coords2 = find_paired_coordinates(residues1, residues2)
     return nrmsd_quaternions(coords1, coords2)
 
 
 def nrmsd_svd_residues(residues1: List["Residue"], residues2: List["Residue"]) -> float:
-    """
-    Calculates nRMSD using SVD decomposition from residue lists.
-    residues1 and residues2 are lists of Residue objects.
+    """Calculate nRMSD (SVD) directly from residue lists.
+
+    Args:
+        residues1: Residues from the first structure.
+        residues2: Residues from the second structure.
+
+    Returns:
+        Normalized RMSD value.
     """
     coords1, coords2 = find_paired_coordinates(residues1, residues2)
     return nrmsd_svd(coords1, coords2)
 
 
 def nrmsd_qcp_residues(residues1: List["Residue"], residues2: List["Residue"]) -> float:
-    """
-    Calculates nRMSD using the QCP method from residue lists.
-    residues1 and residues2 are lists of Residue objects.
+    """Calculate nRMSD (QCP) directly from residue lists.
+
+    Args:
+        residues1: Residues from the first structure.
+        residues2: Residues from the second structure.
+
+    Returns:
+        Normalized RMSD value.
     """
     coords1, coords2 = find_paired_coordinates(residues1, residues2)
     return nrmsd_qcp(coords1, coords2)
@@ -543,48 +537,47 @@ def nrmsd_qcp_residues(residues1: List["Residue"], residues2: List["Residue"]) -
 def nrmsd_validate_residues(
     residues1: List["Residue"], residues2: List["Residue"]
 ) -> float:
-    """
-    Validates that all nRMSD methods produce the same result from residue lists.
-    residues1 and residues2 are lists of Residue objects.
+    """Validate that all nRMSD methods agree for residue lists.
+
+    Args:
+        residues1: Residues from the first structure.
+        residues2: Residues from the second structure.
+
+    Returns:
+        nRMSD value from the quaternion method.
     """
     coords1, coords2 = find_paired_coordinates(residues1, residues2)
     return nrmsd_validate(coords1, coords2)
 
 
 class Structure:
-    """
-    A class representing a molecular structure parsed from PDB or mmCIF format.
+    """Molecular structure parsed from PDB or mmCIF.
 
-    This class takes a DataFrame created by parser_v2 functions and provides
-    methods to access and manipulate the structure data.
+    Wraps a DataFrame of atoms (from parser_v2) and exposes convenient
+    accessors for residues, connected segments and backbone torsion angles.
     """
 
     def __init__(self, atoms: pd.DataFrame):
-        """
-        Initialize a Structure object with atom data.
+        """Initialize a Structure with atom coordinates and metadata.
 
-        Parameters:
-        -----------
-        atoms : pd.DataFrame
-            DataFrame containing atom data, as created by parse_pdb_atoms or parse_cif_atoms
+        Args:
+            atoms: DataFrame created by ``parse_pdb_atoms`` or ``parse_cif_atoms``.
         """
         self.atoms = atoms
         self.format = atoms.attrs.get("format", "unknown")
 
     @cached_property
     def residues(self) -> List["Residue"]:
-        """
-        Group atoms by residue and return a list of Residue objects.
+        """Group atoms into residues and return them as Residue objects.
 
-        The grouping logic depends on the format of the input data:
-        - For PDB: group by (chainID, resSeq, iCode)
-        - For mmCIF: group by (label_asym_id, label_seq_id) if present,
-                     otherwise by (auth_asym_id, auth_seq_id, pdbx_PDB_ins_code)
+        Grouping rules:
+
+        - PDB: by (chainID, resSeq, iCode)
+        - mmCIF: by (auth_asym_id, auth_seq_id, pdbx_PDB_ins_code) if present,
+          otherwise by (label_asym_id, label_seq_id, pdbx_PDB_ins_code).
 
         Returns:
-        --------
-        List[Residue]
-            List of Residue objects, each representing a single residue
+            List of Residue objects.
         """
         if self.format == "PDB":
             # Group by chain ID, residue sequence number, and insertion code
@@ -594,7 +587,7 @@ class Structure:
             groupby_cols = [col for col in groupby_cols if col in self.atoms.columns]
 
             # Group atoms by residue
-            grouped = self.atoms.groupby(groupby_cols, dropna=False, observed=False)
+            grouped = self.atoms.groupby(groupby_cols, dropna=False, observed=True)
 
         elif self.format == "mmCIF":
             # Prefer auth_* columns if they exist
@@ -617,47 +610,31 @@ class Structure:
 
             # Group atoms by residue
             grouped = self.atoms.groupby(
-                groupby_cols, dropna=False, observed=False, sort=False
+                groupby_cols, dropna=False, observed=True, sort=False
             )
 
         else:
             # For unknown formats, return an empty list
             return []
 
-        # Convert groups to a list of DataFrames
-        residue_dfs = []
-        for _, group in grouped:
-            # Create a copy of the group DataFrame
-            residue_df = group.copy()
-
-            # Preserve the format attribute
-            residue_df.attrs["format"] = self.format
-
-            residue_dfs.append(residue_df)
-
         # Convert groups to a list of Residue objects
         residues = []
         for _, group in grouped:
-            # Create a copy of the group DataFrame
             residue_df = group.copy()
-
-            # Preserve the format attribute
             residue_df.attrs["format"] = self.format
-
-            # Create a Residue object
             residues.append(Residue(residue_df))
 
         return residues
 
     @cached_property
     def connected_residues(self) -> List[List["Residue"]]:
-        """
-        Find segments of connected residues in the structure.
+        """Find segments of covalently connected residues.
+
+        Residues are grouped by chain and sorted by residue number; within each
+        chain, segments of sequentially connected residues (via O3'–P) are returned.
 
         Returns:
-        --------
-        List[List[Residue]]
-            List of segments, where each segment is a list of connected residues
+            List of segments; each segment is a list of Residue objects.
         """
         # Group residues by chain
         residues_by_chain = {}
@@ -703,13 +680,16 @@ class Structure:
 
     @cached_property
     def torsion_angles(self) -> pd.DataFrame:
-        """
-        Calculate torsion angles for all connected residues in the structure.
+        """Compute backbone and chi torsion angles for all connected residues.
+
+        For each residue in each connected segment, the following torsions
+        are calculated when possible:
+
+        - alpha, beta, gamma, delta, epsilon, zeta
+        - chi (purine and pyrimidine definitions)
 
         Returns:
-        --------
-        pd.DataFrame
-            DataFrame containing torsion angle values for each residue
+            DataFrame with one row per residue and columns: chain_id, residue_number, insertion_code, residue_name, alpha, beta, gamma, delta, epsilon, zeta, chi.
         """
         # Find connected segments
         segments = self.connected_residues
@@ -745,10 +725,10 @@ class Structure:
                         continue  # Skip chi for now
 
                     if angle_name == "alpha" and i == 0:
-                        continue  # Skip alpha for the second residue
+                        continue  # Skip alpha for the first residue
 
                     if angle_name in ["epsilon", "zeta"] and i == len(segment) - 1:
-                        continue  # Skip epsilon and zeta for the second-to-last residue
+                        continue  # Skip epsilon and zeta for the last residue
 
                     # Get the atoms for this angle
                     atoms = []
@@ -857,28 +837,24 @@ class Structure:
 
 
 class Residue:
-    """
-    A class representing a single residue in a molecular structure.
+    """Single residue in a molecular structure.
 
-    This class encapsulates a DataFrame containing atoms belonging to a single residue
-    and provides methods to access residue properties.
+    Wraps a DataFrame with atoms belonging to one residue and exposes
+    basic properties like chain ID, residue number, name and connectivity.
     """
 
     def __init__(self, residue_df: pd.DataFrame):
-        """
-        Initialize a Residue object with atom data for a single residue.
+        """Initialize a Residue from a DataFrame with atom records.
 
-        Parameters:
-        -----------
-        residue_df : pd.DataFrame
-            DataFrame containing atom data for a single residue
+        Args:
+            residue_df: DataFrame containing atom data for a single residue.
         """
         self.atoms = residue_df
         self.format = residue_df.attrs.get("format", "unknown")
 
     @property
     def chain_id(self) -> str:
-        """Get the chain identifier for this residue."""
+        """Return the chain identifier for this residue."""
         if self.format == "PDB":
             return self.atoms["chainID"].iloc[0]
         elif self.format == "mmCIF":
@@ -901,7 +877,7 @@ class Residue:
 
     @property
     def residue_number(self) -> int:
-        """Get the residue sequence number."""
+        """Return the residue sequence number."""
         if self.format == "PDB":
             return int(self.atoms["resSeq"].iloc[0])
         elif self.format == "mmCIF":
@@ -924,7 +900,7 @@ class Residue:
 
     @property
     def insertion_code(self) -> Optional[str]:
-        """Get the insertion code, if any."""
+        """Return the insertion code, if present."""
         if self.format == "PDB":
             icode = self.atoms["iCode"].iloc[0]
             return icode if pd.notna(icode) else None
@@ -945,7 +921,7 @@ class Residue:
 
     @cached_property
     def residue_name(self) -> str:
-        """Get the residue name (e.g., 'A', 'G', 'C', 'U', etc.)."""
+        """Return the residue name (e.g. A, G, C, U, DA...)."""
         if self.format == "PDB":
             return self.atoms["resName"].iloc[0]
         elif self.format == "mmCIF":
@@ -1000,12 +976,12 @@ class Residue:
 
     @cached_property
     def atoms_list(self) -> List["Atom"]:
-        """Get a list of all atoms in this residue."""
+        """Return all atoms in this residue as Atom objects."""
         return [Atom(self.atoms.iloc[i], self.format) for i in range(len(self.atoms))]
 
     @cached_property
     def _atom_dict(self) -> dict[str, "Atom"]:
-        """Cache a dictionary of atom names to Atom instances."""
+        """Map atom names to Atom objects for fast lookup."""
         atom_dict = {}
 
         for i in range(len(self.atoms)):
@@ -1054,34 +1030,27 @@ class Residue:
         return atom_names
 
     def find_atom(self, atom_name: str) -> Optional["Atom"]:
-        """
-        Find an atom by name in this residue.
+        """Find an atom by name in this residue.
 
-        Parameters:
-        -----------
-        atom_name : str
-            Name of the atom to find
+        Args:
+            atom_name: Name of the atom (e.g. "C1'", "N1").
 
         Returns:
-        --------
-        Optional[Atom]
-            The Atom object, or None if not found
+            Atom object if present, otherwise None.
         """
         return self._atom_dict.get(atom_name)
 
     @cached_property
     def is_nucleotide(self) -> bool:
-        """
-        Check if this residue is a nucleotide.
+        """Check whether this residue looks like a nucleotide.
 
-        A nucleotide is identified by the presence of specific atoms:
-        - Sugar atoms: C1', C2', C3', C4', O4'
-        - Base atoms: N1, C2, N3, C4, C5, C6
+        A nucleotide is identified by the presence of:
+
+        - sugar atoms: C1', C2', C3', C4', O4'
+        - base atoms: N1, C2, N3, C4, C5, C6
 
         Returns:
-        --------
-        bool
-            True if the residue is a nucleotide, False otherwise
+            True if all required atoms are present, False otherwise.
         """
         atom_names = self._atom_names
         if len(atom_names) < len(REQUIRED_NUCLEOTIDE_ATOMS):
@@ -1096,22 +1065,21 @@ class Residue:
         return residue_name in AMINO_ACID_NAMES
 
     def is_connected(self, next_residue_candidate: "Residue") -> bool:
-        """
-        Check if this residue is connected to the next residue candidate.
+        """Check whether this residue is covalently connected to the next.
 
-        The connection is determined by the distance between the O3' atom of this residue
-        and the P atom of the next residue. If the distance is less than 1.5 times the
-        average O-P covalent bond distance, the residues are considered connected.
+        The connection is defined by the distance between:
 
-        Parameters:
-        -----------
-        next_residue_candidate : Residue
-            The residue to check for connection
+        - O3' atom of this residue and
+        - P atom of the next residue.
+
+        If the distance is less than 1.5 × average O–P covalent bond
+        distance, residues are considered connected.
+
+        Args:
+            next_residue_candidate: Residue to check against.
 
         Returns:
-        --------
-        bool
-            True if the residues are connected, False otherwise
+            True if residues are connected, False otherwise.
         """
         o3p = self.find_atom("O3'")
         p = next_residue_candidate.find_atom("P")
@@ -1123,7 +1091,7 @@ class Residue:
         return False
 
     def __str__(self) -> str:
-        """String representation of the residue."""
+        """Return a compact human-readable identifier for the residue."""
         # Start with chain ID and residue name
         chain = self.chain_id
         if chain.isspace() or not chain:
@@ -1146,35 +1114,30 @@ class Residue:
         return builder
 
     def __repr__(self) -> str:
-        """Detailed string representation of the residue."""
+        """Return a detailed string representation with atom count."""
         return f"Residue({self.__str__()}, {len(self.atoms)} atoms)"
 
 
 class Atom:
-    """
-    A class representing a single atom in a molecular structure.
+    """Single atom in a molecular structure.
 
-    This class encapsulates a pandas Series containing data for a single atom
-    and provides methods to access atom properties.
+    Wraps a pandas Series with atom data and exposes basic properties such as
+    name, element, coordinates, occupancy and B-factor.
     """
 
     def __init__(self, atom_data: pd.Series, format: str):
-        """
-        Initialize an Atom object with atom data.
+        """Initialize an Atom.
 
-        Parameters:
-        -----------
-        atom_data : pd.Series
-            Series containing data for a single atom
-        format : str
-            Format of the data ('PDB' or 'mmCIF')
+        Args:
+            atom_data: Series containing data for a single atom.
+            format: Data format, e.g. "PDB" or "mmCIF".
         """
         self.data = atom_data
         self.format = format
 
     @cached_property
     def name(self) -> str:
-        """Get the atom name."""
+        """Return the atom name (e.g. C1', N1, O3')."""
         if self.format == "PDB":
             return self.data["name"]
         elif self.format == "mmCIF":
@@ -1186,7 +1149,7 @@ class Atom:
 
     @cached_property
     def element(self) -> str:
-        """Get the element symbol."""
+        """Return the element symbol (e.g. C, N, O, P)."""
         if self.format == "PDB":
             return self.data["element"]
         elif self.format == "mmCIF":
@@ -1196,7 +1159,7 @@ class Atom:
 
     @cached_property
     def coordinates(self) -> np.ndarray:
-        """Get the 3D coordinates of the atom."""
+        """Return atom coordinates as a NumPy array [x, y, z]."""
         if self.format == "PDB":
             return np.array([self.data["x"], self.data["y"], self.data["z"]])
         elif self.format == "mmCIF":
@@ -1207,7 +1170,7 @@ class Atom:
 
     @cached_property
     def occupancy(self) -> float:
-        """Get the occupancy value."""
+        """Return atom occupancy (defaults to 1.0 if missing)."""
         if self.format == "PDB":
             return (
                 float(self.data["occupancy"])
@@ -1225,7 +1188,7 @@ class Atom:
 
     @cached_property
     def temperature_factor(self) -> float:
-        """Get the temperature factor (B-factor)."""
+        """Return the B-factor (temperature factor) for this atom."""
         if self.format == "PDB":
             return (
                 float(self.data["tempFactor"])
@@ -1242,10 +1205,10 @@ class Atom:
         return 0.0
 
     def __str__(self) -> str:
-        """String representation of the atom."""
+        """Return a compact representation ``'NAME (ELEMENT)'``."""
         return f"{self.name} ({self.element})"
 
     def __repr__(self) -> str:
-        """Detailed string representation of the atom."""
+        """Return a detailed representation including coordinates."""
         coords = self.coordinates
         return f"Atom({self.name}, {self.element}, [{coords[0]:.3f}, {coords[1]:.3f}, {coords[2]:.3f}])"

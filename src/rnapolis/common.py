@@ -18,18 +18,24 @@ logging.basicConfig(level=LOGLEVEL)
 
 
 class Molecule(Enum):
+    """Simple classification of molecule type."""
+
     DNA = "DNA"
     RNA = "RNA"
     Other = "Other"
 
 
 class GlycosidicBond(Enum):
+    """Orientation of the glycosidic bond."""
+
     anti = "anti"
     syn = "syn"
 
 
 @total_ordering
 class LeontisWesthof(Enum):
+    """Leontis–Westhof base pair geometry classification."""
+
     cWW = "cWW"
     cWH = "cWH"
     cWS = "cWS"
@@ -51,13 +57,17 @@ class LeontisWesthof(Enum):
 
     @property
     def reverse(self):
+        """Return the Leontis–Westhof class with swapped edges."""
         return LeontisWesthof[f"{self.name[0]}{self.name[2]}{self.name[1]}"]
 
     def __lt__(self, other):
+        """Compare Leontis–Westhof classes using tuple ordering of values."""
         return tuple(self.value) < tuple(other.value)
 
 
 class Saenger(Enum):
+    """Saenger base pair classification."""
+
     I = "I"
     II = "II"
     III = "III"
@@ -89,6 +99,7 @@ class Saenger(Enum):
 
     @staticmethod
     def table() -> Dict[Tuple[str, str], str]:
+        """Return mapping from (base pair, Leontis–Westhof) to Saenger class name."""
         return {
             ("AA", "tWW"): "I",
             ("AA", "tHH"): "II",
@@ -159,6 +170,16 @@ class Saenger(Enum):
         residue_j_one_letter_name: str,
         lw: LeontisWesthof,
     ) -> Optional["Saenger"]:
+        """Map a Leontis–Westhof class and base pair to a Saenger class.
+
+        Args:
+            residue_i_one_letter_name: One-letter code of the first base.
+            residue_j_one_letter_name: One-letter code of the second base.
+            lw: Leontis–Westhof classification.
+
+        Returns:
+            Matching Saenger class or ``None`` if not defined.
+        """
         key = (f"{residue_i_one_letter_name}{residue_j_one_letter_name}", lw.value)
         if key in Saenger.table():
             return Saenger[Saenger.table()[key]]
@@ -166,10 +187,13 @@ class Saenger(Enum):
 
     @property
     def is_canonical(self) -> bool:
+        """Return True for canonical Watson–Crick or wobble pairs."""
         return self == Saenger.XIX or self == Saenger.XX or self == Saenger.XXVIII
 
 
 class StackingTopology(Enum):
+    """Relative orientation of stacked bases."""
+
     upward = "upward"
     downward = "downward"
     inward = "inward"
@@ -177,6 +201,7 @@ class StackingTopology(Enum):
 
     @property
     def reverse(self):
+        """Return stacking topology with reversed direction."""
         if self == StackingTopology.upward:
             return StackingTopology.downward
         elif self == StackingTopology.downward:
@@ -185,6 +210,8 @@ class StackingTopology(Enum):
 
 
 class BR(Enum):
+    """Base–ribose interaction classes."""
+
     _0 = "0BR"
     _1 = "1BR"
     _2 = "2BR"
@@ -198,6 +225,8 @@ class BR(Enum):
 
 
 class BPh(Enum):
+    """Base–phosphate interaction classes."""
+
     _0 = "0BPh"
     _1 = "1BPh"
     _2 = "2BPh"
@@ -212,6 +241,8 @@ class BPh(Enum):
 
 @dataclass(frozen=True, order=True)
 class ResidueLabel:
+    """Label-style residue identifier (label chain/number/name)."""
+
     chain: str
     number: int
     name: str
@@ -219,6 +250,8 @@ class ResidueLabel:
 
 @dataclass(frozen=True, order=True)
 class ResidueAuth:
+    """Auth-style residue identifier (auth chain/number/icode/name)."""
+
     chain: str
     number: int
     icode: Optional[str]
@@ -228,10 +261,13 @@ class ResidueAuth:
 @dataclass(frozen=True)
 @total_ordering
 class Residue:
+    """Unified residue identifier with both label and auth coordinates."""
+
     label: Optional[ResidueLabel]
     auth: Optional[ResidueAuth]
 
     def __lt__(self, other):
+        """Compare residues by chain, number and insertion code."""
         return (self.chain, self.number, self.icode or " ") < (
             other.chain,
             other.number,
@@ -240,6 +276,7 @@ class Residue:
 
     @property
     def chain(self) -> Optional[str]:
+        """Return chain identifier from auth or label coordinates."""
         if self.auth is not None:
             return self.auth.chain
         if self.label is not None:
@@ -248,6 +285,7 @@ class Residue:
 
     @property
     def number(self) -> Optional[int]:
+        """Return residue number from auth or label coordinates."""
         if self.auth is not None:
             return self.auth.number
         if self.label is not None:
@@ -256,12 +294,14 @@ class Residue:
 
     @property
     def icode(self) -> Optional[str]:
+        """Return insertion code or ``None`` if not set or blank."""
         if self.auth is not None:
             return self.auth.icode if self.auth.icode not in (" ", "?") else None
         return None
 
     @property
     def name(self) -> Optional[str]:
+        """Return residue name from auth or label coordinates."""
         if self.auth is not None:
             return self.auth.name
         if self.label is not None:
@@ -270,6 +310,7 @@ class Residue:
 
     @property
     def molecule_type(self) -> Molecule:
+        """Classify residue as RNA, DNA or Other based on its name."""
         if self.name is not None:
             if self.name.upper() in ("A", "C", "G", "U"):
                 return Molecule.RNA
@@ -280,6 +321,7 @@ class Residue:
     @property
     @cache
     def full_name(self) -> Optional[str]:
+        """Return human-readable residue identifier (e.g. A.A/23^A)."""
         if self.auth is not None:
             if self.auth.chain.isspace():
                 builder = f"{self.auth.name}"
@@ -305,43 +347,58 @@ class Residue:
 
 @dataclass(frozen=True, order=True)
 class Interaction:
+    """Base class for all interactions between two residues."""
+
     nt1: Residue
     nt2: Residue
 
 
 @dataclass(frozen=True, order=True)
 class BasePair(Interaction):
+    """Base pair interaction with Leontis–Westhof and Saenger class."""
+
     lw: LeontisWesthof
     saenger: Optional[Saenger]
 
 
 @dataclass(frozen=True, order=True)
 class Stacking(Interaction):
+    """Base stacking interaction."""
+
     topology: Optional[StackingTopology]
 
 
 @dataclass(frozen=True, order=True)
 class BaseRibose(Interaction):
+    """Base–ribose interaction."""
+
     br: Optional[BR]
 
 
 @dataclass(frozen=True, order=True)
 class BasePhosphate(Interaction):
+    """Base–phosphate interaction."""
+
     bph: Optional[BPh]
 
 
 @dataclass(frozen=True, order=True)
 class OtherInteraction(Interaction):
+    """Catch-all interaction type for non-standard contacts."""
+
     pass
 
 
 @dataclass
 class Entry(Sequence):
+    """Single BPSEQ entry (index, base, pairing partner)."""
+
     index_: int
     sequence: str
     pair: int
 
     def __getitem__(self, item):
+        """Support tuple-like access to (index, sequence, pair)."""
         if item == 0:
             return self.index_
         elif item == 1:
@@ -351,17 +408,22 @@ class Entry(Sequence):
         raise IndexError()
 
     def __lt__(self, other):
+        """Order entries by index."""
         return self.index_ < other.index_
 
     def __len__(self) -> int:
+        """Always return length 3 (index, sequence, pair)."""
         return 3
 
     def __str__(self):
+        """Format entry in classic BPSEQ style: 'i base j'."""
         return f"{self.index_} {self.sequence} {self.pair}"
 
 
 @dataclass(frozen=True)
 class Strand:
+    """Continuous strand segment with sequence and dot-bracket structure."""
+
     first: int
     last: int
     sequence: str
@@ -370,7 +432,18 @@ class Strand:
     @staticmethod
     def from_bpseq_entries(
         entries: List[Entry], dotbracket: str, reverse: bool = False
-    ):
+    ) -> "Strand":
+        """Build a Strand from a list of BPSEQ entries.
+
+        Args:
+            entries: Consecutive BPSEQ entries forming the strand.
+            dotbracket: Full dot-bracket structure string.
+            reverse: If True, reverse 5'–3' direction.
+
+        Returns:
+            New strand object covering the selected region.
+        """
+
         first = entries[0].index_
         last = first + len(entries) - 1
         if reverse:
@@ -385,19 +458,24 @@ class Strand:
         return Strand(first, last, sequence, structure)
 
     def __str__(self):
+        """Return simple text representation of the strand."""
         return f"{self.first}-{self.sequence}-{self.last}"
 
 
 @dataclass
 class SingleStrand:
+    """Single-stranded region (5', 3' or internal)."""
+
     strand: Strand
     is5p: bool
     is3p: bool
 
     def __post_init__(self):
+        """Cache a human-readable description string."""
         self.description = str(self)
 
     def __str__(self):
+        """Return a readable label describing the single strand."""
         if self.is5p:
             return f"SingleStrand5p {self.strand.first} {self.strand.last} {self.strand.sequence} {self.strand.structure}"
         if self.is3p:
@@ -407,13 +485,26 @@ class SingleStrand:
 
 @dataclass
 class Stem:
+    """Paired stem defined by two complementary strands."""
+
     strand5p: Strand
     strand3p: Strand
 
     @staticmethod
     def from_bpseq_entries(
-        strand5p_entries: List[Entry], all_entries: List, dotbracket: str
-    ):
+        strand5p_entries: List[Entry], all_entries: List[Entry], dotbracket: str
+    ) -> "Stem":
+        """Build a Stem from 5' strand entries and full BPSEQ list.
+
+        Args:
+            strand5p_entries: Entries of the 5' side of the stem.
+            all_entries: All BPSEQ entries for the molecule.
+            dotbracket: Full dot-bracket structure string.
+
+        Returns:
+            New stem object with 5' and 3' strands.
+        """
+
         paired = set([entry[2] for entry in strand5p_entries])
         strand3p_entries = list(filter(lambda entry: entry[0] in paired, all_entries))
         return Stem(
@@ -422,31 +513,46 @@ class Stem:
         )
 
     def __post_init__(self):
+        """Cache a human-readable description string."""
         self.description = str(self)
 
     def __str__(self):
-        return f"Stem {self.strand5p.first} {self.strand5p.last} {self.strand5p.sequence} {self.strand5p.structure} {self.strand3p.first} {self.strand3p.last} {self.strand3p.sequence} {self.strand3p.structure}"
+        """Return a readable representation of the stem."""
+        return (
+            f"Stem {self.strand5p.first} {self.strand5p.last} "
+            f"{self.strand5p.sequence} {self.strand5p.structure} "
+            f"{self.strand3p.first} {self.strand3p.last} "
+            f"{self.strand3p.sequence} {self.strand3p.structure}"
+        )
 
 
 @dataclass
 class Hairpin:
+    """Hairpin loop represented by a single strand."""
+
     strand: Strand
 
     def __post_init__(self):
+        """Cache a human-readable description string."""
         self.description = str(self)
 
     def __str__(self):
+        """Return a readable representation of the hairpin."""
         return f"Hairpin {self.strand.first} {self.strand.last} {self.strand.sequence} {self.strand.structure}"
 
 
 @dataclass
 class Loop:
+    """Multi-strand loop consisting of several contiguous strands."""
+
     strands: List[Strand]
 
     def __post_init__(self):
+        """Cache a human-readable description string."""
         self.description = str(self)
 
     def __str__(self):
+        """Return a readable representation of the loop."""
         desc = " ".join(
             [
                 "{} {} {} {}".format(
@@ -460,10 +566,20 @@ class Loop:
 
 @dataclass
 class BpSeq:
+    """Sequence and base-pairing information in BPSEQ format."""
+
     entries: List[Entry]
 
     @staticmethod
-    def from_string(bpseq_str: str):
+    def from_string(bpseq_str: str) -> "BpSeq":
+        """Parse BPSEQ-formatted text into a BpSeq object.
+
+        Args:
+            bpseq_str: Text containing BPSEQ lines.
+
+        Returns:
+            Parsed BPSEQ representation.
+        """
         entries = []
         for line in bpseq_str.splitlines():
             line = line.strip()
@@ -478,12 +594,28 @@ class BpSeq:
         return BpSeq(entries)
 
     @staticmethod
-    def from_file(bpseq_path: str):
+    def from_file(bpseq_path: str) -> "BpSeq":
+        """Read BPSEQ data from a file path.
+
+        Args:
+            bpseq_path: Path to a BPSEQ file.
+
+        Returns:
+            Parsed BPSEQ representation.
+        """
         with open(bpseq_path) as f:
             return BpSeq.from_string(f.read())
 
     @staticmethod
-    def from_dotbracket(dot_bracket):
+    def from_dotbracket(dot_bracket: "DotBracket") -> "BpSeq":
+        """Convert dot-bracket representation to BPSEQ entries.
+
+        Args:
+            dot_bracket: Dot-bracket representation with sequence and structure.
+
+        Returns:
+            BPSEQ representation derived from dot-bracket.
+        """
         entries = [
             Entry(i + 1, dot_bracket.sequence[i], 0)
             for i in range(len(dot_bracket.sequence))
@@ -494,6 +626,7 @@ class BpSeq:
         return BpSeq(entries)
 
     def __post_init__(self):
+        """Build internal mapping from indices to their pairing partners."""
         self.pairs = {}
         for i, _, j in self.entries:
             if j != 0:
@@ -501,18 +634,29 @@ class BpSeq:
                 self.pairs[j] = i
 
     def __str__(self):
+        """Format BPSEQ entries as multi-line text."""
         return "\n".join(("{} {} {}".format(i, c, j) for i, c, j in self.entries))
 
     def __eq__(self, other):
+        """Compare two BpSeq objects entry by entry."""
         return len(self.entries) == len(other.entries) and all(
             ei == ej for ei, ej in zip(self.entries, other.entries)
         )
 
     @cached_property
     def sequence(self) -> str:
+        """Return the nucleotide sequence as a string."""
         return "".join(entry.sequence for entry in self.entries)
 
-    def paired(self, only5to3: bool = False):
+    def paired(self, only5to3: bool = False) -> "Iterator[Entry]":
+        """Iterate over paired entries.
+
+        Args:
+            only5to3: If True, keep only pairs where index < partner.
+
+        Returns:
+            Iterator over paired Entry objects.
+        """
         result = filter(lambda entry: entry.pair != 0, self.entries)
         if only5to3:
             result = filter(lambda entry: entry.index_ < entry.pair, result)
@@ -520,6 +664,7 @@ class BpSeq:
 
     @cached_property
     def __stems_entries(self) -> List[List[Entry]]:
+        """Internal helper: group paired entries into stems."""
         stems = []
         entries: List[Entry] = []
 
@@ -546,6 +691,11 @@ class BpSeq:
     def elements(
         self,
     ) -> Tuple[List[Stem], List[SingleStrand], List[Hairpin], List[Loop]]:
+        """Decompose structure into stems, single strands, hairpins and loops.
+
+        Returns:
+            Four lists describing each structural element type.
+        """
         if not self.__stems_entries:
             return [], [], [], []
 
@@ -652,6 +802,7 @@ class BpSeq:
 
     @cached_property
     def graphviz(self):
+        """Create and render a Graphviz graph of structural elements."""
         stems, single_strands, hairpins, loops = self.elements
         graph = defaultdict(set)
         dot = graphviz.Graph()
@@ -709,6 +860,7 @@ class BpSeq:
 
     @cached_property
     def __regions(self) -> List[Tuple[int, int, int]]:
+        """Internal helper: list of stem regions (start, partner, length)."""
         return [
             (stem_entries[0].index_, stem_entries[0].pair, len(stem_entries))
             for stem_entries in self.__stems_entries
@@ -716,6 +868,7 @@ class BpSeq:
 
     @cached_property
     def dot_bracket(self):
+        """Convert BPSEQ information to dot-bracket using MILP solver if available."""
         if pulp.HiGHS_CMD().available():
             solver = pulp.HiGHS_CMD()  # much faster than default
         else:
@@ -724,7 +877,18 @@ class BpSeq:
             solver.msg = False
         return self.convert_to_dot_bracket(solver)
 
-    def convert_to_dot_bracket(self, solver: pulp.LpSolver):
+    def convert_to_dot_bracket(self, solver: pulp.LpSolver) -> "DotBracket":
+        """Convert BPSEQ to dot-bracket using a given PuLP solver.
+
+        If the solver is not available or the problem is infeasible,
+        the method falls back to a greedy FCFS algorithm.
+
+        Args:
+            solver: PuLP MILP solver instance or None.
+
+        Returns:
+            DotBracket: Dot-bracket representation of the structure.
+        """
         # if PuLP solvers are not installed, use FCFS
         if solver is None:
             return self.fcfs()
@@ -826,7 +990,12 @@ class BpSeq:
 
         return self.__make_dot_bracket(regions, orders)
 
-    def __make_dot_bracket(self, regions, orders):
+    def __make_dot_bracket(self, regions, orders) -> "DotBracket":
+        """Internal helper: build final dot-bracket object from regions and orders.
+
+        Returns:
+            Dot-bracket representation built from the given stem regions and orders.
+        """
         # build dot-bracket
         sequence = self.sequence
         structure = ["." for _ in range(len(sequence))]
@@ -849,7 +1018,12 @@ class BpSeq:
         return DotBracket.from_string(sequence, structure)
 
     @cached_property
-    def fcfs(self):
+    def fcfs(self) -> "DotBracket":
+        """Greedy FCFS (first-come, first-served) conversion to dot-bracket.
+
+        Returns:
+            Dot-bracket representation produced by the FCFS heuristic.
+        """
         regions = [
             (stem_entries[0].index_, stem_entries[0].pair, len(stem_entries))
             for stem_entries in self.__stems_entries
@@ -873,7 +1047,12 @@ class BpSeq:
         return self.__make_dot_bracket(regions, orders)
 
     @cached_property
-    def all_dot_brackets(self):
+    def all_dot_brackets(self) -> list[str]:
+        """Enumerate all valid dot-bracket solutions for pseudoknotted structures.
+
+        Returns:
+            List of possible dot-bracket assignments.
+        """
         # build conflict graph
         regions = self.__regions
         graph = defaultdict(set)
@@ -952,10 +1131,20 @@ class BpSeq:
             solutions.add(self.__make_dot_bracket(regions, orders))
         return list(solutions)
 
-    def without_pseudoknots(self):
+    def without_pseudoknots(self) -> "BpSeq":
+        """Return BPSEQ converted to dot-bracket with pseudoknots removed.
+
+        Returns:
+            New BPSEQ object with all pseudoknots removed.
+        """
         return BpSeq.from_dotbracket(self.dot_bracket.without_pseudoknots())
 
-    def without_isolated(self):
+    def without_isolated(self) -> "BpSeq":
+        """Return BpSeq with isolated base pairs unpaired.
+
+        Returns:
+            New BPSEQ object where isolated base pairs have been unpaired.
+        """
         stems, _, _, _ = self.elements
         to_unpair = []
 
@@ -976,11 +1165,21 @@ class BpSeq:
 
 @dataclass
 class DotBracket:
+    """Sequence and structure in dot-bracket notation."""
+
     sequence: str
     structure: str
 
     @staticmethod
-    def from_file(path: str):
+    def from_file(path: str) -> "DotBracket":
+        """Read DotBracket from a file with 2–3 lines.
+
+        Args:
+            path: Path to a file with sequence and structure lines.
+
+        Returns:
+            Parsed dot-bracket object.
+        """
         with open(path) as f:
             lines = f.readlines()
         if len(lines) == 2:
@@ -990,7 +1189,19 @@ class DotBracket:
         raise RuntimeError(f"Failed to read DotBracket from file: {path}")
 
     @staticmethod
-    def from_string(sequence: str, structure: str):
+    def from_string(sequence: str, structure: str) -> "DotBracket":
+        """Create a DotBracket object from raw sequence and structure strings.
+
+        Args:
+            sequence: Nucleotide sequence.
+            structure: Dot-bracket string of the same length.
+
+        Returns:
+            New dot-bracket object.
+
+        Raises:
+            ValueError: If sequence and structure lengths differ.
+        """
         if len(sequence) != len(structure):
             raise ValueError(
                 "Sequence and structure lengths differ, {} vs {}",
@@ -999,6 +1210,7 @@ class DotBracket:
         return DotBracket(sequence, structure)
 
     def __post_init__(self):
+        """Parse structure string into a list of paired indices."""
         self.pairs = []
 
         opening = "([{<" + string.ascii_uppercase
@@ -1015,31 +1227,64 @@ class DotBracket:
                 self.pairs.append((begins[begin].pop(), i))
 
     def __str__(self):
+        """Return sequence and structure as two lines of text."""
         return f"{self.sequence}\n{self.structure}"
 
     def __eq__(self, other):
+        """Compare dot-bracket objects by sequence and structure."""
         return self.sequence == other.sequence and self.structure == other.structure
 
     def __hash__(self) -> int:
+        """Hash dot-bracket based on sequence and structure."""
         return hash((self.sequence, self.structure))
 
-    def without_pseudoknots(self):
+    def without_pseudoknots(self) -> "DotBracket":
+        """Return a copy with pseudoknot brackets replaced by dots.
+
+        Returns:
+            New dot-bracket object with pseudoknots removed.
+        """
         structure = re.sub(r"[\[\]\{\}\<\>A-Za-z]", ".", self.structure)
         return DotBracket(self.sequence, structure)
 
 
 @dataclass
 class MultiStrandDotBracket(DotBracket):
+    """Dot-bracket representation for multiple strands concatenated together."""
+
     strands: List[Strand]
 
     @staticmethod
-    def from_string(sequence: str, structure: str):
+    def from_string(sequence: str, structure: str) -> "DotBracket":
+        """Create MultiStrandDotBracket from a single sequence/structure.
+
+        For compatibility with DotBracket, this creates a single strand
+        covering the full sequence.
+
+        Args:
+            sequence: Nucleotide sequence.
+            structure: Dot-bracket structure string.
+
+        Returns:
+            Multi-strand dot-bracket object.
+        """
         # Provide compatibility with DotBracket.from_string
         strand = Strand(1, len(sequence), sequence, structure)
         return MultiStrandDotBracket(sequence, structure, [strand])
 
     @staticmethod
-    def from_multiline_string(input: str):
+    def from_multiline_string(input: str) -> "DotBracket":
+        """Parse multi-strand dot-bracket from a multi-line string.
+
+        The format expects optional header lines starting with '>', followed
+        by sequence and structure lines for each strand.
+
+        Args:
+            input: Full multi-line text.
+
+        Returns:
+            Parsed multi-strand representation.
+        """
         strands = []
         first = 1
 
@@ -1061,13 +1306,23 @@ class MultiStrandDotBracket(DotBracket):
         )
 
     @staticmethod
-    def from_file(path: str):
+    def from_file(path: str) -> "DotBracket":
+        """Read MultiStrandDotBracket from a file.
+
+        Args:
+            path: Path to the input file.
+
+        Returns:
+            Parsed multi-strand dot-bracket object.
+        """
         with open(path) as f:
             return MultiStrandDotBracket.from_multiline_string(f.read())
 
 
 @dataclass(frozen=True, order=True)
 class BaseInteractions:
+    """Container for all base-level interactions in a structure."""
+
     base_pairs: List[BasePair]
     stackings: List[Stacking]
     base_ribose_interactions: List[BaseRibose]
@@ -1084,6 +1339,22 @@ class BaseInteractions:
         base_phosphate_interactions: List[BasePhosphate],
         other_interactions: List[OtherInteraction],
     ) -> "BaseInteractions":
+        """Unify residue identifiers across interactions based on a 3D structure.
+
+        This method ensures that all interactions share consistent auth/label
+        coordinates and, when possible, fills in missing Saenger classes.
+
+        Args:
+            structure3d: 3D structure used as a reference.
+            base_pairs: List of base-pair interactions.
+            stackings: List of stacking interactions.
+            base_ribose_interactions: List of base–ribose interactions.
+            base_phosphate_interactions: List of base–phosphate interactions.
+            other_interactions: List of other interactions.
+
+        Returns:
+            BaseInteractions: Normalized interactions container.
+        """
         cni2residue = {}
         cni2label = {}
         cni2auth = {}
@@ -1170,6 +1441,8 @@ class BaseInteractions:
 
 @dataclass(frozen=True, order=True)
 class InterStemParameters:
+    """Geometric parameters describing relationships between two stems."""
+
     stem1_idx: int
     stem2_idx: int
     type: Optional[str]  # Type of closest endpoint pair ('cs55', 'cs53', etc.)
@@ -1182,6 +1455,12 @@ class InterStemParameters:
 
 @dataclass
 class Structure2D:
+    """Secondary structure representation plus derived structural elements.
+
+    This object collects interactions, BPSEQ, dot-bracket notation,
+    stems, loops and optional inter-stem parameters.
+    """
+
     base_pairs: List[BasePair]
     stackings: List[Stacking]
     base_ribose_interactions: List[BaseRibose]

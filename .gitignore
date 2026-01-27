@@ -1,4 +1,6 @@
 .aider*
+.venv
+.DS_Store
 .env
 .hypothesis
 RNApolis.egg-info
