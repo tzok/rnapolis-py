@@ -1,4 +1,5 @@
 site_name: rnapolis-py documentation
+site_url: https://tzok.github.io/rnapolis-py/
 
 theme:
   name: material
@@ -31,4 +32,3 @@ nav:
       - Splitter: api/splitter.md
       - Tertiary: api/tertiary.md
       - Tertiary v2: api/tertiary_v2.md
-
