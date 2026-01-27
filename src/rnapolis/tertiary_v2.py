@@ -587,7 +587,7 @@ class Structure:
             groupby_cols = [col for col in groupby_cols if col in self.atoms.columns]
 
             # Group atoms by residue
-            grouped = self.atoms.groupby(groupby_cols, dropna=False, observed=False)
+            grouped = self.atoms.groupby(groupby_cols, dropna=False, observed=True)
 
         elif self.format == "mmCIF":
             # Prefer auth_* columns if they exist
@@ -610,7 +610,7 @@ class Structure:
 
             # Group atoms by residue
             grouped = self.atoms.groupby(
-                groupby_cols, dropna=False, observed=False, sort=False
+                groupby_cols, dropna=False, observed=True, sort=False
             )
 
         else:
