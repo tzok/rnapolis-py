@@ -1,4 +1,5 @@
 import io
+import io
 import os
 
 import numpy as np
@@ -12,7 +13,13 @@ from rnapolis.parser_v2 import (
     write_cif,
     write_pdb,
 )
-from rnapolis.tertiary_v2 import Structure, calculate_torsion_angle
+from rnapolis.tertiary_v2 import (
+    REQUIRED_NUCLEOTIDE_ATOMS,
+    Structure,
+    calculate_torsion_angle,
+)
+from rnapolis.geometry import are_bases_coplanar
+from rnapolis.quick_filter import filter_content
 
 
 def compare_structures(df1: pd.DataFrame, df2: pd.DataFrame, rtol=1e-5, atol=1e-8):
@@ -88,15 +95,45 @@ def compare_structures(df1: pd.DataFrame, df2: pd.DataFrame, rtol=1e-5, atol=1e-
             )
 
             # Compare coordinates with tolerance
-            np.testing.assert_allclose(
-                atom1.coordinates,
-                atom2.coordinates,
-                rtol=rtol,
-                atol=atol,
-                err_msg=(
-                    f"Atom coordinate mismatch for atom {atom1.name} in residue {res1_id}"
-                ),
-            )
+    np.testing.assert_allclose(
+        atom1.coordinates,
+        atom2.coordinates,
+        rtol=rtol,
+        atol=atol,
+        err_msg=(
+            f"Atom coordinate mismatch for atom {atom1.name} in residue {res1_id}"
+        ),
+    )
+
+
+def _build_pdb_residue(residue_name: str, atom_names):
+    records = []
+    for serial, atom_name in enumerate(atom_names, 1):
+        records.append(
+            {
+                "record_type": "ATOM",
+                "serial": serial,
+                "name": atom_name,
+                "altLoc": None,
+                "resName": residue_name,
+                "chainID": "A",
+                "resSeq": 1,
+                "iCode": None,
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0,
+                "occupancy": 1.0,
+                "tempFactor": 0.0,
+                "element": atom_name[0],
+                "charge": None,
+                "model": 1,
+            }
+        )
+
+    df = pd.DataFrame(records)
+    df.attrs["format"] = "PDB"
+    structure = Structure(df)
+    return structure.residues[0]
 
 
 @pytest.fixture
@@ -446,3 +483,75 @@ def test_is_nucleotide(data_dir):
     structure = Structure(df_atoms)
     residues = [residue for residue in structure.residues if residue.is_nucleotide]
     assert len(residues) == 76
+
+
+def test_quick_filter_cif_nucleic_acid(data_dir):
+    cif_path = os.path.join(data_dir, "1a9n.cif")
+    if not os.path.exists(cif_path):
+        pytest.skip(f"Test file not found: {cif_path}")
+
+    with open(cif_path, "r") as f:
+        content = f.read()
+
+    original_atoms = parse_cif_atoms(io.StringIO(content))
+    filtered_content = filter_content(content, mode="nucleic-acid")
+    filtered_atoms = parse_cif_atoms(io.StringIO(filtered_content))
+
+    assert len(filtered_atoms) < len(original_atoms)
+
+    structure = Structure(filtered_atoms)
+    assert structure.residues, "Filtered structure has no residues"
+    assert all(residue.is_nucleotide for residue in structure.residues)
+
+
+def test_are_bases_coplanar_examples(data_dir):
+    cif_path = os.path.join(data_dir, "1ehz-assembly-1.cif")
+    if not os.path.exists(cif_path):
+        pytest.skip(f"Test file not found: {cif_path}")
+
+    with open(cif_path, "r") as f:
+        df_atoms = parse_cif_atoms(f)
+    assert not df_atoms.empty, "Original CIF parsing failed"
+
+    structure = Structure(df_atoms)
+
+    by_id = {
+        (r.chain_id, r.residue_name, r.residue_number, r.insertion_code): r
+        for r in structure.residues
+    }
+
+    coplanar = [
+        by_id[("A", "2MG", 10, None)],
+        by_id[("A", "C", 25, None)],
+        by_id[("A", "G", 45, None)],
+    ]
+    assert are_bases_coplanar(coplanar, max_distance=1.0, max_angle_deg=30.0)
+
+    not_coplanar = [
+        by_id[("A", "G", 18, None)],
+        by_id[("A", "PSU", 55, None)],
+        by_id[("A", "G", 57, None)],
+    ]
+    assert not are_bases_coplanar(not_coplanar, max_distance=1.0, max_angle_deg=30.0)
+
+
+def test_is_nucleotide_detects_required_atoms():
+    residue = _build_pdb_residue("A", sorted(REQUIRED_NUCLEOTIDE_ATOMS))
+    assert residue.is_nucleotide
+
+
+def test_is_nucleotide_requires_all_atoms():
+    required_atoms = sorted(REQUIRED_NUCLEOTIDE_ATOMS)
+    residue = _build_pdb_residue("A", required_atoms[:-1])
+    assert not residue.is_nucleotide
+
+
+def test_is_amino_acid_detects_standard_residue():
+    residue = _build_pdb_residue("ALA", ["N", "CA", "C", "O"])
+    assert residue.is_amino_acid
+    assert not residue.is_nucleotide
+
+
+def test_is_amino_acid_rejects_water():
+    residue = _build_pdb_residue("HOH", ["O"])
+    assert not residue.is_amino_acid

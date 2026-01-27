@@ -1,7 +1,7 @@
 import configparser
 import importlib.resources
 import numpy as np
-from typing import Dict, List, NamedTuple, Optional, Tuple, Union
+from typing import Dict, Iterable, List, NamedTuple, Optional, Tuple, Union
 
 from collections import Counter
 
@@ -160,12 +160,14 @@ def is_c1p_c1p_distance_valid(
 
 
 def _get_base_atoms_coords(residue: Residue) -> Optional[np.ndarray]:
+    """Extracts coordinates of core base atoms for a residue.
+
+    Uses `Residue.one_letter_name` so modified residues (e.g. PSU/2MG)
+    can still be treated as a canonical base when possible.
     """
-    Extracts coordinates of core base atoms for a given residue.
-    """
-    res_name = residue.residue_name
-    is_purine = res_name in {"A", "G", "DA", "DG"}
-    is_pyrimidine = res_name in {"C", "U", "T", "DC", "DT"}
+    res_name = residue.one_letter_name.upper()
+    is_purine = res_name in {"A", "G"}
+    is_pyrimidine = res_name in {"C", "U", "T"}
 
     if not (is_purine or is_pyrimidine):
         return None
@@ -208,12 +210,13 @@ def _calculate_mean_plane(coords: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
 
 
 def _unify_normal(residue: Residue, normal: np.ndarray) -> Optional[np.ndarray]:
+    """Ensures the normal vector points in the canonical direction.
+
+    Uses `Residue.one_letter_name` so modified residues can be handled.
     """
-    Ensures the normal vector points in the canonical direction (IUPAC standard).
-    """
-    res_name = residue.residue_name
-    is_purine = res_name in {"A", "G", "DA", "DG"}
-    is_pyrimidine = res_name in {"C", "U", "T", "DC", "DT"}
+    res_name = residue.one_letter_name.upper()
+    is_purine = res_name in {"A", "G"}
+    is_pyrimidine = res_name in {"C", "U", "T"}
 
     if not (is_purine or is_pyrimidine):
         return None
@@ -455,6 +458,97 @@ def get_stacking_parameters(
         "overlap_area": overlap_area,
         "face_orientation": face_orientation,
     }
+
+
+def are_bases_coplanar(
+    residues: Iterable[Residue],
+    *,
+    max_distance: float = 1.0,
+    max_angle_deg: float = 30.0,
+) -> bool:
+    """Check if nucleobases of residues are co-planar.
+
+    The criterion is a *single* global best-fit plane computed from the core
+    ring atoms of all residues.
+
+    A residue's nucleobase is considered compatible if:
+    - its base centroid lies close to the global plane (`max_distance`)
+    - the residue's own base plane normal is close to the global normal
+      (`max_angle_deg`)
+
+    Notes:
+    - If `len(residues) < 2`, returns `True`.
+    - Raises `ValueError` if any residue is not a recognizable nucleotide or
+      lacks base core atoms.
+
+    Parameters
+    ----------
+    residues:
+        Iterable of `rnapolis.tertiary_v2.Residue`.
+    max_distance:
+        Maximum allowed atom-to-plane distance in Angstroms.
+    max_angle_deg:
+        Maximum allowed angle between a residue base normal and the global
+        normal, in degrees.
+
+    Returns
+    -------
+    bool
+        True if all residues satisfy both criteria.
+    """
+
+    residues_list = list(residues)
+    if len(residues_list) < 2:
+        return True
+
+    per_res_coords: List[np.ndarray] = []
+    all_coords: List[np.ndarray] = []
+
+    for residue in residues_list:
+        coords = _get_base_atoms_coords(residue)
+        if coords is None or coords.shape[0] < 3:
+            raise ValueError(
+                f"Cannot compute base plane for residue {residue}; missing core atoms"
+            )
+        per_res_coords.append(coords)
+        all_coords.append(coords)
+
+    stacked_coords = np.vstack(all_coords)
+    centroid, global_normal = _calculate_mean_plane(stacked_coords)
+
+    # Ensure a stable reference direction for angle checks.
+    ref_centroid, ref_normal = _calculate_mean_plane(per_res_coords[0])
+    ref_normal = _unify_normal(residues_list[0], ref_normal)
+    if ref_normal is None:
+        raise ValueError(
+            f"Cannot determine canonical base normal for residue {residues_list[0]}"
+        )
+    if np.dot(global_normal, ref_normal) < 0:
+        global_normal = -global_normal
+
+    # 1) Distance-to-plane check using per-residue base centroids.
+    # Using centroids is more robust to small local puckers / atom naming
+    # differences, and matches typical "base plane" usage.
+    base_centroids = np.array([np.mean(coords, axis=0) for coords in per_res_coords])
+    centroid_dists = np.abs((base_centroids - centroid) @ global_normal)
+    if float(np.max(centroid_dists)) > max_distance:
+        return False
+
+    # 2) Per-residue normal alignment check.
+    for residue, coords in zip(residues_list, per_res_coords):
+        _, n_svd = _calculate_mean_plane(coords)
+        n = _unify_normal(residue, n_svd)
+        if n is None:
+            raise ValueError(
+                f"Cannot determine canonical base normal for residue {residue}"
+            )
+
+        cos_angle = np.clip(np.abs(float(np.dot(n, global_normal))), -1.0, 1.0)
+        angle_deg = float(np.degrees(np.arccos(cos_angle)))
+        if angle_deg > max_angle_deg:
+            return False
+
+    return True
 
 
 def is_stacking_valid(

@@ -1,5 +1,6 @@
 import io
 import os
+import re
 import string
 import tempfile
 from typing import IO, TextIO, Union
@@ -157,37 +158,37 @@ def parse_cif_atoms(content: Union[str, IO[str]]) -> pd.DataFrame:
     """
     adapter = IoAdapterPy()
 
-    # Handle string, StringIO, and file-like objects
     if isinstance(content, str):
-        # Create a temporary file for string input
-        with tempfile.NamedTemporaryFile(
-            mode="w+", suffix=".cif", delete=False
-        ) as temp_file:
-            temp_file.write(content)
-            temp_file_path = temp_file.name
-        try:
-            data = adapter.readFile(temp_file_path)
-        finally:
-            os.remove(temp_file_path)  # Clean up the temporary file
+        cif_text = content
     elif isinstance(content, io.StringIO):
-        # Create a temporary file for StringIO input
-        with tempfile.NamedTemporaryFile(
-            mode="w+", suffix=".cif", delete=False
-        ) as temp_file:
-            content.seek(0)  # Ensure reading from the start
-            temp_file.write(content.read())
-            temp_file_path = temp_file.name
-        try:
-            data = adapter.readFile(temp_file_path)
-        finally:
-            os.remove(temp_file_path)  # Clean up the temporary file
-    elif hasattr(content, "name"):
-        # Assume it's a file-like object with a name attribute (like an open file)
-        data = adapter.readFile(content.name)
+        content.seek(0)
+        cif_text = content.read()
+    elif hasattr(content, "read"):
+        content.seek(0)
+        cif_text = content.read()
+        if isinstance(cif_text, bytes):
+            cif_text = cif_text.decode("utf-8")
     else:
         raise TypeError(
-            "Unsupported input type for parse_cif_atoms. Expected str, file-like object with name, or StringIO."
+            "Unsupported input type for parse_cif_atoms. Expected str, file-like object, or StringIO."
         )
+
+    cif_text = re.sub(r"(^\s*data_)\s*$", r"\1unnamed", cif_text, flags=re.MULTILINE)
+    for axis in ("x", "y", "z"):
+        cif_text = re.sub(
+            rf"(_atom_site\.)cartn_{axis}\b",
+            rf"\1Cartn_{axis}",
+            cif_text,
+            flags=re.IGNORECASE,
+        )
+
+    with tempfile.NamedTemporaryFile(mode="w+", suffix=".cif", delete=False) as temp_file:
+        temp_file.write(cif_text)
+        temp_file_path = temp_file.name
+    try:
+        data = adapter.readFile(temp_file_path)
+    finally:
+        os.remove(temp_file_path)
 
     # Get the atom_site category
     category = data[0].getObj("atom_site")

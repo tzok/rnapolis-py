@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 from collections import defaultdict
 from typing import Callable, Dict, Iterable, List, Optional, Tuple
 
@@ -23,6 +24,23 @@ _BARNABA_STACKING_TOPOLOGIES = {
     "<>": "outward",
     "><": "inward",
 }
+
+
+_BARNABA_SEQUENCE_TOKEN_RE = re.compile(r"[A-Za-z0-9]+_-?\d+_\d+")
+
+
+def _barnaba_parse_sequence(sequence: str) -> List[str]:
+    """Parse the `# sequence` field from barnaba output.
+
+    Barnaba joins residue descriptors with '-' (dash). Residue numbers may be
+    negative (e.g. `DA_-1_0`), so a plain `split('-')` is ambiguous.
+    """
+
+    tokens = _BARNABA_SEQUENCE_TOKEN_RE.findall(sequence)
+    if tokens:
+        return tokens
+    # Fallback for unexpected formats.
+    return sequence.split("-")
 
 
 def _barnaba_assign_indices_to_chains(indices, chains, score, avail):
@@ -156,25 +174,27 @@ def parse_barnaba_output(
         logging.warning("No barnaba pairing or stacking files found")
         return BaseInteractions([], [], [], [], [])
 
-    barnaba_mapping: List[str] = []
+    barnaba_sequence: List[str] = []
+    sequence_file = pairing_file if pairing_file is not None else stacking_file
+    assert sequence_file is not None
 
-    with open(pairing_file or stacking_file, "r") as f:
+    with open(sequence_file, "r") as f:
         for line in f.readlines():
             if line.startswith("# sequence"):
-                barnaba_mapping = line.strip().split()[2].split("-")
+                barnaba_sequence = _barnaba_parse_sequence(line.strip().split()[2])
                 break
 
-    if not barnaba_mapping:
+    if not barnaba_sequence:
         logging.warning("Could not find barnaba sequence in output files")
         return BaseInteractions([], [], [], [], [])
 
-    barnaba_mapping = {
+    barnaba_mapping: Dict[str, Tuple[str, int, int]] = {
         residue_info: (
             residue_info.split("_")[0],
             int(residue_info.split("_")[1]),
             int(residue_info.split("_")[2]),
         )
-        for residue_info in barnaba_mapping
+        for residue_info in barnaba_sequence
     }
     rnapolis_mapping = {
         (residue.auth.name, residue.auth.number, residue.auth.chain): residue

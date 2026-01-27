@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "RNApolis"
-version = "0.12.2"
+version = "0.14.0"
 description = "A Python library containing RNA-related bioinformatics functions and classes"
 authors = ["Tomasz Zok <tomasz.zok@cs.put.poznan.pl>"]
 readme = "README.md"
@@ -58,3 +58,4 @@ transformer = "rnapolis.transformer:main"
 rfam-folder = "rnapolis.rfam_folder:main"
 unifier = "rnapolis.unifier:main"
 splitter = "rnapolis.splitter:main"
+quick-filter = "rnapolis.quick_filter:main"
