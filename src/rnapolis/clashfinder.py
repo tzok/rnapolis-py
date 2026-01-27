@@ -56,7 +56,6 @@ class AtomType(Enum):
         return atom.name.strip().startswith(self.value)
 
 
-
 def find_clashes(
     residues: List[Residue3D],
     ignore_occupancy: bool,
@@ -89,7 +88,7 @@ def find_clashes(
               - **atom_i**, **atom_j** (Atom): clashing atoms,
               - **occupancy_sum** (float): sum of occupancies for the atom pair.
     """
-    
+
     reference_residues = []
     reference_atoms = []
     coordinates = []

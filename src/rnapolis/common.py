@@ -385,6 +385,7 @@ class BasePhosphate(Interaction):
 @dataclass(frozen=True, order=True)
 class OtherInteraction(Interaction):
     """Catch-all interaction type for non-standard contacts."""
+
     pass
 
 
@@ -430,7 +431,8 @@ class Strand:
 
     @staticmethod
     def from_bpseq_entries(
-        entries: List[Entry], dotbracket: str, reverse: bool = False) -> "Strand":
+        entries: List[Entry], dotbracket: str, reverse: bool = False
+    ) -> "Strand":
         """Build a Strand from a list of BPSEQ entries.
 
         Args:
@@ -1048,8 +1050,8 @@ class BpSeq:
     def all_dot_brackets(self) -> list[str]:
         """Enumerate all valid dot-bracket solutions for pseudoknotted structures.
 
-    Returns:
-        List of possible dot-bracket assignments.
+        Returns:
+            List of possible dot-bracket assignments.
         """
         # build conflict graph
         regions = self.__regions

@@ -139,7 +139,7 @@ def filter_cif(
     asym_ids: list[str],
     auth_asym_ids: list[str],
     retain_categories: list[str],
-) -> str: 
+) -> str:
     """Build a filtered PDBx/mmCIF text containing only selected entities and categories.
 
     Args:

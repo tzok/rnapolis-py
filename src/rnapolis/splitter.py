@@ -12,6 +12,7 @@ from rnapolis.parser_v2 import (
     write_pdb,
 )
 
+
 def main():
     """Command-line entry point for the multi-model splitter.
 

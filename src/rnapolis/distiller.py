@@ -337,7 +337,9 @@ def validate_nucleotide_counts(
 # ----------------------------------------------------------------------
 
 
-def run_exact(structures: List[Structure], valid_files: List[Path], args: argparse.Namespace) -> None:
+def run_exact(
+    structures: List[Structure], valid_files: List[Path], args: argparse.Namespace
+) -> None:
     """Run exact nRMSD-based clustering workflow and optional visualization.
 
     Args:
