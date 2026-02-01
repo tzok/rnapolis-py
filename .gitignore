@@ -18,5 +18,23 @@ devenv.local.nix
 # pre-commit
 .pre-commit-config.yaml
 
+Updated upstream
 .idea
 src/dnatco_process_all.sh
+=======
+# macOS
+.DS_Store
+
+# Python venv
+.venv/
+Stashed changes
+
+# macOS
+.DS_Store
+
+# Python venv
+.venv/
+
+# Jupyter
+.ipynb_checkpoints/
+
