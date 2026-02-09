@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "RNApolis"
-version = "0.14.1"
+version = "0.14.2"
 description = "A Python library containing RNA-related bioinformatics functions and classes"
 authors = ["Tomasz Zok <tomasz.zok@cs.put.poznan.pl>"]
 readme = "README.md"
