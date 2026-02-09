@@ -463,8 +463,8 @@ def get_stacking_parameters(
 def are_bases_coplanar(
     residues: Iterable[Residue],
     *,
-    max_distance: float = 1.0,
-    max_angle_deg: float = 30.0,
+    max_distance: float = 0.2,
+    max_angle_deg: float = 25.0,
 ) -> bool:
     """Check if nucleobases of residues are co-planar.
 

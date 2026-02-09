@@ -520,19 +520,77 @@ def test_are_bases_coplanar_examples(data_dir):
         for r in structure.residues
     }
 
-    coplanar = [
+    # --- 4 coplanar base triples ---
+    # A.2MG10, A.C25, A.G45
+    assert are_bases_coplanar([
         by_id[("A", "2MG", 10, None)],
         by_id[("A", "C", 25, None)],
         by_id[("A", "G", 45, None)],
-    ]
-    assert are_bases_coplanar(coplanar, max_distance=1.0, max_angle_deg=30.0)
+    ])
 
-    not_coplanar = [
+    # A.G22, A.C13, A.7MG46
+    assert are_bases_coplanar([
+        by_id[("A", "G", 22, None)],
+        by_id[("A", "C", 13, None)],
+        by_id[("A", "7MG", 46, None)],
+    ])
+
+    # A.U8, A.A14, A.A21
+    assert are_bases_coplanar([
+        by_id[("A", "U", 8, None)],
+        by_id[("A", "A", 14, None)],
+        by_id[("A", "A", 21, None)],
+    ])
+
+    # A.A23, A.U12, A.A9
+    assert are_bases_coplanar([
+        by_id[("A", "A", 23, None)],
+        by_id[("A", "U", 12, None)],
+        by_id[("A", "A", 9, None)],
+    ])
+
+    # --- 6 non-coplanar base triples ---
+    # A.A9, A.C11, A.A23
+    assert not are_bases_coplanar([
+        by_id[("A", "A", 9, None)],
+        by_id[("A", "C", 11, None)],
+        by_id[("A", "A", 23, None)],
+    ])
+
+    # A.u55, A.G18, A.G57
+    assert not are_bases_coplanar([
+        by_id[("A", "PSU", 55, None)],
+        by_id[("A", "G", 18, None)],
+        by_id[("A", "G", 57, None)],
+    ])
+
+    # A.C11, A.G24, A.A9
+    assert not are_bases_coplanar([
+        by_id[("A", "C", 11, None)],
+        by_id[("A", "G", 24, None)],
+        by_id[("A", "A", 9, None)],
+    ])
+
+    # A.G57, A.G18, A.u55
+    assert not are_bases_coplanar([
+        by_id[("A", "G", 57, None)],
         by_id[("A", "G", 18, None)],
         by_id[("A", "PSU", 55, None)],
+    ])
+
+    # A.C61, A.G53, A.C60
+    assert not are_bases_coplanar([
+        by_id[("A", "C", 61, None)],
+        by_id[("A", "G", 53, None)],
+        by_id[("A", "C", 60, None)],
+    ])
+
+    # A.G18, A.G57, A.u55
+    assert not are_bases_coplanar([
+        by_id[("A", "G", 18, None)],
         by_id[("A", "G", 57, None)],
-    ]
-    assert not are_bases_coplanar(not_coplanar, max_distance=1.0, max_angle_deg=30.0)
+        by_id[("A", "PSU", 55, None)],
+    ])
 
 
 def test_is_nucleotide_detects_required_atoms():
