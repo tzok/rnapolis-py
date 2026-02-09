@@ -113,6 +113,27 @@ def test_elements():
     assert len(loops) == 2
 
 
+def test_elements_four_way_junction_zero_linkers():
+    """Test that a 4-way junction with 0 nt linkers is detected (PDB 9E9Q)."""
+    sequence = "CUCGUCUAUCUUCUGCAGGCUGCUUACGGGAAACCGUGUUGCAGCCGAUCAUCAGCACAUCUAGGUUUCGUCCGGGUGUGACCGAAAGGUAAGAUGGAGAG"
+    structure = "(((.(((((((((((..((((((.(((((....)))))..))))))......)))(((((((.((......)))))))))(((....))))))))))))))"
+    bpseq = BpSeq.from_dotbracket(DotBracket(sequence, structure))
+    stems, single_strands, hairpins, loops = bpseq.elements
+    assert len(stems) == 8
+    assert len(single_strands) == 0
+    assert len(hairpins) == 3
+    assert len(loops) == 6
+
+    # Find the 4-way junction (the loop with 4 strands)
+    four_way = [loop for loop in loops if len(loop.strands) == 4]
+    assert len(four_way) == 1
+    junction = four_way[0]
+
+    # Verify the junction strand positions
+    strand_positions = [(s.first, s.last) for s in junction.strands]
+    assert strand_positions == [(12, 13), (55, 56), (80, 81), (90, 91)]
+
+
 def test_pseudoknot_order_assignment():
     bpseq = BpSeq.from_file("tests/6EK0-L5-L8.bpseq")
     dot_bracket = bpseq.dot_bracket
