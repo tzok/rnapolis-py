@@ -4,12 +4,12 @@
     enable = true;
     poetry.enable = true;
     poetry.install.groups = [ "docs" ];
-    jupyter.enable = true;
   };
   packages = [
     pkgs.graphviz
     pkgs.highs
     pkgs.zlib
+    pkgs.jupyter
   ];
   enterShell = ''
     export PYTHONPATH=src/
