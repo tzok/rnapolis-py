@@ -4,6 +4,7 @@
     enable = true;
     poetry.enable = true;
     poetry.install.groups = [ "docs" ];
+    jupyter.enable = true;
   };
   packages = [
     pkgs.graphviz
