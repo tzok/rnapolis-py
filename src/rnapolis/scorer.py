@@ -174,7 +174,7 @@ def circular_mad(data, median):
     """
     data = np.asarray(data)
     deviations = np.abs(np.arctan2(np.sin(data - median), np.cos(data - median)))
-    return np.median(deviations).item()
+    return float(np.median(deviations))
 
 
 def bootstrap_ci(data, statistic_fn, n_bootstrap, alpha=0.05):
@@ -195,7 +195,7 @@ def bootstrap_ci(data, statistic_fn, n_bootstrap, alpha=0.05):
         statistics.append(statistic_fn(sample))
     lower = np.percentile(statistics, 100 * alpha / 2)
     upper = np.percentile(statistics, 100 - 100 * alpha / 2)
-    return lower.item(), upper.item()
+    return float(lower), float(upper)
 
 
 def monte_carlo_mad_test(data, observed_mad, use_full_circle, n_simulations):
@@ -418,8 +418,8 @@ def _compute_statistics(signed_diffs, unsigned_diffs, n_bootstrap):
         signed_diffs, lambda s: circular_mad(s, medcd), n_bootstrap
     )
 
-    p_rayleigh_dmcd = hypothesis.rayleigh_test(signed_diffs_arr).pval.item()
-    p_rayleigh_dmcq = hypothesis.rayleigh_test(doubled_unsigned_arr).pval.item()
+    p_rayleigh_dmcd = float(hypothesis.rayleigh_test(signed_diffs_arr).pval)
+    p_rayleigh_dmcq = float(hypothesis.rayleigh_test(doubled_unsigned_arr).pval)
 
     p_sim_test_dmcd = monte_carlo_mad_test(
         signed_diffs, circular_mad_mcd, True, n_bootstrap
@@ -432,14 +432,14 @@ def _compute_statistics(signed_diffs, unsigned_diffs, n_bootstrap):
         p_wilcoxon_dmcd, p_watson_dmcd, p_watson_dmcq = 0, 0, 0
     else:
         p_wilcoxon_dmcd = scipy.stats.wilcoxon(signed_diffs).pvalue
-        p_watson_dmcd = hypothesis.watson_test(signed_diffs_arr)[1]
-        p_watson_dmcq = hypothesis.watson_test(doubled_unsigned_arr)[1]
+        p_watson_dmcd = hypothesis.watson_test(signed_diffs_arr).pval
+        p_watson_dmcq = hypothesis.watson_test(doubled_unsigned_arr).pval
 
     return {
         "mcq": mcq,
         "mcd": mcd,
-        "rmcq": rmcq.item(),
-        "rmcd": rmcd.item(),
+        "rmcq": float(rmcq),
+        "rmcd": float(rmcd),
         "ci_lower_mcq": ci_lower_mcq,
         "ci_upper_mcq": ci_upper_mcq,
         "ci_lower_mcd": ci_lower_mcd,
