@@ -1,13 +1,10 @@
-from pycircstat2.clustering import MovM, CircHAC, CircKMeans
+from pycircstat2.clustering import MovM
 from rnapolis import parser_v2 as rna_parser
 from rnapolis import tertiary_v2 as tertiary
-from pycircstat2 import visualization
 from pycircstat2 import descriptive
 from pycircstat2 import hypothesis
 from pycircstat2 import Circular
 import matplotlib.pyplot as plt
-from scipy import stats
-import pandas as pd
 import numpy as np
 import argparse
 import random
@@ -15,18 +12,20 @@ import scipy
 import math
 import sys
 import csv
+import os
 
 
 def parse_file(filepath):
-    if filepath[len(filepath) - 3 :] == "pdb":
+    if filepath.endswith(".pdb"):
         with open(filepath) as file:
             data = rna_parser.parse_pdb_atoms(file)
-    elif filepath[len(filepath) - 3 :] == "cif":
+    elif filepath.endswith(".cif"):
         with open(filepath) as file:
             data = rna_parser.parse_cif_atoms(file)
     else:
-        print("Invalid file format.")
-        return
+        raise ValueError(
+            f"Invalid file format for '{filepath}'. Expected .pdb or .cif extension."
+        )
     return data
 
 
@@ -40,34 +39,35 @@ def dmcd_dmcq(target, model):
     dmcds = []
     dmcqs = []
     angles = ["alpha", "beta", "gamma", "delta", "epsilon", "zeta", "chi"]
-    for i in range(len(target.index)):
-        chain = target.at[i, "chain_id"]
-        num = target.at[i, "residue_number"]
-        name = target.at[i, "residue_name"]
+    for i in range(len(target)):
+        chain = target.iloc[i]["chain_id"]
+        num = target.iloc[i]["residue_number"]
+        name = target.iloc[i]["residue_name"]
         if (
-            model.at[i, "chain_id"] == chain
-            and model.at[i, "residue_number"] == num
-            and model.at[i, "residue_name"] == name
+            i < len(model)
+            and model.iloc[i]["chain_id"] == chain
+            and model.iloc[i]["residue_number"] == num
+            and model.iloc[i]["residue_name"] == name
         ):
             for angle in angles:
-                ang1 = target.at[i, angle]
-                ang2 = model.at[i, angle]
+                ang1 = target.iloc[i][angle]
+                ang2 = model.iloc[i][angle]
                 if not (math.isnan(ang1) or math.isnan(ang2)):
                     dmcd = math.atan2(math.sin(ang1 - ang2), math.cos(ang1 - ang2))
                     if not (math.isnan(dmcd)):
                         dmcds.append(dmcd)
                         dmcqs.append(abs(dmcd))
         else:
-            for j in range(len(model.index)):
+            for j in range(len(model)):
                 if (
-                    model.at[j, "chain_id"] == chain
-                    and model.at[j, "residue_number"] == num
-                    and model.at[j, "residue_name"] == name
+                    model.iloc[j]["chain_id"] == chain
+                    and model.iloc[j]["residue_number"] == num
+                    and model.iloc[j]["residue_name"] == name
                 ):
                     for angle in angles:
-                        ang1 = target.at[i, angle]
-                        ang2 = model.at[j, angle]
-                        if not (math.isnan(ang1) or math.isnan(ang1)):
+                        ang1 = target.iloc[i][angle]
+                        ang2 = model.iloc[j][angle]
+                        if not (math.isnan(ang1) or math.isnan(ang2)):
                             dmcd = math.atan2(
                                 math.sin(ang1 - ang2), math.cos(ang1 - ang2)
                             )
@@ -150,18 +150,14 @@ def score(d):
         + wc[3] * (1 - d["p_sim_test_dmcq"])
     )
 
-    ## to jest zgodnie ze wzorem
     u = (
         wu[0] * max(0, 1 - (abs(d["mcd"]) / (0.25 * math.pi)))
         + wu[1] * max(0, 1 - (abs(d["medcd"]) / (0.25 * math.pi)))
-        + wu[2] * (1 - d["rmcd"])
+        + wu[2] * d["rmcd"]
         + wu[3] * max(0, 1 - (d["circular_mad_mcd"] / (0.25 * math.pi)))
-        + wu[4] * d["p_rayleigh_dmcd"]
-        + wu[5] * d["p_wilcoxon_dmcd"]
+        + wu[4] * (1 - d["p_rayleigh_dmcd"])
+        + wu[5] * (1 - d["p_wilcoxon_dmcd"])
     )
-
-    ## to jest do 1
-    ##u = wu[0] * max(0, 1 - (abs(d["mcd"]) / (0.25 * math.pi))) + wu[1] * max(0, 1 - (abs(d["medcd"]) / (0.25 * math.pi))) + wu[2] * d["rmcd"] + wu[3] * max(0, 1 - (d["circular_mad_mcd"] / (0.25 * math.pi))) + wu[4] * (1 - d["p_rayleigh_dmcd"]) + wu[5] * (1 - d["p_wilcoxon_dmcd"])
 
     score = ws[0] * f + ws[1] * c + ws[2] * u
 
@@ -228,7 +224,7 @@ def visualize(d, outfile1, outfile2):
     plt.close()
 
 
-def run_score(target_path, model_path, reps, rounding, visualize_on):
+def run_score(target_path, model_path, reps, rounding, visualize_on, output_dir="."):
     target_data = parse_file(target_path)
     target_structure = tertiary.Structure(target_data)
     target_torsion_angles = target_structure.torsion_angles
@@ -242,8 +238,16 @@ def run_score(target_path, model_path, reps, rounding, visualize_on):
     npdmcq_double = np.array([2 * v for v in dmcq])
 
     if visualize_on:
-        visualize(npdmcq, "dmcq.svg", "dmcq_clusters.svg")
-        visualize(npdmcd, "dmcd.svg", "dmcd_clusters.svg")
+        visualize(
+            npdmcq,
+            os.path.join(output_dir, "dmcq.svg"),
+            os.path.join(output_dir, "dmcq_clusters.svg"),
+        )
+        visualize(
+            npdmcd,
+            os.path.join(output_dir, "dmcd.svg"),
+            os.path.join(output_dir, "dmcd_clusters.svg"),
+        )
 
     mcq, rmcq = descriptive.circ_mean_and_r(npdmcq)
     mcd, rmcd = descriptive.circ_mean_and_r(npdmcd)
@@ -287,7 +291,7 @@ def run_score(target_path, model_path, reps, rounding, visualize_on):
         dmcq, medcq, reps
     )
     ci_lower_circular_mad_mcd, ci_upper_circular_mad_mcd = circular_mad_ci(
-        dmcq, medcd, reps
+        dmcd, medcd, reps
     )
 
     p_rayleigh_dmcd = hypothesis.rayleigh_test(npdmcd).pval.item()
@@ -355,6 +359,9 @@ def main(argv):
     parser.add_argument(
         "--visualize", action="store_true", required=False, default=False
     )
+    parser.add_argument(
+        "--output_dir", type=str, help="output directory", required=False, default="."
+    )
 
     args = parser.parse_args()
 
@@ -364,12 +371,12 @@ def main(argv):
     rounding = args.rounding
     visualize_on = args.visualize
 
-    results = run_score(target_path, model_path, reps, rounding, visualize_on)
+    results = run_score(target_path, model_path, reps, rounding, visualize_on, args.output_dir)
     
     results_list = [[str(key) for key in results.keys()]] + [
         [round(v, rounding) for v in list(results.values())]
     ]
-    save_csv("result.csv", results_list)
+    save_csv(os.path.join(args.output_dir, "result.csv"), results_list)
     print(results["score"])
 
     
