@@ -1,4 +1,14 @@
-from pycircstat2.clustering import MovM
+"""Compare RNA 3D structures using circular statistics on torsion angles.
+
+This module implements a scoring pipeline that computes signed (MCD) and unsigned
+(MCQ) circular differences between backbone torsion angles of a target and model
+RNA structure, then derives a composite similarity score in [0, 1].
+
+Terminology:
+    MCD (Mean Circular Deviation): Signed angular difference, range [-pi, pi].
+    MCQ (Mean Circular Quality): Unsigned (absolute) angular difference, range [0, pi].
+"""
+
 from rnapolis import parser_v2 as rna_parser
 from rnapolis import tertiary_v2 as tertiary
 from pycircstat2 import descriptive
@@ -14,8 +24,43 @@ import sys
 import csv
 import os
 
+#: Backbone torsion angle names used for comparison.
+TORSION_ANGLES = ["alpha", "beta", "gamma", "delta", "epsilon", "zeta", "chi"]
+
+#: Residue identifier columns used to match residues between structures.
+RESIDUE_ID_COLUMNS = ["chain_id", "residue_number", "residue_name"]
+
+#: Normalization threshold for MCQ metrics (pi/2 = 90 degrees).
+MCQ_NORMALIZATION = 0.5 * math.pi
+
+#: Normalization threshold for MCD metrics (pi/4 = 45 degrees).
+MCD_NORMALIZATION = 0.25 * math.pi
+
+#: Weights for the fit sub-score: [mean_mcq, median_mcq].
+WEIGHTS_FIT = [0.4, 0.6]
+
+#: Weights for the concentration sub-score: [r_mcq, mad_mcq, watson_p, sim_p].
+WEIGHTS_CONCENTRATION = [0.15, 0.3, 0.25, 0.3]
+
+#: Weights for the uniformity sub-score: [mean_mcd, median_mcd, r_mcd, mad_mcd, rayleigh_p, wilcoxon_p].
+WEIGHTS_UNIFORMITY = [0.1, 0.2, 0.1, 0.2, 0.15, 0.25]
+
+#: Weights for combining sub-scores: [fit, concentration, uniformity].
+WEIGHTS_COMPOSITE = [0.5, 0.2, 0.3]
+
 
 def parse_file(filepath):
+    """Parse an RNA structure file in PDB or mmCIF format.
+
+    Args:
+        filepath: Path to the input file. Must have a ``.pdb`` or ``.cif`` extension.
+
+    Returns:
+        Parsed atom data as a DataFrame.
+
+    Raises:
+        ValueError: If the file extension is not ``.pdb`` or ``.cif``.
+    """
     if filepath.endswith(".pdb"):
         with open(filepath) as file:
             data = rna_parser.parse_pdb_atoms(file)
@@ -30,284 +75,367 @@ def parse_file(filepath):
 
 
 def save_csv(result_file_path, data):
+    """Write rows of data to a CSV file.
+
+    Args:
+        result_file_path: Path to the output CSV file.
+        data: List of rows, where each row is a list of values.
+    """
     with open(result_file_path, "w", newline="") as file:
         writer = csv.writer(file)
         writer.writerows(data)
 
 
-def dmcd_dmcq(target, model):
-    dmcds = []
-    dmcqs = []
-    angles = ["alpha", "beta", "gamma", "delta", "epsilon", "zeta", "chi"]
+def _compute_angle_diffs(target_row, model_row):
+    """Compute wrapped angular differences for all torsion angles between two residues."""
+    signed = []
+    unsigned = []
+    for angle in TORSION_ANGLES:
+        target_angle = target_row[angle]
+        model_angle = model_row[angle]
+        if not (math.isnan(target_angle) or math.isnan(model_angle)):
+            wrapped_diff = math.atan2(
+                math.sin(target_angle - model_angle),
+                math.cos(target_angle - model_angle),
+            )
+            if not math.isnan(wrapped_diff):
+                signed.append(wrapped_diff)
+                unsigned.append(abs(wrapped_diff))
+    return signed, unsigned
+
+
+def _build_model_lookup(model):
+    """Build a dict mapping residue identity to row index for O(1) lookup."""
+    lookup = {}
+    for j in range(len(model)):
+        row = model.iloc[j]
+        key = (row["chain_id"], row["residue_number"], row["residue_name"])
+        lookup[key] = j
+    return lookup
+
+
+def compute_mcd_mcq(target, model):
+    """Compute signed (MCD) and unsigned (MCQ) angular differences between two structures.
+
+    For each residue matched by chain, number, and name, wraps the angular
+    difference of each backbone torsion angle into [-pi, pi] (MCD) and takes
+    its absolute value (MCQ).
+
+    If a residue at position *i* in the target does not match the same position
+    in the model, a lookup by residue identity is used as a fallback.
+
+    Args:
+        target: DataFrame of torsion angles for the reference structure.
+        model: DataFrame of torsion angles for the model structure.
+
+    Returns:
+        Tuple of (signed_diffs, unsigned_diffs) where each is a list of
+        floats in radians.
+    """
+    signed_diffs = []
+    unsigned_diffs = []
+    model_lookup = _build_model_lookup(model)
+
     for i in range(len(target)):
-        chain = target.iloc[i]["chain_id"]
-        num = target.iloc[i]["residue_number"]
-        name = target.iloc[i]["residue_name"]
+        target_row = target.iloc[i]
+        chain_id = target_row["chain_id"]
+        residue_number = target_row["residue_number"]
+        residue_name = target_row["residue_name"]
+
         if (
             i < len(model)
-            and model.iloc[i]["chain_id"] == chain
-            and model.iloc[i]["residue_number"] == num
-            and model.iloc[i]["residue_name"] == name
+            and model.iloc[i]["chain_id"] == chain_id
+            and model.iloc[i]["residue_number"] == residue_number
+            and model.iloc[i]["residue_name"] == residue_name
         ):
-            for angle in angles:
-                ang1 = target.iloc[i][angle]
-                ang2 = model.iloc[i][angle]
-                if not (math.isnan(ang1) or math.isnan(ang2)):
-                    dmcd = math.atan2(math.sin(ang1 - ang2), math.cos(ang1 - ang2))
-                    if not (math.isnan(dmcd)):
-                        dmcds.append(dmcd)
-                        dmcqs.append(abs(dmcd))
+            s, u = _compute_angle_diffs(target_row, model.iloc[i])
+            signed_diffs.extend(s)
+            unsigned_diffs.extend(u)
         else:
-            for j in range(len(model)):
-                if (
-                    model.iloc[j]["chain_id"] == chain
-                    and model.iloc[j]["residue_number"] == num
-                    and model.iloc[j]["residue_name"] == name
-                ):
-                    for angle in angles:
-                        ang1 = target.iloc[i][angle]
-                        ang2 = model.iloc[j][angle]
-                        if not (math.isnan(ang1) or math.isnan(ang2)):
-                            dmcd = math.atan2(
-                                math.sin(ang1 - ang2), math.cos(ang1 - ang2)
-                            )
-                            if not (math.isnan(dmcd)):
-                                dmcds.append(dmcd)
-                                dmcqs.append(abs(dmcd))
-    return dmcds, dmcqs
+            key = (chain_id, residue_number, residue_name)
+            if key in model_lookup:
+                j = model_lookup[key]
+                s, u = _compute_angle_diffs(target_row, model.iloc[j])
+                signed_diffs.extend(s)
+                unsigned_diffs.extend(u)
+
+    return signed_diffs, unsigned_diffs
 
 
-def auto_dmcd_dmcq(target, model):
-    angles = ["alpha", "beta", "gamma", "delta", "epsilon", "zeta", "chi"]
-    target_angles = target[angles].to_numpy()
-    model_angles = model[angles].to_numpy()
-    dmcd = descriptive.circ_pairdist(target_angles, model_angles, metric="center")
-    dmcq = descriptive.circ_pairdist(target_angles, model_angles, metric="geodesic")
-    return dmcd, dmcq
+def circular_mad(data, median):
+    """Compute the circular median absolute deviation.
+
+    Args:
+        data: Angular values in radians.
+        median: Circular median in radians.
+
+    Returns:
+        The median of absolute wrapped deviations from ``median``.
+    """
+    data = np.asarray(data)
+    deviations = np.abs(np.arctan2(np.sin(data - median), np.cos(data - median)))
+    return np.median(deviations).item()
 
 
-def circular_mad(d, med):
-    rs = []
-    for v in d:
-        r = abs(math.atan2(math.sin(v - med), math.cos(v - med)))
-        rs.append(r)
-    return np.median(rs).item()
+def bootstrap_ci(data, statistic_fn, n_bootstrap, alpha=0.05):
+    """Compute a bootstrap confidence interval for a circular statistic.
 
+    Args:
+        data: Input data (list of floats).
+        statistic_fn: Callable that takes a list and returns a scalar.
+        n_bootstrap: Number of bootstrap resamples.
+        alpha: Significance level (default 0.05 for 95% CI).
 
-def r_ci(d, reps, alfa=0.05):
-    rs = []
-    for i in range(reps):
-        n = [random.choice(d) for j in range(len(d))]
-        r = descriptive.circ_r(np.array(n))
-        rs.append(r)
-    lower = np.percentile(rs, alfa / 2)
-    upper = np.percentile(rs, 100 - alfa / 2)
+    Returns:
+        Tuple of (lower_bound, upper_bound) for the confidence interval.
+    """
+    statistics = []
+    for _ in range(n_bootstrap):
+        sample = np.random.choice(data, size=len(data), replace=True).tolist()
+        statistics.append(statistic_fn(sample))
+    lower = np.percentile(statistics, 100 * alpha / 2)
+    upper = np.percentile(statistics, 100 - 100 * alpha / 2)
     return lower.item(), upper.item()
 
 
-def circular_mad_ci(d, med, reps, alfa=0.05):
-    rs = []
-    for i in range(reps):
-        n = [random.choice(d) for j in range(len(d))]
-        r = circular_mad(n, med)
-        rs.append(r)
-    lower = np.percentile(rs, alfa / 2)
-    upper = np.percentile(rs, 100 - alfa / 2)
-    return lower.item(), upper.item()
+def monte_carlo_mad_test(data, observed_mad, use_full_circle, n_simulations):
+    """Test concentration by comparing observed MAD to random circular samples.
+
+    Generates ``n_simulations`` random samples from a uniform circular
+    distribution and counts how often their MAD is at most as small as
+    the ``observed_mad``.
+
+    Args:
+        data: Original angular data (used only for its length).
+        observed_mad: The observed circular MAD to compare against.
+        use_full_circle: If ``True``, sample from [-pi, pi]; otherwise [0, pi].
+        n_simulations: Number of Monte Carlo iterations.
+
+    Returns:
+        Proportion of random samples with MAD <= ``observed_mad`` (p-value).
+    """
+    lower = -math.pi if use_full_circle else 0
+    count = 0
+    for _ in range(n_simulations):
+        random_sample = [random.uniform(lower, math.pi) for _ in range(len(data))]
+        random_mad = circular_mad(
+            random_sample, descriptive.circ_median(np.array(random_sample))
+        )
+        if random_mad <= observed_mad:
+            count += 1
+    return count / n_simulations
 
 
-def simulation_test(d, mad_o, negatives, reps):
-    n = 0
-    if negatives:
-        for i in range(reps):
-            d_new = [random.uniform(-math.pi, math.pi) for _ in range(len(d))]
-            mad_r = circular_mad(d_new, descriptive.circ_median(np.array(d_new)))
-            if mad_r <= mad_o:
-                n += 1
+def compute_score(metrics):
+    """Compute a composite similarity score from circular statistics.
+
+    Combines three weighted sub-scores:
+
+    - **Fit**: How close the mean and median MCQ are to zero.
+    - **Concentration**: How tightly the MCQ distribution is concentrated.
+    - **Uniformity**: How concentrated the MCD distribution is around zero,
+      indicating lack of systematic bias.
+
+    Args:
+        metrics: Dictionary containing at minimum the keys ``mcq``, ``medcq``,
+            ``rmcq``, ``circular_mad_mcq``, ``p_watson_dmcq``, ``p_sim_test_dmcq``,
+            ``mcd``, ``medcd``, ``rmcd``, ``circular_mad_mcd``,
+            ``p_rayleigh_dmcd``, ``p_wilcoxon_dmcd``.
+
+    Returns:
+        Similarity score in [0, 1], where 1.0 means identical structures.
+    """
+    wf = WEIGHTS_FIT
+    wc = WEIGHTS_CONCENTRATION
+    wu = WEIGHTS_UNIFORMITY
+    ws = WEIGHTS_COMPOSITE
+
+    fit = wf[0] * max(0, 1 - metrics["mcq"] / MCQ_NORMALIZATION) + wf[1] * max(
+        0, 1 - metrics["medcq"] / MCQ_NORMALIZATION
+    )
+
+    concentration = (
+        wc[0] * metrics["rmcq"]
+        + wc[1] * max(0, 1 - metrics["circular_mad_mcq"])
+        + wc[2] * (1 - metrics["p_watson_dmcq"])
+        + wc[3] * (1 - metrics["p_sim_test_dmcq"])
+    )
+
+    uniformity = (
+        wu[0] * max(0, 1 - (abs(metrics["mcd"]) / MCD_NORMALIZATION))
+        + wu[1] * max(0, 1 - (abs(metrics["medcd"]) / MCD_NORMALIZATION))
+        + wu[2] * metrics["rmcd"]
+        + wu[3] * max(0, 1 - (metrics["circular_mad_mcd"] / MCD_NORMALIZATION))
+        + wu[4] * (1 - metrics["p_rayleigh_dmcd"])
+        + wu[5] * (1 - metrics["p_wilcoxon_dmcd"])
+    )
+
+    composite = ws[0] * fit + ws[1] * concentration + ws[2] * uniformity
+
+    return composite
+
+
+def _build_plot_config(c, color="black"):
+    """Build an adaptive pycircstat2 plot config based on data concentration.
+
+    For highly concentrated data (``r > 0.9``), nonparametric density estimation
+    produces an extreme spike that dominates the plot.  In that regime the density
+    layer is disabled and the rose diagram uses finer bins so that the angular
+    distribution remains readable.
+
+    Args:
+        c: A ``pycircstat2.Circular`` object whose ``r`` attribute is inspected.
+        color: Color string applied to scatter, mean, median, and rose elements.
+
+    Returns:
+        Configuration dictionary suitable for ``Circular.plot(config=...)``.
+    """
+    high_concentration = float(c.r) > 0.9
+
+    config = {
+        "scatter": {"color": color},
+        "mean": {"color": color},
+        "median": {"color": color},
+        "rose": {"color": color},
+    }
+
+    if high_concentration:
+        config["density"] = False
+        config["rose"]["bins"] = 36
     else:
-        for i in range(reps):
-            d_new = [random.uniform(0, math.pi) for _ in range(len(d))]
-            mad_r = circular_mad(d_new, descriptive.circ_median(np.array(d_new)))
-            if mad_r <= mad_o:
-                n += 1
-    return n / reps
+        config["density"] = {"color": color}
+
+    return config
 
 
-def score(d):
-    wf = [0.4, 0.6]
-    wc = [0.15, 0.3, 0.25, 0.3]
-    wu = [0.1, 0.2, 0.1, 0.2, 0.15, 0.25]
-    ws = [0.5, 0.2, 0.3]
+def visualize(d, outfile):
+    """Save a polar plot of angular data to an SVG file.
 
-    f = wf[0] * max(0, 1 - d["mcq"] / (0.5 * math.pi)) + wf[1] * max(
-        0, 1 - d["medcq"] / (0.5 * math.pi)
-    )
+    Plots the circular distribution of angle differences using an adaptive
+    configuration: for highly concentrated data (resultant length > 0.9) the
+    density layer is disabled to avoid an uninformative spike, and the rose
+    diagram uses finer bins.
 
-    c = (
-        wc[0] * d["rmcq"]
-        + wc[1] * max(0, 1 - d["circular_mad_mcq"])
-        + wc[2] * (1 - d["p_watson_dmcq"])
-        + wc[3] * (1 - d["p_sim_test_dmcq"])
-    )
+    Input angles are wrapped to [0, 2pi) before plotting so that signed
+    differences (which may be negative) do not confuse the density estimator
+    or scatter positioning.
 
-    u = (
-        wu[0] * max(0, 1 - (abs(d["mcd"]) / (0.25 * math.pi)))
-        + wu[1] * max(0, 1 - (abs(d["medcd"]) / (0.25 * math.pi)))
-        + wu[2] * d["rmcd"]
-        + wu[3] * max(0, 1 - (d["circular_mad_mcd"] / (0.25 * math.pi)))
-        + wu[4] * (1 - d["p_rayleigh_dmcd"])
-        + wu[5] * (1 - d["p_wilcoxon_dmcd"])
-    )
+    Args:
+        d: Array of angular values in radians.
+        outfile: Output path for the polar plot (typically ``.svg``).
+    """
+    d = d % (2 * np.pi)
 
-    score = ws[0] * f + ws[1] * c + ws[2] * u
-
-    return score
-
-
-def visualize(d, outfile1, outfile2):
     if np.allclose(d, d[0]):
         fig, ax = plt.subplots(subplot_kw={"projection": "polar"}, figsize=(6, 6))
         ax.set_title("All values equal", pad=30)
         ax.plot([0], [1], "o")
-        plt.savefig(outfile1, format="svg")
+        plt.savefig(outfile, format="svg")
         plt.close()
         return
 
     c = Circular(d, unit="radian")
-    ax_labels = ["A", "B"]
+    config = _build_plot_config(c)
 
-    fig, ax = plt.subplot_mosaic(
-        mosaic="""
-        A
-        """,
+    fig, ax = plt.subplots(
         figsize=(10, 10),
         subplot_kw={"projection": "polar"},
         layout="constrained",
     )
-    c.plot(ax["A"])
-    ax["A"].set_rlim(0, 3)
-    ax["A"].set_title("Complete data", pad=30)
-    plt.savefig(outfile1, format="svg")
-    plt.close()
-
-    movm = MovM(n_clusters=2, unit="radian", random_seed=2046)
-    movm.fit(X=d)
-
-    fig, ax = plt.subplot_mosaic(
-        mosaic="""
-        AB
-        """,
-        figsize=(10, 8),
-        subplot_kw={"projection": "polar"},
-        layout="constrained",
-    )
-
-    for i, k in enumerate([1, 0]):
-        x_k = movm.data[movm.labels_ == k]
-        c_k = Circular(data=x_k, unit=movm.unit)
-        c_k.plot(
-            ax=ax[ax_labels[i]],
-            config={
-                "density": {"color": f"C{i}"},
-                "scatter": {"color": f"C{i}"},
-                "mean": {"color": f"C{i}"},
-                "median": {"color": f"C{i}"},
-                "rose": {"color": f"C{i}"},
-            },
-        )
-        ax["A"].set_rlim(0, 3)
-        ax["B"].set_rlim(0, 3)
-
-    ax["A"].set_title("Cluster 1", pad=30)
-    ax["B"].set_title("Cluster 2", pad=30)
-    plt.savefig(outfile2, format="svg")
+    c.plot(ax, config=config)
+    ax.set_title("Complete data", pad=30)
+    plt.savefig(outfile, format="svg")
     plt.close()
 
 
-def run_score(target_path, model_path, reps, rounding, visualize_on, output_dir="."):
+def _parse_structures(target_path, model_path):
+    """Parse two structure files and extract torsion angle DataFrames."""
     target_data = parse_file(target_path)
     target_structure = tertiary.Structure(target_data)
-    target_torsion_angles = target_structure.torsion_angles
+    target_torsion = target_structure.torsion_angles
 
     model_data = parse_file(model_path)
     model_structure = tertiary.Structure(model_data)
-    model_torsion_angles = model_structure.torsion_angles
+    model_torsion = model_structure.torsion_angles
 
-    dmcd, dmcq = dmcd_dmcq(target_torsion_angles, model_torsion_angles)
-    npdmcd, npdmcq = np.array(dmcd), np.array(dmcq)
-    npdmcq_double = np.array([2 * v for v in dmcq])
+    return target_torsion, model_torsion
 
-    if visualize_on:
-        visualize(
-            npdmcq,
-            os.path.join(output_dir, "dmcq.svg"),
-            os.path.join(output_dir, "dmcq_clusters.svg"),
-        )
-        visualize(
-            npdmcd,
-            os.path.join(output_dir, "dmcd.svg"),
-            os.path.join(output_dir, "dmcd_clusters.svg"),
-        )
 
-    mcq, rmcq = descriptive.circ_mean_and_r(npdmcq)
-    mcd, rmcd = descriptive.circ_mean_and_r(npdmcd)
+def _compute_statistics(signed_diffs, unsigned_diffs, n_bootstrap):
+    """Compute all circular statistics, CIs, and hypothesis tests."""
+    signed_diffs_arr = np.array(signed_diffs)
+    unsigned_diffs_arr = np.array(unsigned_diffs)
+    doubled_unsigned_arr = 2 * unsigned_diffs_arr
 
-    if np.allclose(npdmcd, 0):
-        ci_lower_mcq, ci_upper_mcq, ci_lower_mcd, ci_upper_mcd = [0, 0, 0, 0]
+    all_diffs_zero = np.allclose(signed_diffs_arr, 0)
+
+    mcq, rmcq = descriptive.circ_mean_and_r(unsigned_diffs_arr)
+    mcd, rmcd = descriptive.circ_mean_and_r(signed_diffs_arr)
+
+    if all_diffs_zero:
+        ci_lower_mcq, ci_upper_mcq, ci_lower_mcd, ci_upper_mcd = 0, 0, 0, 0
     else:
         ci_lower_mcq, ci_upper_mcq = descriptive.circ_mean_ci(
-            npdmcq, method="bootstrap", ci=0.95, mean=mcq
+            unsigned_diffs_arr, method="bootstrap", ci=0.95, mean=mcq
         )
         ci_lower_mcd, ci_upper_mcd = descriptive.circ_mean_ci(
-            npdmcd, method="bootstrap", ci=0.95, mean=mcd
+            signed_diffs_arr, method="bootstrap", ci=0.95, mean=mcd
         )
 
-    ci_lower_rmcq, ci_upper_rmcq = r_ci(dmcq, reps)
-    ci_lower_rmcd, ci_upper_rmcd = r_ci(dmcd, reps)
+    ci_lower_rmcq, ci_upper_rmcq = bootstrap_ci(
+        unsigned_diffs, lambda s: descriptive.circ_r(np.array(s)), n_bootstrap
+    )
+    ci_lower_rmcd, ci_upper_rmcd = bootstrap_ci(
+        signed_diffs, lambda s: descriptive.circ_r(np.array(s)), n_bootstrap
+    )
 
-    if np.allclose(npdmcd, 0):
-        medcq, medcd = [0, 0]
+    if all_diffs_zero:
+        medcq, medcd = 0, 0
     else:
-        medcq = descriptive.circ_median(npdmcq)
-        medcd = descriptive.circ_median(npdmcd)
+        medcq = descriptive.circ_median(unsigned_diffs_arr)
+        medcd = descriptive.circ_median(signed_diffs_arr)
 
     ci_lower_medcq, ci_upper_medcq = [
         float(v)
         for v in descriptive.circ_median_ci(
-            alpha=npdmcq, method="bootstrap", ci=0.95, median=medcq
+            alpha=unsigned_diffs_arr, method="bootstrap", ci=0.95, median=medcq
         )[:2]
     ]
     ci_lower_medcd, ci_upper_medcd = [
         float(v)
         for v in descriptive.circ_median_ci(
-            alpha=npdmcd, method="bootstrap", ci=0.95, median=medcd
+            alpha=signed_diffs_arr, method="bootstrap", ci=0.95, median=medcd
         )[:2]
     ]
 
-    circular_mad_mcq = circular_mad(dmcq, medcq)
-    circular_mad_mcd = circular_mad(dmcd, medcd)
+    circular_mad_mcq = circular_mad(unsigned_diffs, medcq)
+    circular_mad_mcd = circular_mad(signed_diffs, medcd)
 
-    ci_lower_circular_mad_mcq, ci_upper_circular_mad_mcq = circular_mad_ci(
-        dmcq, medcq, reps
+    ci_lower_circular_mad_mcq, ci_upper_circular_mad_mcq = bootstrap_ci(
+        unsigned_diffs, lambda s: circular_mad(s, medcq), n_bootstrap
     )
-    ci_lower_circular_mad_mcd, ci_upper_circular_mad_mcd = circular_mad_ci(
-        dmcd, medcd, reps
+    ci_lower_circular_mad_mcd, ci_upper_circular_mad_mcd = bootstrap_ci(
+        signed_diffs, lambda s: circular_mad(s, medcd), n_bootstrap
     )
 
-    p_rayleigh_dmcd = hypothesis.rayleigh_test(npdmcd).pval.item()
-    p_rayleigh_dmcq = hypothesis.rayleigh_test(npdmcq_double).pval.item()
+    p_rayleigh_dmcd = hypothesis.rayleigh_test(signed_diffs_arr).pval.item()
+    p_rayleigh_dmcq = hypothesis.rayleigh_test(doubled_unsigned_arr).pval.item()
 
-    p_sim_test_dmcd = simulation_test(dmcd, circular_mad_mcd, True, reps)
-    p_sim_test_dmcq = simulation_test(dmcq, circular_mad_mcq, False, reps)
+    p_sim_test_dmcd = monte_carlo_mad_test(
+        signed_diffs, circular_mad_mcd, True, n_bootstrap
+    )
+    p_sim_test_dmcq = monte_carlo_mad_test(
+        unsigned_diffs, circular_mad_mcq, False, n_bootstrap
+    )
 
-    if np.allclose(npdmcd, 0):
-        p_wilcoxon_dmcd, p_watson_dmcd, p_watson_dmcq = [0, 0, 0]
+    if all_diffs_zero:
+        p_wilcoxon_dmcd, p_watson_dmcd, p_watson_dmcq = 0, 0, 0
     else:
-        p_wilcoxon_dmcd = scipy.stats.wilcoxon(dmcd).pvalue
-        p_watson_dmcd = hypothesis.watson_test(npdmcd)[1]
-        p_watson_dmcq = hypothesis.watson_test(npdmcq_double)[1]
+        p_wilcoxon_dmcd = scipy.stats.wilcoxon(signed_diffs).pvalue
+        p_watson_dmcd = hypothesis.watson_test(signed_diffs_arr)[1]
+        p_watson_dmcq = hypothesis.watson_test(doubled_unsigned_arr)[1]
 
-    results = {
+    return {
         "mcq": mcq,
         "mcd": mcd,
         "rmcq": rmcq.item(),
@@ -341,45 +469,98 @@ def run_score(target_path, model_path, reps, rounding, visualize_on, output_dir=
         "p_watson_dmcq": p_watson_dmcq,
     }
 
-    results["score"] = score(results)
+
+def evaluate_similarity(
+    target_path, model_path, n_bootstrap=10000, visualize_on=False, output_dir="."
+):
+    """Evaluate the similarity between two RNA structures.
+
+    Parses both structures, computes torsion angle differences, derives
+    circular statistics with bootstrap confidence intervals, and returns
+    a results dictionary including a composite score.
+
+    Args:
+        target_path: Path to the reference structure (``.pdb`` or ``.cif``).
+        model_path: Path to the model structure (``.pdb`` or ``.cif``).
+        n_bootstrap: Number of bootstrap resamples for confidence intervals.
+        visualize_on: If ``True``, save polar plots to ``output_dir``.
+        output_dir: Directory for output files (plots, CSV).
+
+    Returns:
+        Dictionary of circular statistics and a ``score`` key with the
+        composite similarity score in [0, 1].
+    """
+    target_torsion, model_torsion = _parse_structures(target_path, model_path)
+
+    signed_diffs, unsigned_diffs = compute_mcd_mcq(target_torsion, model_torsion)
+
+    if visualize_on:
+        unsigned_diffs_arr = np.array(unsigned_diffs)
+        signed_diffs_arr = np.array(signed_diffs)
+        visualize(
+            unsigned_diffs_arr,
+            os.path.join(output_dir, "dmcq.svg"),
+        )
+        visualize(
+            signed_diffs_arr,
+            os.path.join(output_dir, "dmcd.svg"),
+        )
+
+    results = _compute_statistics(signed_diffs, unsigned_diffs, n_bootstrap)
+    results["score"] = compute_score(results)
 
     return results
 
 
-def main(argv):
-    parser = argparse.ArgumentParser(description="run scoring")
-    parser.add_argument("--target_path", type=str, help="target", required=True)
-    parser.add_argument("--model_path", type=str, help="model", required=True)
-    parser.add_argument(
-        "--bootstrap_reps", type=int, help="reps", required=False, default=10000
+def main():
+    """CLI entry point for RNA structure scoring."""
+    parser = argparse.ArgumentParser(
+        description="Compare two RNA 3D structures using circular statistics"
     )
     parser.add_argument(
-        "--rounding", type=int, help="rouding", required=False, default=10
+        "--target", type=str, help="path to reference structure", required=True
     )
     parser.add_argument(
-        "--visualize", action="store_true", required=False, default=False
+        "--model", type=str, help="path to model structure", required=True
     )
     parser.add_argument(
-        "--output_dir", type=str, help="output directory", required=False, default="."
+        "--bootstrap-reps",
+        type=int,
+        help="number of bootstrap resamples",
+        required=False,
+        default=10000,
+    )
+    parser.add_argument(
+        "--visualize",
+        action="store_true",
+        help="save polar plots to output directory",
+        required=False,
+        default=False,
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=str,
+        help="output directory for CSV and plots",
+        required=False,
+        default=".",
     )
 
     args = parser.parse_args()
 
-    target_path = args.target_path
-    model_path = args.model_path
-    reps = args.bootstrap_reps
-    rounding = args.rounding
-    visualize_on = args.visualize
+    results = evaluate_similarity(
+        args.target,
+        args.model,
+        args.bootstrap_reps,
+        args.visualize,
+        args.output_dir,
+    )
 
-    results = run_score(target_path, model_path, reps, rounding, visualize_on, args.output_dir)
-    
     results_list = [[str(key) for key in results.keys()]] + [
-        [round(v, rounding) for v in list(results.values())]
+        list(results.values())
     ]
     save_csv(os.path.join(args.output_dir, "result.csv"), results_list)
     print(results["score"])
 
-    
 
 if __name__ == "__main__":
-    main(sys.argv[1:])
+    main()

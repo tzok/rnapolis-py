@@ -3,12 +3,11 @@ import random
 
 import pytest
 
-from rnapolis.scorer import run_score
+from rnapolis.scorer import evaluate_similarity
 
 DATA_DIR = os.path.dirname(__file__)
 
 REPS = 10000
-ROUNDING = 10
 SEED = 42
 
 
@@ -28,7 +27,7 @@ def test_scorer_returns_valid_result(target_file, model_file):
         pytest.skip(f"Test data not found: {target_file} or {model_file}")
 
     random.seed(SEED)
-    result = run_score(target_path, model_path, REPS, ROUNDING, False)
+    result = evaluate_similarity(target_path, model_path, REPS, False)
 
     assert isinstance(result, dict), "Scorer should return a dictionary"
     assert "score" in result, "Returned dictionary should contain 'score' key"
@@ -45,7 +44,7 @@ def test_scorer_identical_structures():
         pytest.skip("Test data not found: 1a9nR.pdb")
 
     random.seed(SEED)
-    result = run_score(target_path, target_path, REPS, ROUNDING, False)
+    result = evaluate_similarity(target_path, target_path, REPS, False)
     # Identical structures must produce a perfect similarity score
     assert (
         result["score"] == 1.0

@@ -29,6 +29,7 @@ nav:
       - Parser: api/parser.md
       - Parser v2: api/parser_v2.md
       - Rfam Folder: api/rfam_folder.md
+      - Scorer: api/scorer.md
       - Splitter: api/splitter.md
       - Tertiary: api/tertiary.md
       - Tertiary v2: api/tertiary_v2.md
