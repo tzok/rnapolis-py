@@ -21,7 +21,7 @@ repository = "https://github.com/tzok/rnapolis-py"
 [tool.poetry.dependencies]
 python = "^3.12"
 appdirs = "*"
-faiss-cpu = "*"
+faiss-cpu = "<1.13.0"
 graphviz = "*"
 mmcif = "*"
 numpy = "*"
