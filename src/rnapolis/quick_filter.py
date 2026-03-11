@@ -105,7 +105,7 @@ def filter_atoms_df(
     keep_ligands: bool = False,
     keep_waters: bool = False,
     keep_ions: bool = False,
-    keep_altlocs: bool = False,
+    altloc: Optional[str] = None,
     chains: Optional[Iterable[str]] = None,
     model: Optional[int] = None,
 ) -> pd.DataFrame:
@@ -124,8 +124,11 @@ def filter_atoms_df(
         Keep water residues.
     keep_ions : bool
         Keep ionic residues.
-    keep_altlocs : bool
-        Keep non-primary alternate locations.
+    altloc : Optional[str]
+        Which alternate location to keep. None (default) keeps primary
+        conformer (A). Use "all" to keep every altloc. Any other value
+        (e.g. "B") keeps only atoms with that altloc indicator (plus atoms
+        that have no altloc indicator at all).
     chains : Optional[Iterable[str]]
         Chain IDs to keep.
     model : Optional[int]
@@ -178,11 +181,21 @@ def filter_atoms_df(
         filtered = filtered[filtered[model_col] == model].copy()
 
     altloc_col = _altloc_column(filtered)
-    if not keep_altlocs and altloc_col and altloc_col in filtered.columns:
-        altloc_series = filtered[altloc_col]
-        altloc_str = altloc_series.astype(str)
-        keep_mask = altloc_series.isna() | altloc_str.isin(PRIMARY_ALTLOC_VALUES)
-        filtered = filtered[keep_mask].copy()
+    if altloc_col and altloc_col in filtered.columns:
+        if altloc is None:
+            # Default: keep primary conformer (A)
+            altloc_series = filtered[altloc_col]
+            altloc_str = altloc_series.astype(str)
+            keep_mask = altloc_series.isna() | altloc_str.isin(PRIMARY_ALTLOC_VALUES)
+            filtered = filtered[keep_mask].copy()
+        elif altloc.lower() != "all":
+            # Keep specific altloc (plus atoms with no altloc indicator)
+            altloc_series = filtered[altloc_col]
+            altloc_str = altloc_series.astype(str)
+            no_altloc = altloc_series.isna() | altloc_str.isin({"", ".", "?"})
+            matches = altloc_str == altloc.upper()
+            filtered = filtered[no_altloc | matches].copy()
+        # else: altloc="all" -> keep everything, no filtering
 
     filtered.attrs["format"] = atoms.attrs.get("format")
     return filtered
@@ -293,7 +306,7 @@ def filter_content(
     keep_ligands: bool = False,
     keep_waters: bool = False,
     keep_ions: bool = False,
-    keep_altlocs: bool = False,
+    altloc: Optional[str] = None,
     chains: Optional[Iterable[str]] = None,
     model: Optional[int] = None,
 ) -> str:
@@ -311,7 +324,7 @@ def filter_content(
         keep_ligands=keep_ligands,
         keep_waters=keep_waters,
         keep_ions=keep_ions,
-        keep_altlocs=keep_altlocs,
+        altloc=altloc,
         chains=chains,
         model=model,
     )
@@ -328,7 +341,7 @@ def filter_file(
     keep_ligands: bool = False,
     keep_waters: bool = False,
     keep_ions: bool = False,
-    keep_altlocs: bool = False,
+    altloc: Optional[str] = None,
     chains: Optional[Iterable[str]] = None,
     model: Optional[int] = None,
 ) -> str:
@@ -341,7 +354,7 @@ def filter_file(
         keep_ligands=keep_ligands,
         keep_waters=keep_waters,
         keep_ions=keep_ions,
-        keep_altlocs=keep_altlocs,
+        altloc=altloc,
         chains=chains,
         model=model,
     )
@@ -373,9 +386,10 @@ def main() -> None:
         help="Keep ion residues.",
     )
     parser.add_argument(
-        "--keep-altlocs",
-        action="store_true",
-        help="Keep non-primary alternate locations.",
+        "--altloc",
+        type=str,
+        default=None,
+        help="Altloc to keep (e.g. A, B). Use 'all' to keep all altlocs. Default: keep primary (A).",
     )
     parser.add_argument(
         "--chains",
@@ -400,7 +414,7 @@ def main() -> None:
         keep_ligands=args.keep_ligands,
         keep_waters=args.keep_waters,
         keep_ions=args.keep_ions,
-        keep_altlocs=args.keep_altlocs,
+        altloc=args.altloc,
         chains=chains,
         model=args.model,
     )
