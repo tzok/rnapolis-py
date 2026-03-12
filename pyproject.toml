@@ -41,7 +41,7 @@ viennarna = "*"
 [tool.poetry.group.dev.dependencies]
 pytest = "*"
 hypothesis = "*"
-notebook = "^7.5.3"
+notebook = "*"
 
 [tool.poetry.group.docs.dependencies]
 mkdocs = "*"
