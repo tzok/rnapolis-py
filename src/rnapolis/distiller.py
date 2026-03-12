@@ -5,6 +5,7 @@ import json
 import os
 import sys
 import time
+import warnings
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -13,7 +14,8 @@ import faiss
 import numpy as np
 from scipy.cluster.hierarchy import dendrogram, fcluster, linkage
 from scipy.optimize import curve_fit
-from scipy.spatial.distance import squareform
+from scipy.spatial.distance import pdist, squareform
+from sklearn.cluster import AffinityPropagation
 from sklearn.decomposition import PCA
 from tqdm import tqdm
 
@@ -35,75 +37,191 @@ def parse_arguments() -> argparse.Namespace:
         argparse.Namespace: Parsed command-line arguments.
     """
     parser = argparse.ArgumentParser(
-        description="Find clusters of almost identical RNA structures from mmCIF or PDB files"
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description="""\
+Cluster RNA 3D structures by geometric similarity.
+
+Two modes are available:
+
+  approximate (default)  Fast feature-based clustering. Structures are
+                         featurised with inter-base distances and torsion
+                         angles, projected via PCA, and clustered in the
+                         reduced space.
+
+  exact                  Rigorous all-vs-all nRMSD comparison. Slower but
+                         produces publication-quality distance matrices.
+
+Three clustering methods can be combined with either mode:
+
+  hierarchical (default) Complete-linkage agglomerative clustering with
+                         auto-detected or user-specified threshold.
+  affinity-propagation   Message-passing algorithm that discovers exemplars
+                         and the number of clusters automatically.
+  facility-location      Submodular optimisation that selects exactly N
+                         maximally representative structures (requires
+                         --n-representatives).
+
+examples:
+  # Auto-detect clusters (approximate + hierarchical, the default)
+  distiller *.cif
+
+  # Pipe file paths from find
+  find structures/ -name '*.pdb' | distiller
+
+  # Exact mode with auto-detected threshold
+  distiller --mode exact *.cif
+
+  # Exact mode with a specific nRMSD threshold
+  distiller --mode exact --threshold 0.15 *.cif
+
+  # Affinity propagation (let AP choose cluster count)
+  distiller --method affinity-propagation *.cif
+
+  # Select exactly 5 representatives via facility location
+  distiller --n-representatives 5 *.cif
+
+  # Approximate mode with explicit radii
+  distiller --radius 1.0 --radius 4.0 *.cif
+
+  # Save results and produce plots
+  distiller --output-json results.json --visualize *.cif""",
     )
 
     parser.add_argument(
         "files",
         nargs="*",
         type=Path,
-        help="Input mmCIF or PDB files to analyze (use '-' or omit to read paths from stdin)",
+        help="input mmCIF or PDB files (use '-' or omit to read paths from stdin)",
     )
 
-    parser.add_argument(
-        "--visualize",
-        action="store_true",
-        help="Show dendrogram visualization of clustering (exact mode only)",
-    )
+    # -- Output options ---------------------------------------------------
+    output_group = parser.add_argument_group("output options")
 
-    parser.add_argument(
+    output_group.add_argument(
         "--output-json",
         type=str,
-        help="Output JSON file to save clustering results (available in both modes)",
+        metavar="FILE",
+        help="save clustering results to a JSON file",
     )
 
-    parser.add_argument(
+    output_group.add_argument(
+        "--visualize",
+        action="store_true",
+        help="show dendrogram / MDS scatter plots of the clustering",
+    )
+
+    # -- Mode & method ----------------------------------------------------
+    mode_group = parser.add_argument_group("mode & method")
+
+    mode_group.add_argument(
+        "--mode",
+        choices=["exact", "approximate"],
+        default="approximate",
+        help=(
+            "distance computation strategy (default: approximate). "
+            "'approximate' uses PCA + FAISS; "
+            "'exact' uses rigorous pairwise nRMSD"
+        ),
+    )
+
+    mode_group.add_argument(
+        "--method",
+        choices=["hierarchical", "affinity-propagation"],
+        default="hierarchical",
+        help=(
+            "clustering algorithm (default: hierarchical). "
+            "ignored when --n-representatives is set"
+        ),
+    )
+
+    mode_group.add_argument(
+        "--n-representatives",
+        type=int,
+        default=None,
+        metavar="N",
+        help=(
+            "select exactly N representatives via submodular facility "
+            "location (overrides --method and --threshold)"
+        ),
+    )
+
+    # -- Hierarchical options ---------------------------------------------
+    hier_group = parser.add_argument_group("hierarchical clustering options")
+
+    hier_group.add_argument(
+        "--threshold",
+        type=float,
+        default=None,
+        help=(
+            "nRMSD distance threshold (exact mode). "
+            "if omitted, auto-detected from the exponential-decay knee"
+        ),
+    )
+
+    hier_group.add_argument(
+        "--radius",
+        type=float,
+        action="append",
+        default=None,
+        help=(
+            "PCA-space radius for approximate mode. "
+            "can be given multiple times; "
+            "if omitted, auto-detected like --threshold"
+        ),
+    )
+
+    # -- Affinity propagation options -------------------------------------
+    ap_group = parser.add_argument_group("affinity propagation options")
+
+    ap_group.add_argument(
+        "--preference",
+        type=float,
+        default=None,
+        help=(
+            "AP preference — controls cluster count "
+            "(default: median of similarities; "
+            "more negative = fewer clusters)"
+        ),
+    )
+
+    ap_group.add_argument(
+        "--damping",
+        type=float,
+        default=0.9,
+        help=(
+            "AP damping factor in [0.5, 1.0) "
+            "(default: 0.9; higher = more stable convergence)"
+        ),
+    )
+
+    # -- Exact-mode options -----------------------------------------------
+    exact_group = parser.add_argument_group("exact mode options")
+
+    exact_group.add_argument(
         "--rmsd-method",
         type=str,
         choices=["quaternions", "svd", "qcp", "validate"],
         default="quaternions",
-        help="RMSD calculation method (default: quaternions). Use 'validate' to check all methods agree. (exact mode only)",
+        help=(
+            "nRMSD algorithm (default: quaternions). "
+            "'validate' runs all three and checks agreement"
+        ),
     )
 
-    parser.add_argument(
-        "--threshold",
-        type=float,
-        default=None,
-        help="nRMSD threshold for clustering (default: auto-detect from exponential decay inflection point) (exact mode only)",
-    )
-
-    parser.add_argument(
+    exact_group.add_argument(
         "--cache-file",
         type=str,
         default="nrmsd_cache.json",
-        help="Cache file for storing computed nRMSD values (exact mode only, default: nrmsd_cache.json)",
+        metavar="FILE",
+        help="file for caching computed nRMSD values (default: nrmsd_cache.json)",
     )
 
-    parser.add_argument(
+    exact_group.add_argument(
         "--cache-save-interval",
         type=int,
         default=100,
-        help="Save cache to disk every N computations (exact mode only, default: 100)",
-    )
-
-    parser.add_argument(
-        "--mode",
-        choices=["exact", "approximate"],
-        default="approximate",
-        help="Clustering mode switch: --mode approximate (default) performs faster feature-based PCA + FAISS clustering, "
-        "--mode exact performs rigorous nRMSD clustering",
-    )
-
-    parser.add_argument(
-        "--radius",
-        type=float,
-        action="append",
-        default=[1.0, 2.0, 4.0, 8.0],
-        help=(
-            "Radius in PCA-reduced space for redundancy detection "
-            "(approximate mode). Can be supplied multiple times; "
-            "results will be produced for each value (default: 1, 2, 4, 8)."
-        ),
+        metavar="N",
+        help="save cache every N computations (default: 100)",
     )
 
     return parser.parse_args()
@@ -334,6 +452,381 @@ def validate_nucleotide_counts(
     print(f"All structures have {first_count} nucleotides")
 
 
+# ======================================================================
+# Shared clustering helpers (used by both exact and approximate modes)
+# ======================================================================
+
+
+def cluster_affinity_propagation(
+    distance_matrix: np.ndarray,
+    file_paths: List[Path],
+    preference: Optional[float] = None,
+    damping: float = 0.9,
+) -> dict:
+    """Cluster structures using Affinity Propagation on a distance matrix.
+
+    The distance matrix is converted to a similarity matrix via
+    ``similarity = -(distance ** 2)`` and passed to scikit-learn's
+    :class:`~sklearn.cluster.AffinityPropagation`.  Exemplars discovered
+    by the algorithm serve directly as cluster representatives.
+
+    Args:
+        distance_matrix: Square symmetric distance matrix (L2 or nRMSD).
+        file_paths: Paths corresponding to the structures.
+        preference: AP preference (controls cluster count).
+            ``None`` uses the median of the similarity values.
+        damping: Damping factor in ``[0.5, 1.0)`` (default 0.9).
+
+    Returns:
+        Clustering result dict with the same schema as
+        :func:`get_clustering_at_threshold`.
+    """
+    similarity = -(distance_matrix**2)
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        ap = AffinityPropagation(
+            affinity="precomputed",
+            damping=damping,
+            preference=preference,
+            max_iter=300,
+            convergence_iter=15,
+            random_state=0,
+        )
+        ap.fit(similarity)
+
+    for w in caught:
+        if "did not converge" in str(w.message):
+            print(
+                f"Warning: Affinity Propagation did not converge after "
+                f"{ap.n_iter_} iterations. Consider increasing --damping "
+                f"(current: {damping}).",
+                file=sys.stderr,
+            )
+
+    exemplar_indices = ap.cluster_centers_indices_
+    labels = ap.labels_
+
+    if exemplar_indices is None or labels is None:
+        print(
+            "Error: Affinity Propagation produced degenerate results. "
+            "Try adjusting --damping or --preference.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    n_clusters = len(exemplar_indices)
+
+    print(f"Affinity Propagation found {n_clusters} clusters (exemplars)")
+
+    # Build cluster membership lists
+    clusters: dict[int, List[int]] = {}
+    for i, label in enumerate(labels):
+        clusters.setdefault(int(label), []).append(i)
+
+    cluster_sizes = sorted(
+        (len(members) for members in clusters.values()), reverse=True
+    )
+
+    result: dict = {
+        "n_clusters": n_clusters,
+        "cluster_sizes": cluster_sizes,
+        "clusters": [],
+    }
+
+    for cluster_id in range(n_clusters):
+        exemplar_idx = int(exemplar_indices[cluster_id])
+        member_indices = clusters.get(cluster_id, [])
+        members = [
+            str(file_paths[idx]) for idx in member_indices if idx != exemplar_idx
+        ]
+        result["clusters"].append(
+            {"representative": str(file_paths[exemplar_idx]), "members": members}
+        )
+
+    return result
+
+
+def cluster_facility_location(
+    distance_matrix: np.ndarray,
+    file_paths: List[Path],
+    n_representatives: int,
+) -> dict:
+    """Select *n_representatives* using submodular facility location.
+
+    Uses the *apricot-select* library to greedily pick a maximally
+    representative subset.  The distance matrix is converted to a
+    non-negative similarity matrix via ``max(d) - d``.
+
+    Args:
+        distance_matrix: Square symmetric distance matrix.
+        file_paths: Paths corresponding to the structures.
+        n_representatives: Exact number of representatives to select.
+
+    Returns:
+        Clustering result dict.  Each "cluster" groups a representative
+        with the non-selected structures nearest to it.
+    """
+    try:
+        from apricot import FacilityLocationSelection
+    except ImportError:
+        print(
+            "Error: apricot-select is required for --n-representatives. "
+            "Install it with:  pip install apricot-select",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    n = len(file_paths)
+    if n_representatives >= n:
+        print(
+            f"Warning: --n-representatives ({n_representatives}) >= number of "
+            f"structures ({n}); selecting all structures.",
+            file=sys.stderr,
+        )
+        n_representatives = n
+
+    # apricot requires a non-negative similarity matrix
+    similarity = distance_matrix.max() - distance_matrix
+    np.fill_diagonal(similarity, 0.0)
+
+    selector = FacilityLocationSelection(
+        n_samples=n_representatives,
+        metric="precomputed",
+        optimizer="lazy",
+        verbose=False,
+    )
+    selector.fit(similarity)
+
+    ranking = selector.ranking  # ordered indices of selected representatives
+    gains = selector.gains  # marginal gain at each selection step
+
+    print(
+        f"Facility location selected {n_representatives} representatives "
+        f"(total gain: {gains.sum():.4f})"
+    )
+
+    # Assign every non-selected structure to its nearest representative
+    selected_set = set(int(r) for r in ranking)
+    rep_indices = np.array(ranking, dtype=int)
+
+    # For each structure, find the nearest selected representative
+    nearest_rep: dict[int, List[int]] = {int(r): [] for r in ranking}
+    for idx in range(n):
+        if idx in selected_set:
+            continue
+        dists_to_reps = distance_matrix[idx, rep_indices]
+        best = rep_indices[int(np.argmin(dists_to_reps))]
+        nearest_rep[int(best)].append(idx)
+
+    cluster_sizes = sorted(
+        (1 + len(members) for members in nearest_rep.values()), reverse=True
+    )
+
+    result: dict = {
+        "n_clusters": n_representatives,
+        "cluster_sizes": cluster_sizes,
+        "clusters": [],
+        "ranking": [int(r) for r in ranking],
+        "gains": [float(g) for g in gains],
+    }
+
+    for r_idx in ranking:
+        r_idx = int(r_idx)
+        members = [str(file_paths[m]) for m in nearest_rep[r_idx]]
+        result["clusters"].append(
+            {"representative": str(file_paths[r_idx]), "members": members}
+        )
+
+    return result
+
+
+def _visualize_flat_clustering(
+    distance_matrix: np.ndarray,
+    labels: np.ndarray,
+    exemplar_indices: np.ndarray,
+    title: str,
+    output_file: str,
+    gains: Optional[List[float]] = None,
+) -> None:
+    """Produce a visualization for a flat (non-hierarchical) clustering.
+
+    Panel 1 is a 2-D MDS projection coloured by cluster label with
+    exemplars/representatives highlighted.  When *gains* are supplied
+    (facility location mode), panel 2 shows the marginal-gain curve.
+
+    Args:
+        distance_matrix: Square distance matrix used for MDS.
+        labels: Cluster label for each structure (length N).
+        exemplar_indices: Indices of representative structures.
+        title: Figure super-title.
+        output_file: Path to save the PNG.
+        gains: Optional marginal gains (facility location only).
+    """
+    try:
+        import matplotlib.pyplot as plt
+        from sklearn.manifold import MDS
+    except ImportError:
+        print(
+            "Warning: matplotlib/sklearn not available, skipping visualization",
+            file=sys.stderr,
+        )
+        return
+
+    n_panels = 2 if gains else 1
+    fig, axes = plt.subplots(1, n_panels, figsize=(8 * n_panels, 6))
+    if n_panels == 1:
+        axes = [axes]
+
+    # --- Panel 1: MDS scatter coloured by cluster ---
+    ax = axes[0]
+    mds = MDS(
+        n_components=2,
+        dissimilarity="precomputed",
+        random_state=0,
+        normalized_stress="auto",
+    )
+    coords = mds.fit_transform(distance_matrix)
+
+    scatter = ax.scatter(
+        coords[:, 0], coords[:, 1], c=labels, cmap="tab20", alpha=0.6, s=40
+    )
+    rep_coords = coords[exemplar_indices]
+    ax.scatter(
+        rep_coords[:, 0],
+        rep_coords[:, 1],
+        c="red",
+        s=120,
+        marker="*",
+        zorder=5,
+        edgecolors="black",
+        linewidths=0.5,
+        label=f"Representatives ({len(exemplar_indices)})",
+    )
+    ax.set_title("MDS Projection of Structures")
+    ax.set_xlabel("MDS Dimension 1")
+    ax.set_ylabel("MDS Dimension 2")
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+
+    # --- Panel 2: Marginal gains (facility location only) ---
+    if gains and len(axes) > 1:
+        ax2 = axes[1]
+        ax2.bar(range(1, len(gains) + 1), gains, color="steelblue", alpha=0.8)
+        ax2.set_xlabel("Selection Order")
+        ax2.set_ylabel("Marginal Gain")
+        ax2.set_title("Facility Location Marginal Gains")
+        ax2.grid(True, alpha=0.3, axis="y")
+
+    fig.suptitle(title, fontsize=14, fontweight="bold")
+    plt.tight_layout()
+    plt.savefig(output_file, dpi=300, bbox_inches="tight")
+    print(f"Visualization saved to {output_file}")
+
+    try:
+        plt.show()
+    except Exception:
+        print("Note: Could not display plot interactively, but saved to file")
+
+
+def _print_clustering_summary(clustering: dict) -> None:
+    """Print a human-readable summary of a flat clustering result.
+
+    Args:
+        clustering: Dict with keys ``n_clusters``, ``cluster_sizes``,
+            and ``clusters`` (list of representative/members dicts).
+    """
+    print(f"\n  Number of clusters: {clustering['n_clusters']}")
+    print(f"  Cluster sizes: {clustering['cluster_sizes']}")
+    for i, cluster in enumerate(clustering["clusters"]):
+        print(
+            f"  Cluster {i + 1}: {cluster['representative']} "
+            f"+ {len(cluster['members'])} members"
+        )
+
+
+def _labels_from_clustering(
+    clustering: dict, file_paths: List[Path]
+) -> np.ndarray:
+    """Reconstruct a per-structure label array from a clustering dict.
+
+    Args:
+        clustering: Dict whose ``clusters`` list contains
+            ``representative`` and ``members`` string paths.
+        file_paths: Ordered list of paths (defines index mapping).
+
+    Returns:
+        Integer label array of length ``len(file_paths)``.
+    """
+    path_to_idx = {str(p): i for i, p in enumerate(file_paths)}
+    labels = np.full(len(file_paths), -1, dtype=int)
+    for cluster_id, cluster in enumerate(clustering["clusters"]):
+        rep_idx = path_to_idx.get(cluster["representative"])
+        if rep_idx is not None:
+            labels[rep_idx] = cluster_id
+        for member_path in cluster["members"]:
+            member_idx = path_to_idx.get(member_path)
+            if member_idx is not None:
+                labels[member_idx] = cluster_id
+    return labels
+
+
+def _exemplar_indices_from_clustering(
+    clustering: dict, file_paths: List[Path]
+) -> np.ndarray:
+    """Extract exemplar (representative) indices from a clustering dict.
+
+    Args:
+        clustering: Dict whose ``clusters`` list contains
+            ``representative`` string paths.
+        file_paths: Ordered list of paths (defines index mapping).
+
+    Returns:
+        Integer array of exemplar indices.
+    """
+    path_to_idx = {str(p): i for i, p in enumerate(file_paths)}
+    indices = []
+    for cluster in clustering["clusters"]:
+        idx = path_to_idx.get(cluster["representative"])
+        if idx is not None:
+            indices.append(idx)
+    return np.array(indices, dtype=int)
+
+
+def _write_json(
+    output_path: str,
+    clustering: dict,
+    *,
+    mode: str,
+    method: str,
+    n_structures: int,
+    **extra_params,
+) -> None:
+    """Write clustering results to a JSON file with metadata.
+
+    Args:
+        output_path: Destination file path.
+        clustering: Clustering result dict (n_clusters, clusters, …).
+        mode: ``"exact"`` or ``"approximate"``.
+        method: Clustering method name (e.g. ``"affinity-propagation"``).
+        n_structures: Total number of input structures.
+        **extra_params: Additional parameters to include in the
+            ``parameters`` section (e.g. ``preference``, ``damping``).
+    """
+    output_data = {
+        "clustering": clustering,
+        "parameters": {
+            "mode": mode,
+            "method": method,
+            "n_structures": n_structures,
+            **extra_params,
+        },
+    }
+    with open(output_path, "w") as f:
+        json.dump(output_data, f, indent=2)
+    print(f"\nClustering results saved to {output_path}")
+
+
 # ----------------------------------------------------------------------
 
 
@@ -357,6 +850,77 @@ def run_exact(
         structures, valid_files, cache, args.visualize, args.rmsd_method
     )
 
+    # ------------------------------------------------------------------
+    # Facility location (--n-representatives) takes priority
+    # ------------------------------------------------------------------
+    if args.n_representatives is not None:
+        clustering = cluster_facility_location(
+            distance_matrix, valid_files, args.n_representatives
+        )
+        _print_clustering_summary(clustering)
+
+        if args.visualize:
+            labels = _labels_from_clustering(clustering, valid_files)
+            exemplar_indices = np.array(clustering["ranking"])
+            _visualize_flat_clustering(
+                distance_matrix,
+                labels,
+                exemplar_indices,
+                "Facility Location Selection (Exact nRMSD)",
+                "facility_location_analysis.png",
+                gains=clustering.get("gains"),
+            )
+
+        if args.output_json:
+            _write_json(
+                args.output_json,
+                clustering,
+                mode="exact",
+                method="facility-location",
+                n_structures=len(structures),
+                rmsd_method=args.rmsd_method,
+                n_representatives=args.n_representatives,
+            )
+        return
+
+    # ------------------------------------------------------------------
+    # Affinity propagation (--method affinity-propagation)
+    # ------------------------------------------------------------------
+    if args.method == "affinity-propagation":
+        clustering = cluster_affinity_propagation(
+            distance_matrix, valid_files, args.preference, args.damping
+        )
+        _print_clustering_summary(clustering)
+
+        if args.visualize:
+            labels = _labels_from_clustering(clustering, valid_files)
+            exemplar_indices = _exemplar_indices_from_clustering(
+                clustering, valid_files
+            )
+            _visualize_flat_clustering(
+                distance_matrix,
+                labels,
+                exemplar_indices,
+                "Affinity Propagation Clustering (Exact nRMSD)",
+                "clustering_analysis.png",
+            )
+
+        if args.output_json:
+            _write_json(
+                args.output_json,
+                clustering,
+                mode="exact",
+                method="affinity-propagation",
+                n_structures=len(structures),
+                rmsd_method=args.rmsd_method,
+                preference=args.preference,
+                damping=args.damping,
+            )
+        return
+
+    # ------------------------------------------------------------------
+    # Hierarchical clustering (default)
+    # ------------------------------------------------------------------
     # Build linkage matrix
     linkage_matrix = linkage(squareform(distance_matrix), method="complete")
 
@@ -499,6 +1063,7 @@ def run_exact(
                 if args.threshold is not None
                 else "auto-detected",
                 "rmsd_method": args.rmsd_method,
+                "method": "hierarchical",
             },
         }
         with open(args.output_json, "w") as f:
@@ -596,23 +1161,47 @@ def featurize_structure(structure: Structure) -> np.ndarray:
 def run_approximate_multiple(
     structures: List[Structure],
     file_paths: List[Path],
-    radii: List[float],
+    radii: Optional[List[float]],
     output_json: Optional[str],
+    visualize: bool = False,
+    method: str = "hierarchical",
+    preference: Optional[float] = None,
+    damping: float = 0.9,
+    n_representatives: Optional[int] = None,
 ) -> None:
-    """Run approximate PCA + FAISS-based redundancy detection for multiple radii.
+    """Run approximate PCA + FAISS-based redundancy detection.
 
-    Features are computed once, PCA is fitted once, and clustering is repeated
-    for every radius value.
+    When *radii* are provided explicitly, the original greedy FAISS scan is
+    used for each radius value.  When *radii* is ``None`` (the default), the
+    optimal radius is auto-detected by computing a pairwise L2 distance
+    matrix in PCA-reduced space, building a hierarchical linkage tree, and
+    selecting the "knee" of the threshold-vs-cluster-count curve (same
+    strategy used by exact mode for nRMSD thresholds).
 
     Args:
-        structures (List[Structure]): Parsed structures to analyze.
-        file_paths (List[Path]): Paths corresponding to the structures.
-        radii (List[float]): Radii in reduced space for grouping similar structures.
-        output_json (Optional[str]): Optional path to save clustering summary as JSON.
+        structures: Parsed structures to analyse.
+        file_paths: Paths corresponding to the structures.
+        radii: Optional radii in reduced space.  ``None`` triggers auto-detect.
+        output_json: Optional path to save clustering summary as JSON.
+        visualize: If ``True``, produce a dendrogram + threshold-vs-cluster
+            plot (only used in auto-detect mode).
+        method: Clustering method (``"hierarchical"`` or
+            ``"affinity-propagation"``).
+        preference: AP preference value (only for affinity-propagation).
+        damping: AP damping factor (only for affinity-propagation).
+        n_representatives: If set, use facility location selection instead
+            of threshold-based clustering.
     """
-    if not radii:
-        print("Error: No radius values supplied", file=sys.stderr)
-        sys.exit(1)
+    # ------------------------------------------------------------------
+    # 0. Handle --radius + --method conflict
+    # ------------------------------------------------------------------
+    if radii is not None and method == "affinity-propagation":
+        warnings.warn(
+            "--radius is incompatible with --method affinity-propagation; "
+            "ignoring --method and using greedy FAISS scan for specified radii.",
+            stacklevel=2,
+        )
+        method = "hierarchical"
 
     # ------------------------------------------------------------------
     # 1. Feature extraction
@@ -638,15 +1227,34 @@ def run_approximate_multiple(
     d = X_red.shape[1]
     print(f"PCA reduced to {d} dimensions (95 % variance)")
 
-    # ------------------------------------------------------------------
-    # 3. Build FAISS index once
-    # ------------------------------------------------------------------
+    # ==================================================================
+    # Branch A – auto-detect radius via hierarchical clustering
+    #            (also used for AP and facility location in approx mode)
+    # ==================================================================
+    if radii is None:
+        _run_approximate_auto(
+            X_red,
+            structures,
+            file_paths,
+            output_json,
+            visualize,
+            method=method,
+            preference=preference,
+            damping=damping,
+            n_representatives=n_representatives,
+        )
+        return
+
+    # ==================================================================
+    # Branch B – user-supplied radii → greedy FAISS scan (original logic)
+    # ==================================================================
+    if not radii:
+        print("Error: No radius values supplied", file=sys.stderr)
+        sys.exit(1)
+
     index = faiss.IndexFlatL2(d)
     index.add(X_red)
 
-    # ------------------------------------------------------------------
-    # 4. Cluster for each radius
-    # ------------------------------------------------------------------
     results_for_json: List[dict] = []
     for radius in radii:
         radius_sq = radius**2
@@ -700,6 +1308,283 @@ def run_approximate_multiple(
         print(f"\nApproximate clustering for all radii saved to {output_json}")
 
     return
+
+
+def _run_approximate_auto(
+    X_red: np.ndarray,
+    structures: List[Structure],
+    file_paths: List[Path],
+    output_json: Optional[str],
+    visualize: bool,
+    method: str = "hierarchical",
+    preference: Optional[float] = None,
+    damping: float = 0.9,
+    n_representatives: Optional[int] = None,
+) -> None:
+    """Auto-detect optimal radius and cluster using hierarchical linkage.
+
+    This mirrors the strategy used by exact mode: build a complete-linkage
+    dendrogram over pairwise L2 distances in PCA-reduced space, enumerate
+    every merge distance (each one splits the set into progressively fewer
+    clusters), fit an exponential decay to the threshold-vs-cluster-count
+    curve, and pick the "knee" as the optimal radius.
+
+    When *n_representatives* or *method="affinity-propagation"* is set,
+    the pairwise L2 distance matrix is still computed but the final
+    clustering step uses the corresponding algorithm instead of
+    hierarchical linkage.
+
+    Args:
+        X_red: PCA-reduced feature matrix (N × d, float32).
+        structures: Parsed structures (used only for length).
+        file_paths: Paths corresponding to the structures.
+        output_json: Optional path to save clustering summary as JSON.
+        visualize: If ``True``, produce clustering plots.
+        method: Clustering method (``"hierarchical"`` or
+            ``"affinity-propagation"``).
+        preference: AP preference value.
+        damping: AP damping factor.
+        n_representatives: If set, use facility location selection.
+    """
+    n = len(structures)
+    print(f"\nAuto-detecting optimal radius from {n} structures …")
+
+    # ------------------------------------------------------------------
+    # 1. Pairwise L2 distance matrix
+    # ------------------------------------------------------------------
+    condensed = pdist(X_red.astype(np.float64), metric="euclidean")
+    distance_matrix = squareform(condensed)
+    print(f"Pairwise L2 distance matrix computed ({n}×{n})")
+
+    # ------------------------------------------------------------------
+    # Facility location (--n-representatives) takes priority
+    # ------------------------------------------------------------------
+    if n_representatives is not None:
+        clustering = cluster_facility_location(
+            distance_matrix, file_paths, n_representatives
+        )
+        _print_clustering_summary(clustering)
+
+        if visualize:
+            labels = _labels_from_clustering(clustering, file_paths)
+            exemplar_indices = np.array(clustering["ranking"])
+            _visualize_flat_clustering(
+                distance_matrix,
+                labels,
+                exemplar_indices,
+                "Facility Location Selection (Approximate PCA L2)",
+                "facility_location_analysis.png",
+                gains=clustering.get("gains"),
+            )
+
+        if output_json:
+            _write_json(
+                output_json,
+                clustering,
+                mode="approximate",
+                method="facility-location",
+                n_structures=n,
+                n_representatives=n_representatives,
+            )
+        return
+
+    # ------------------------------------------------------------------
+    # Affinity propagation (--method affinity-propagation)
+    # ------------------------------------------------------------------
+    if method == "affinity-propagation":
+        clustering = cluster_affinity_propagation(
+            distance_matrix, file_paths, preference, damping
+        )
+        _print_clustering_summary(clustering)
+
+        if visualize:
+            labels = _labels_from_clustering(clustering, file_paths)
+            exemplar_indices = _exemplar_indices_from_clustering(
+                clustering, file_paths
+            )
+            _visualize_flat_clustering(
+                distance_matrix,
+                labels,
+                exemplar_indices,
+                "Affinity Propagation Clustering (Approximate PCA L2)",
+                "clustering_analysis.png",
+            )
+
+        if output_json:
+            _write_json(
+                output_json,
+                clustering,
+                mode="approximate",
+                method="affinity-propagation",
+                n_structures=n,
+                preference=preference,
+                damping=damping,
+            )
+        return
+
+    # ------------------------------------------------------------------
+    # Hierarchical clustering (default)
+    # ------------------------------------------------------------------
+    linkage_matrix = linkage(condensed, method="complete")
+
+    # ------------------------------------------------------------------
+    # 3. Auto-detect optimal radius (reuse exact mode's logic)
+    # ------------------------------------------------------------------
+    optimal_radius = determine_optimal_threshold(distance_matrix, linkage_matrix)
+
+    # ------------------------------------------------------------------
+    # 4. Enumerate all merge-distance clusterings
+    # ------------------------------------------------------------------
+    all_threshold_data = find_all_thresholds_and_clusters(
+        distance_matrix, linkage_matrix, file_paths
+    )
+    threshold_clustering = get_clustering_at_threshold(
+        linkage_matrix, distance_matrix, file_paths, optimal_radius
+    )
+
+    # ------------------------------------------------------------------
+    # 5. Visualisation (mirrors exact mode's two-panel plot)
+    # ------------------------------------------------------------------
+    if visualize:
+        try:
+            import matplotlib.pyplot as plt
+
+            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 6))
+
+            # Left panel – dendrogram
+            dendrogram(
+                linkage_matrix,
+                labels=[f"Structure {i}" for i in range(n)],
+                ax=ax1,
+                color_threshold=optimal_radius,
+            )
+            ax1.axhline(
+                y=optimal_radius,
+                color="red",
+                linestyle="--",
+                linewidth=2,
+                label=f"Radius = {optimal_radius:.4f}",
+            )
+            ax1.set_title("Hierarchical Clustering Dendrogram (PCA L2)")
+            ax1.set_xlabel("Structure Index")
+            ax1.set_ylabel("L2 Distance in PCA Space")
+            ax1.legend()
+
+            # Right panel – threshold vs cluster count
+            thresholds = np.array(
+                [entry["nrmsd_threshold"] for entry in all_threshold_data]
+            )
+            cluster_counts = np.array(
+                [len(entry["clusters"]) for entry in all_threshold_data]
+            )
+
+            x_smooth, y_smooth, inflection_x = fit_exponential_decay(
+                thresholds, cluster_counts
+            )
+
+            ax2.scatter(
+                thresholds, cluster_counts, alpha=0.7, s=30, label="Data points"
+            )
+            if len(x_smooth) > 0:
+                ax2.plot(
+                    x_smooth,
+                    y_smooth,
+                    "b-",
+                    linewidth=2,
+                    alpha=0.8,
+                    label="Exponential decay fit",
+                )
+
+            if len(inflection_x) > 0 and len(x_smooth) > 0:
+                inflection_y = np.interp(inflection_x, x_smooth, y_smooth)
+                ax2.scatter(
+                    inflection_x,
+                    inflection_y,
+                    color="orange",
+                    s=100,
+                    marker="*",
+                    zorder=6,
+                    label=f"Key points ({len(inflection_x)})",
+                )
+
+            ax2.axvline(
+                x=optimal_radius,
+                color="red",
+                linestyle="--",
+                linewidth=2,
+                label=f"Radius = {optimal_radius:.4f}",
+            )
+            ax2.scatter(
+                [optimal_radius],
+                [threshold_clustering["n_clusters"]],
+                color="red",
+                s=100,
+                zorder=5,
+                label=f"Selected ({threshold_clustering['n_clusters']} clusters)",
+            )
+
+            ax2.set_xlabel("L2 Distance in PCA Space")
+            ax2.set_ylabel("Number of Clusters")
+            ax2.set_title("Radius vs Cluster Count with Exponential Decay Fit")
+            ax2.grid(True, alpha=0.3)
+            ax2.legend()
+
+            plt.tight_layout()
+            plt.savefig(
+                "approximate_clustering_analysis.png", dpi=300, bbox_inches="tight"
+            )
+            print(
+                "Approximate clustering plots saved to approximate_clustering_analysis.png"
+            )
+
+            try:
+                plt.show()
+            except Exception:
+                print(
+                    "Note: Could not display plot interactively, but saved to file"
+                )
+        except ImportError:
+            print(
+                "Warning: matplotlib not available, skipping visualization",
+                file=sys.stderr,
+            )
+
+    # ------------------------------------------------------------------
+    # 6. Summary output (mirrors exact mode)
+    # ------------------------------------------------------------------
+    print(f"\nFound {len(all_threshold_data)} different clustering configurations")
+    print(
+        f"Radius range: {all_threshold_data[0]['nrmsd_threshold']:.6f} "
+        f"to {all_threshold_data[-1]['nrmsd_threshold']:.6f}"
+    )
+    print(
+        f"Cluster count range: {len(all_threshold_data[-1]['clusters'])} "
+        f"to {len(all_threshold_data[0]['clusters'])}"
+    )
+
+    print(f"\nClustering at auto-detected radius {optimal_radius:.6f}:")
+    print(f"  Number of clusters: {threshold_clustering['n_clusters']}")
+    print(f"  Cluster sizes: {threshold_clustering['cluster_sizes']}")
+    for i, cluster in enumerate(threshold_clustering["clusters"]):
+        print(
+            f"  Cluster {i + 1}: {cluster['representative']} "
+            f"+ {len(cluster['members'])} members"
+        )
+
+    if output_json:
+        output_data = {
+            "all_thresholds": all_threshold_data,
+            "selected_clustering": threshold_clustering,
+            "parameters": {
+                "mode": "approximate",
+                "radius": optimal_radius,
+                "radius_source": "auto-detected",
+                "n_structures": len(structures),
+            },
+        }
+        with open(output_json, "w") as f:
+            json.dump(output_data, f, indent=2)
+        print(f"\nApproximate clustering results saved to {output_json}")
 
 
 # ----------------------------------------------------------------------
@@ -1200,7 +2085,17 @@ def main():
 
     # Switch workflow based on requested mode
     if args.mode == "approximate":
-        run_approximate_multiple(structures, valid_files, args.radius, args.output_json)
+        run_approximate_multiple(
+            structures,
+            valid_files,
+            args.radius,
+            args.output_json,
+            visualize=args.visualize,
+            method=args.method,
+            preference=args.preference,
+            damping=args.damping,
+            n_representatives=args.n_representatives,
+        )
         return
     else:
         run_exact(structures, valid_files, args)
