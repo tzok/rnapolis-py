@@ -9,6 +9,7 @@
     pkgs.graphviz
     pkgs.highs
     pkgs.zlib
+    pkgs.jupyter
   ];
   enterShell = ''
     export PYTHONPATH=src/

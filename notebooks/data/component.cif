@@ -1,0 +1,228 @@
+data_A
+loop_
+_chem_comp_atom.comp_id
+_chem_comp_atom.atom_id
+_chem_comp_atom.alt_atom_id
+_chem_comp_atom.type_symbol
+_chem_comp_atom.charge
+_chem_comp_atom.pdbx_align
+_chem_comp_atom.pdbx_aromatic_flag
+_chem_comp_atom.pdbx_leaving_atom_flag
+_chem_comp_atom.pdbx_stereo_config
+_chem_comp_atom.model_Cartn_x
+_chem_comp_atom.model_Cartn_y
+_chem_comp_atom.model_Cartn_z
+_chem_comp_atom.pdbx_model_Cartn_x_ideal
+_chem_comp_atom.pdbx_model_Cartn_y_ideal
+_chem_comp_atom.pdbx_model_Cartn_z_ideal
+_chem_comp_atom.pdbx_component_atom_id
+_chem_comp_atom.pdbx_component_comp_id
+_chem_comp_atom.pdbx_ordinal
+A OP3    O3P  O 0 1 N Y N 22.586 9.736  -6.030 2.135  -1.141 -5.313 OP3    A 1
+A P      P    P 0 1 N N N 23.014 10.223 -7.491 1.024  -0.137 -4.723 P      A 2
+A OP1    O1P  O 0 1 N N N 21.938 9.966  -8.412 1.633  1.190  -4.488 OP1    A 3
+A OP2    O2P  O 0 1 N N N 24.378 9.686  -7.860 -0.183 0.005  -5.778 OP2    A 4
+A "O5'"  O5*  O 0 1 N N N 23.144 11.720 -7.092 0.456  -0.720 -3.334 "O5'"  A 5
+A "C5'"  C5*  C 0 1 N N N 24.013 12.484 -7.839 -0.520 0.209  -2.863 "C5'"  A 6
+A "C4'"  C4*  C 0 1 N N R 23.996 13.899 -7.276 -1.101 -0.287 -1.538 "C4'"  A 7
+A "O4'"  O4*  O 0 1 N N N 24.523 13.928 -5.945 -0.064 -0.383 -0.538 "O4'"  A 8
+A "C3'"  C3*  C 0 1 N N S 24.868 14.877 -8.041 -2.105 0.739  -0.969 "C3'"  A 9
+A "O3'"  O3*  O 0 1 N N N 24.195 15.389 -9.178 -3.445 0.360  -1.287 "O3'"  A 10
+A "C2'"  C2*  C 0 1 N N R 25.172 15.942 -7.004 -1.874 0.684  0.558  "C2'"  A 11
+A "O2'"  O2*  O 0 1 N N N 24.060 16.759 -6.874 -3.065 0.271  1.231  "O2'"  A 12
+A "C1'"  C1*  C 0 1 N N R 25.387 15.094 -5.814 -0.755 -0.367 0.729  "C1'"  A 13
+A N9     N9   N 0 1 Y N N 26.745 14.503 -5.630 0.158  0.029  1.803  N9     A 14
+A C8     C8   C 0 1 Y N N 27.163 13.163 -5.773 1.265  0.813  1.672  C8     A 15
+A N7     N7   N 0 1 Y N N 28.488 13.043 -5.514 1.843  0.963  2.828  N7     A 16
+A C5     C5   C 0 1 Y N N 28.887 14.292 -5.222 1.143  0.292  3.773  C5     A 17
+A C6     C6   C 0 1 Y N N 30.177 14.748 -4.871 1.290  0.091  5.156  C6     A 18
+A N6     N6   N 0 1 N N N 31.245 13.997 -4.775 2.344  0.664  5.846  N6     A 19
+A N1     N1   N 0 1 Y N N 30.286 16.119 -4.615 0.391  -0.656 5.787  N1     A 20
+A C2     C2   C 0 1 Y N N 29.272 16.866 -4.702 -0.617 -1.206 5.136  C2     A 21
+A N3     N3   N 0 1 Y N N 27.992 16.509 -5.030 -0.792 -1.051 3.841  N3     A 22
+A C4     C4   C 0 1 Y N N 27.856 15.249 -5.271 0.056  -0.320 3.126  C4     A 23
+A HOP3   3HOP H 0 0 N N N 23.296 9.905  -5.422 2.448  -0.755 -6.142 HOP3   A 24
+A HOP2   2HOP H 0 0 N N N 25.088 9.855  -7.252 -0.552 -0.879 -5.902 HOP2   A 25
+A "H5'"  1H5* H 0 1 N N N 25.039 12.050 -7.885 -1.319 0.301  -3.599 "H5'"  A 26
+A "H5''" 2H5* H 0 0 N N N 23.788 12.450 -8.930 -0.052 1.182  -2.712 "H5''" A 27
+A "H4'"  H4*  H 0 1 N N N 22.923 14.196 -7.338 -1.586 -1.254 -1.677 "H4'"  A 28
+A "H3'"  H3*  H 0 1 N N N 25.794 14.420 -8.461 -1.890 1.736  -1.353 "H3'"  A 29
+A "HO3'" H3T  H 0 0 N Y N 24.741 16.001 -9.657 -4.024 1.035  -0.908 "HO3'" A 30
+A "H2'"  H2*  H 0 1 N N N 26.025 16.626 -7.219 -1.543 1.654  0.930  "H2'"  A 31
+A "HO2'" 2HO* H 0 0 N N N 24.250 17.425 -6.224 -3.740 0.936  1.037  "HO2'" A 32
+A "H1'"  H1*  H 0 1 N N N 25.197 15.783 -4.958 -1.185 -1.346 0.940  "H1'"  A 33
+A H8     H8   H 0 1 N N N 26.526 12.307 -6.055 1.611  1.246  0.745  H8     A 34
+A H61    1H6  H 0 1 N N N 32.176 14.326 -4.521 2.432  0.522  6.801  H61    A 35
+A H62    2H6  H 0 1 N N N 31.340 13.509 -5.666 2.996  1.205  5.374  H62    A 36
+A H2     H2   H 0 1 N N N 29.524 17.915 -4.473 -1.325 -1.807 5.688  H2     A 37
+#
+data_C
+loop_
+_chem_comp_atom.comp_id
+_chem_comp_atom.atom_id
+_chem_comp_atom.alt_atom_id
+_chem_comp_atom.type_symbol
+_chem_comp_atom.charge
+_chem_comp_atom.pdbx_align
+_chem_comp_atom.pdbx_aromatic_flag
+_chem_comp_atom.pdbx_leaving_atom_flag
+_chem_comp_atom.pdbx_stereo_config
+_chem_comp_atom.model_Cartn_x
+_chem_comp_atom.model_Cartn_y
+_chem_comp_atom.model_Cartn_z
+_chem_comp_atom.pdbx_model_Cartn_x_ideal
+_chem_comp_atom.pdbx_model_Cartn_y_ideal
+_chem_comp_atom.pdbx_model_Cartn_z_ideal
+_chem_comp_atom.pdbx_component_atom_id
+_chem_comp_atom.pdbx_component_comp_id
+_chem_comp_atom.pdbx_ordinal
+C OP3    O3P  O 0 1 N Y N 26.803 20.514 -11.017 2.147  -1.021 -4.678 OP3    C 1
+C P      P    P 0 1 N N N 27.386 20.433 -12.503 1.049  -0.039 -4.028 P      C 2
+C OP1    O1P  O 0 1 N N N 26.539 21.293 -13.322 1.692  1.237  -3.646 OP1    C 3
+C OP2    O2P  O 0 1 N N N 27.570 19.015 -12.877 -0.116 0.246  -5.102 OP2    C 4
+C "O5'"  O5*  O 0 1 N N N 28.830 21.055 -12.361 0.415  -0.733 -2.721 "O5'"  C 5
+C "C5'"  C5*  C 0 1 N N N 29.051 22.423 -11.973 -0.546 0.181  -2.193 "C5'"  C 6
+C "C4'"  C4*  C 0 1 N N R 30.525 22.652 -11.850 -1.189 -0.419 -0.942 "C4'"  C 7
+C "O4'"  O4*  O 0 1 N N N 30.993 22.001 -10.600 -0.190 -0.648 0.076  "O4'"  C 8
+C "C3'"  C3*  C 0 1 N N S 31.457 22.096 -12.933 -2.178 0.583  -0.307 "C3'"  C 9
+C "O3'"  O3*  O 0 1 N N N 31.346 22.915 -14.074 -3.518 0.283  -0.703 "O3'"  C 10
+C "C2'"  C2*  C 0 1 N N R 32.751 22.157 -12.194 -2.001 0.373  1.215  "C2'"  C 11
+C "O2'"  O2*  O 0 1 N N N 33.186 23.463 -12.031 -3.228 -0.059 1.806  "O2'"  C 12
+C "C1'"  C1*  C 0 1 N N R 32.361 21.627 -10.851 -0.924 -0.729 1.317  "C1'"  C 13
+C N1     N1   N 0 1 N N N 32.476 20.131 -10.779 -0.036 -0.470 2.453  N1     C 14
+C C2     C2   C 0 1 N N N 33.674 19.589 -10.493 0.652  0.683  2.514  C2     C 15
+C O2     O2   O 0 1 N N N 34.680 20.354 -10.277 0.529  1.504  1.620  O2     C 16
+C N3     N3   N 0 1 N N N 33.855 18.230 -10.434 1.467  0.945  3.535  N3     C 17
+C C4     C4   C 0 1 N N N 32.804 17.495 -10.663 1.620  0.070  4.520  C4     C 18
+C N4     N4   N 0 1 N N N 32.905 16.139 -10.606 2.464  0.350  5.569  N4     C 19
+C C5     C5   C 0 1 N N N 31.488 18.044 -10.975 0.916  -1.151 4.483  C5     C 20
+C C6     C6   C 0 1 N N N 31.389 19.360 -11.041 0.087  -1.399 3.442  C6     C 21
+C HOP3   3HOP H 0 0 N N N 27.354 19.953 -10.483 2.501  -0.569 -5.456 HOP3   C 22
+C HOP2   2HOP H 0 0 N N N 28.121 18.454 -12.343 -0.508 -0.608 -5.323 HOP2   C 23
+C "H5'"  1H5* H 0 1 N N N 28.562 23.147 -12.665 -1.315 0.371  -2.941 "H5'"  C 24
+C "H5''" 2H5* H 0 0 N N N 28.496 22.699 -11.045 -0.052 1.118  -1.933 "H5''" C 25
+C "H4'"  H4*  H 0 1 N N N 30.596 23.763 -11.911 -1.699 -1.350 -1.188 "H4'"  C 26
+C "H3'"  H3*  H 0 1 N N N 31.269 21.074 -13.339 -1.917 1.604  -0.586 "H3'"  C 27
+C "HO3'" H3T  H 0 0 N Y N 31.923 22.570 -14.745 -4.088 0.939  -0.278 "HO3'" C 28
+C "H2'"  H2*  H 0 1 N N N 33.568 21.607 -12.716 -1.653 1.290  1.689  "H2'"  C 29
+C "HO2'" 2HO* H 0 0 N N N 34.010 23.501 -11.560 -3.874 0.644  1.656  "HO2'" C 30
+C "H1'"  H1*  H 0 1 N N N 33.051 22.057 -10.088 -1.392 -1.708 1.418  "H1'"  C 31
+C H41    1H4  H 0 1 N N N 33.824 15.755 -10.388 2.950  1.189  5.590  H41    C 32
+C H42    2H4  H 0 1 N N N 32.564 15.734 -11.478 2.571  -0.289 6.290  H42    C 33
+C H5     H5   H 0 1 N N N 30.568 17.464 -11.160 1.030  -1.873 5.278  H5     C 34
+C H6     H6   H 0 1 N N N 30.417 19.806 -11.309 -0.465 -2.326 3.393  H6     C 35
+#
+data_G
+loop_
+_chem_comp_atom.comp_id
+_chem_comp_atom.atom_id
+_chem_comp_atom.alt_atom_id
+_chem_comp_atom.type_symbol
+_chem_comp_atom.charge
+_chem_comp_atom.pdbx_align
+_chem_comp_atom.pdbx_aromatic_flag
+_chem_comp_atom.pdbx_leaving_atom_flag
+_chem_comp_atom.pdbx_stereo_config
+_chem_comp_atom.model_Cartn_x
+_chem_comp_atom.model_Cartn_y
+_chem_comp_atom.model_Cartn_z
+_chem_comp_atom.pdbx_model_Cartn_x_ideal
+_chem_comp_atom.pdbx_model_Cartn_y_ideal
+_chem_comp_atom.pdbx_model_Cartn_z_ideal
+_chem_comp_atom.pdbx_component_atom_id
+_chem_comp_atom.pdbx_component_comp_id
+_chem_comp_atom.pdbx_ordinal
+G OP3    O3P  O 0 1 N Y N 34.313 3.314 -0.422 -1.945 -1.360 5.599  OP3    G 1
+G P      P    P 0 1 N N N 33.741 4.431 0.367  -0.911 -0.277 5.008  P      G 2
+G OP1    O1P  O 0 1 N N N 33.537 5.671 -0.451 -1.598 1.022  4.844  OP1    G 3
+G OP2    O2P  O 0 1 N N N 34.442 4.727 1.661  0.325  -0.105 6.025  OP2    G 4
+G "O5'"  O5*  O 0 1 N N N 32.289 3.932 0.811  -0.365 -0.780 3.580  "O5'"  G 5
+G "C5'"  C5*  C 0 1 N N N 32.101 2.551 1.198  0.542  0.217  3.109  "C5'"  G 6
+G "C4'"  C4*  C 0 1 N N R 30.760 2.450 1.879  1.100  -0.200 1.748  "C4'"  G 7
+G "O4'"  O4*  O 0 1 N N N 30.797 3.202 3.104  0.033  -0.318 0.782  "O4'"  G 8
+G "C3'"  C3*  C 0 1 N N S 29.597 3.022 1.070  2.025  0.898  1.182  "C3'"  G 9
+G "O3'"  O3*  O 0 1 N N N 29.106 2.045 0.152  3.395  0.582  1.439  "O3'"  G 10
+G "C2'"  C2*  C 0 1 N N R 28.603 3.421 2.118  1.741  0.884  -0.338 "C2'"  G 11
+G "O2'"  O2*  O 0 1 N N N 27.930 2.319 2.657  2.927  0.560  -1.066 "O2'"  G 12
+G "C1'"  C1*  C 0 1 N N R 29.487 3.936 3.170  0.675  -0.220 -0.507 "C1'"  G 13
+G N9     N9   N 0 1 Y N N 29.942 5.378 3.195  -0.297 0.162  -1.534 N9     G 14
+G C8     C8   C 0 1 Y N N 31.187 5.907 3.065  -1.440 0.880  -1.334 C8     G 15
+G N7     N7   N 0 1 Y N N 31.237 7.191 3.136  -2.066 1.037  -2.464 N7     G 16
+G C5     C5   C 0 1 Y N N 29.896 7.536 3.341  -1.364 0.431  -3.453 C5     G 17
+G C6     C6   C 0 1 N N N 29.331 8.813 3.503  -1.556 0.279  -4.846 C6     G 18
+G O6     O6   O 0 1 N N N 29.901 9.926 3.495  -2.534 0.755  -5.397 O6     G 19
+G N1     N1   N 0 1 N N N 27.948 8.749 3.683  -0.626 -0.401 -5.551 N1     G 20
+G C2     C2   C 0 1 N N N 27.233 7.615 3.707  0.459  -0.934 -4.923 C2     G 21
+G N2     N2   N 0 1 N N N 25.894 7.743 3.899  1.384  -1.626 -5.664 N2     G 22
+G N3     N3   N 0 1 N N N 27.758 6.393 3.559  0.649  -0.800 -3.630 N3     G 23
+G C4     C4   C 0 1 Y N N 29.079 6.431 3.382  -0.226 -0.134 -2.868 C4     G 24
+G HOP3   3HOP H 0 0 N N N 34.442 2.528 0.096  -2.247 -1.021 6.453  HOP3   G 25
+G HOP2   2HOP H 0 0 N N N 34.571 3.941 2.179  0.745  -0.973 6.104  HOP2   G 26
+G "H5'"  1H5* H 0 1 N N N 32.209 1.841 0.344  1.362  0.327  3.820  "H5'"  G 27
+G "H5''" 2H5* H 0 0 N N N 32.936 2.156 1.822  0.018  1.168  3.011  "H5''" G 28
+G "H4'"  H4*  H 0 1 N N N 30.585 1.358 2.025  1.640  -1.144 1.833  "H4'"  G 29
+G "H3'"  H3*  H 0 1 N N N 29.867 3.891 0.426  1.772  1.868  1.610  "H3'"  G 30
+G "HO3'" H3T  H 0 0 N Y N 28.382 2.400 -0.351 3.923  1.300  1.065  "HO3'" G 31
+G "H2'"  H2*  H 0 1 N N N 27.827 4.115 1.719  1.346  1.847  -0.662 "H2'"  G 32
+G "HO2'" 2HO* H 0 0 N N N 27.299 2.572 3.321  3.573  1.254  -0.871 "HO2'" G 33
+G "H1'"  H1*  H 0 1 N N N 28.814 3.801 4.048  1.148  -1.167 -0.769 "H1'"  G 34
+G H8     H8   H 0 1 N N N 32.110 5.323 2.909  -1.776 1.261  -0.381 H8     G 35
+G H1     H1   H 0 1 N N N 27.411 9.607 3.808  -0.736 -0.518 -6.508 H1     G 36
+G H21    1H2  H 0 1 N N N 25.350 6.880 3.917  2.165  -2.007 -5.232 H21    G 37
+G H22    2H2  H 0 1 N N N 25.507 8.377 3.200  1.256  -1.736 -6.619 H22    G 38
+#
+data_U
+loop_
+_chem_comp_atom.comp_id
+_chem_comp_atom.atom_id
+_chem_comp_atom.alt_atom_id
+_chem_comp_atom.type_symbol
+_chem_comp_atom.charge
+_chem_comp_atom.pdbx_align
+_chem_comp_atom.pdbx_aromatic_flag
+_chem_comp_atom.pdbx_leaving_atom_flag
+_chem_comp_atom.pdbx_stereo_config
+_chem_comp_atom.model_Cartn_x
+_chem_comp_atom.model_Cartn_y
+_chem_comp_atom.model_Cartn_z
+_chem_comp_atom.pdbx_model_Cartn_x_ideal
+_chem_comp_atom.pdbx_model_Cartn_y_ideal
+_chem_comp_atom.pdbx_model_Cartn_z_ideal
+_chem_comp_atom.pdbx_component_atom_id
+_chem_comp_atom.pdbx_component_comp_id
+_chem_comp_atom.pdbx_ordinal
+U OP3    O3P  O 0 1 N Y N 29.106 2.045  0.152  -2.122 1.033  -4.690 OP3    U 1
+U P      P    P 0 1 N N N 28.940 2.442  -1.379 -1.030 0.047  -4.037 P      U 2
+U OP1    O1P  O 0 1 N N N 28.520 1.217  -2.078 -1.679 -1.228 -3.660 OP1    U 3
+U OP2    O2P  O 0 1 N N N 30.133 3.129  -1.866 0.138  -0.241 -5.107 OP2    U 4
+U "O5'"  O5*  O 0 1 N N N 27.784 3.522  -1.387 -0.399 0.736  -2.726 "O5'"  U 5
+U "C5'"  C5*  C 0 1 N N N 26.432 3.117  -1.047 0.557  -0.182 -2.196 "C5'"  U 6
+U "C4'"  C4*  C 0 1 N N R 25.647 4.373  -0.834 1.197  0.415  -0.942 "C4'"  U 7
+U "O4'"  O4*  O 0 1 N N N 26.122 5.093  0.327  0.194  0.645  0.074  "O4'"  U 8
+U "C3'"  C3*  C 0 1 N N S 25.763 5.465  -1.895 2.181  -0.588 -0.301 "C3'"  U 9
+U "O3'"  O3*  O 0 1 N N N 25.041 5.077  -3.062 3.524  -0.288 -0.686 "O3'"  U 10
+U "C2'"  C2*  C 0 1 N N R 25.213 6.663  -1.148 1.995  -0.383 1.218  "C2'"  U 11
+U "O2'"  O2*  O 0 1 N N N 23.829 6.500  -1.012 3.219  0.046  1.819  "O2'"  U 12
+U "C1'"  C1*  C 0 1 N N R 25.917 6.524  0.133  0.922  0.723  1.319  "C1'"  U 13
+U N1     N1   N 0 1 N N N 27.224 7.194  0.137  0.028  0.464  2.451  N1     U 14
+U C2     C2   C 0 1 N N N 27.201 8.578  0.406  -0.690 -0.671 2.486  C2     U 15
+U O2     O2   O 0 1 N N N 26.156 9.121  0.619  -0.587 -1.474 1.580  O2     U 16
+U N3     N3   N 0 1 N N N 28.408 9.189  0.403  -1.515 -0.936 3.517  N3     U 17
+U C4     C4   C 0 1 N N N 29.660 8.606  0.152  -1.641 -0.055 4.530  C4     U 18
+U O4     O4   O 0 1 N N N 30.676 9.330  0.195  -2.391 -0.292 5.460  O4     U 19
+U C5     C5   C 0 1 N N N 29.604 7.215  -0.113 -0.894 1.146  4.502  C5     U 20
+U C6     C6   C 0 1 N N N 28.447 6.605  -0.111 -0.070 1.384  3.459  C6     U 21
+U HOP3   3HOP H 0 0 N N N 29.377 2.835  0.603  -2.475 0.583  -5.470 HOP3   U 22
+U HOP2   2HOP H 0 0 N N N 30.404 3.919  -1.414 0.534  0.613  -5.325 HOP2   U 23
+U "H5'"  1H5* H 0 1 N N N 25.974 2.434  -1.800 1.329  -0.373 -2.942 "H5'"  U 24
+U "H5''" 2H5* H 0 0 N N N 26.387 2.417  -0.179 0.060  -1.117 -1.940 "H5''" U 25
+U "H4'"  H4*  H 0 1 N N N 24.613 3.957  -0.795 1.712  1.345  -1.185 "H4'"  U 26
+U "H3'"  H3*  H 0 1 N N N 26.782 5.677  -2.293 1.923  -1.609 -0.583 "H3'"  U 27
+U "HO3'" H3T  H 0 0 N Y N 25.113 5.756  -3.722 4.094  -0.926 -0.234 "HO3'" U 28
+U "H2'"  H2*  H 0 1 N N N 25.358 7.661  -1.622 1.643  -1.301 1.688  "H2'"  U 29
+U "HO2'" 2HO* H 0 0 N N N 23.484 7.251  -0.543 3.865  -0.657 1.671  "HO2'" U 30
+U "H1'"  H1*  H 0 1 N N N 25.312 6.996  0.941  1.392  1.700  1.423  "H1'"  U 31
+U H3     H3   H 0 1 N N N 28.370 10.187 0.610  -2.024 -1.762 3.528  H3     U 32
+U H5     H5   H 0 1 N N N 30.486 6.589  -0.327 -0.982 1.863  5.305  H5     U 33
+U H6     H6   H 0 1 N N N 28.506 5.526  -0.332 0.507  2.295  3.421  H6     U 34
+#

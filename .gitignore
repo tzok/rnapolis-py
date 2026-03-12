@@ -1,22 +1,16 @@
-.aider*
-.venv
 .DS_Store
+.aider*
 .env
 .hypothesis
+.ipynb_checkpoints
+.venv
 RNApolis.egg-info
 __pycache__
-dist
 build
+dist
+notebooks/outputs
 
 # Devenv
+.direnv
 .devenv*
 devenv.local.nix
-
-# direnv
-.direnv
-
-# pre-commit
-.pre-commit-config.yaml
-
-.idea
-src/dnatco_process_all.sh
