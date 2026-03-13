@@ -3,7 +3,9 @@ from rnapolis.common import LeontisWesthof, ResidueAuth, ResidueLabel
 from rnapolis.tertiary import Atom, Residue3D, Structure3D
 
 
-def _make_residue3d(chain: str, number: int, auth_name: str, one_letter: str) -> Residue3D:
+def _make_residue3d(
+    chain: str, number: int, auth_name: str, one_letter: str
+) -> Residue3D:
     label = ResidueLabel(chain=chain, number=number, name=auth_name)
     auth = ResidueAuth(chain=chain, number=number, icode=None, name=auth_name)
 
@@ -37,7 +39,9 @@ def _make_residue3d(chain: str, number: int, auth_name: str, one_letter: str) ->
         )
         for name in sorted(atom_names)
     )
-    return Residue3D(label=label, auth=auth, model=1, one_letter_name=one_letter, atoms=atoms)
+    return Residue3D(
+        label=label, auth=auth, model=1, one_letter_name=one_letter, atoms=atoms
+    )
 
 
 def test_barnaba_sequence_negative_residue_number(tmp_path):

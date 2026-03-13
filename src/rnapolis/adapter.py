@@ -134,6 +134,7 @@ def process_external_tool_output(
     tool: ExternalTool,
     input_file_path: str,
     find_gaps: bool = False,
+    decompose_pseudoknot_free: bool = False,
 ) -> Tuple[Structure2D, Mapping2D3D]:  # Added Mapping2D3D to return tuple
     """
     Process external tool output and create a secondary structure representation.
@@ -147,6 +148,9 @@ def process_external_tool_output(
         tool: The external tool that generated the output (FR3D, DSSR, etc.)
         input_file_path: Path to the input file (used when external_file_paths is empty)
         find_gaps: Whether to detect gaps in the structure
+        decompose_pseudoknot_free: If True, structural elements are decomposed from the
+            pseudoknot-free structure while retaining pseudoknot characters in
+            dot-bracket strings. Pseudoknotted stems are reported separately.
 
     Returns:
         A tuple containing the Structure2D object and the Mapping2D3D object.
@@ -165,7 +169,9 @@ def process_external_tool_output(
     base_interactions = parse_external_output(file_paths_to_process, tool, structure3d)
 
     # Extract secondary structure using the external tool's interactions
-    return structure3d.extract_secondary_structure(base_interactions, find_gaps)
+    return structure3d.extract_secondary_structure(
+        base_interactions, find_gaps, decompose_pseudoknot_free
+    )
 
 
 def main():
@@ -209,6 +215,7 @@ def main():
         tool,
         args.input,
         args.find_gaps,
+        args.decompose_pseudoknot_free,
     )
 
     handle_output_arguments(args, structure2d, mapping, args.input)

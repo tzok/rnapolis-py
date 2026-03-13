@@ -182,7 +182,9 @@ def parse_cif_atoms(content: Union[str, IO[str]]) -> pd.DataFrame:
             flags=re.IGNORECASE,
         )
 
-    with tempfile.NamedTemporaryFile(mode="w+", suffix=".cif", delete=False) as temp_file:
+    with tempfile.NamedTemporaryFile(
+        mode="w+", suffix=".cif", delete=False
+    ) as temp_file:
         temp_file.write(cif_text)
         temp_file_path = temp_file.name
     try:

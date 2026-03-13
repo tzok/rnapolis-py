@@ -22,7 +22,9 @@ def main():
     parser.add_argument("--dbn", help="path to DotBracket file")
     parser.add_argument("--bpseq", help="path to BpSeq file")
     parser.add_argument(
-        "--remove-pseudoknots", action="store_true", help="remove pseudoknots"
+        "--decompose-pseudoknot-free",
+        action="store_true",
+        help="decompose elements from pseudoknot-free structure",
     )
     parser.add_argument(
         "--remove-isolated", action="store_true", help="remove isolated base pairs"
@@ -40,7 +42,7 @@ def main():
     if args.remove_isolated:
         bpseq = bpseq.without_isolated()
 
-    if args.remove_pseudoknots:
+    if args.decompose_pseudoknot_free:
         bpseq = bpseq.without_pseudoknots()
 
     print(f"Full dot-bracket:\n{bpseq.dot_bracket}")

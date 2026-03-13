@@ -62,19 +62,21 @@ RESIDUE_ATOMS_MAP = {
     "DC": ATOMS_DC,
     "DT": ATOMS_DT,
 }
-REQUIRED_NUCLEOTIDE_ATOMS = frozenset({
-    "C1'",
-    "C2'",
-    "C3'",
-    "C4'",
-    "O4'",
-    "N1",
-    "C2",
-    "N3",
-    "C4",
-    "C5",
-    "C6",
-})
+REQUIRED_NUCLEOTIDE_ATOMS = frozenset(
+    {
+        "C1'",
+        "C2'",
+        "C3'",
+        "C4'",
+        "O4'",
+        "N1",
+        "C2",
+        "N3",
+        "C4",
+        "C5",
+        "C6",
+    }
+)
 AMINO_ACID_NAMES = {
     "ALA",
     "ARG",

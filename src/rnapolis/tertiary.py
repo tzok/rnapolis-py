@@ -541,7 +541,10 @@ class Structure3D:
         return None
 
     def extract_secondary_structure(
-        self, base_interactions: BaseInteractions, find_gaps: bool = False
+        self,
+        base_interactions: BaseInteractions,
+        find_gaps: bool = False,
+        decompose_pseudoknot_free: bool = False,
     ) -> Tuple[Structure2D, "Mapping2D3D"]:
         """
         Create a secondary structure representation.
@@ -549,6 +552,12 @@ class Structure3D:
         Args:
             base_interactions: Interactions
             find_gaps: Whether to detect gaps in the structure
+            decompose_pseudoknot_free: If True, structural elements (stems, hairpins,
+                loops, single strands) are decomposed from the pseudoknot-free
+                structure, but dot-bracket strings inside ``Strand`` objects
+                retain the full notation with pseudoknot characters.
+                Pseudoknotted stems are collected separately in the
+                ``pseudoknot_stems`` field of the returned ``Structure2D``.
 
         Returns:
             A tuple containing the Structure2D object and the Mapping2D3D object.
@@ -559,7 +568,29 @@ class Structure3D:
             base_interactions.stackings,
             find_gaps,
         )
-        stems, single_strands, hairpins, loops = mapping.bpseq.elements
+
+        full_dotbracket_str = mapping.bpseq.dot_bracket.structure
+
+        if decompose_pseudoknot_free:
+            pk_free_bpseq = mapping.bpseq.without_pseudoknots()
+            stems, single_strands, hairpins, loops = pk_free_bpseq.compute_elements(
+                dotbracket_override=full_dotbracket_str
+            )
+        else:
+            stems, single_strands, hairpins, loops = mapping.bpseq.elements
+
+        # Identify pseudoknot stems: stems whose Strand.structure contains
+        # characters other than '(' and ')' (i.e. higher-order brackets like
+        # '[', ']', '{', '}', etc.).  This works in both modes because
+        # Strand.structure always reflects the full dot-bracket notation.
+        canonical = set("()")
+        full_stems, _, _, _ = mapping.bpseq.elements
+        pseudoknot_stems = [
+            stem
+            for stem in full_stems
+            if any(c not in canonical for c in stem.strand5p.structure)
+            or any(c not in canonical for c in stem.strand3p.structure)
+        ]
 
         # Calculate inter-stem parameters using the helper function
         inter_stem_params = calculate_all_inter_stem_parameters(mapping)
@@ -578,6 +609,7 @@ class Structure3D:
             single_strands,
             hairpins,
             loops,
+            pseudoknot_stems,
             inter_stem_params,
         )
         return structure2d, mapping

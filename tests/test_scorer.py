@@ -32,9 +32,9 @@ def test_scorer_returns_valid_result(target_file, model_file):
     assert isinstance(result, dict), "Scorer should return a dictionary"
     assert "score" in result, "Returned dictionary should contain 'score' key"
     assert isinstance(result["score"], float), "Score should be a float"
-    assert (
-        0 <= result["score"] <= 1
-    ), f"Score {result['score']} should be between 0 and 1"
+    assert 0 <= result["score"] <= 1, (
+        f"Score {result['score']} should be between 0 and 1"
+    )
 
 
 def test_scorer_identical_structures():
@@ -46,6 +46,6 @@ def test_scorer_identical_structures():
     random.seed(SEED)
     result = evaluate_similarity(target_path, target_path, REPS, False)
     # Identical structures must produce a perfect similarity score
-    assert (
-        result["score"] == 1.0
-    ), f"Self-comparison score {result['score']} should be exactly 1.0"
+    assert result["score"] == 1.0, (
+        f"Self-comparison score {result['score']} should be exactly 1.0"
+    )
