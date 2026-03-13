@@ -570,58 +570,27 @@ class Structure3D:
         )
 
         full_dotbracket_str = mapping.bpseq.dot_bracket.structure
-        pseudoknot_stems = []
 
         if decompose_pseudoknot_free:
             pk_free_bpseq = mapping.bpseq.without_pseudoknots()
             stems, single_strands, hairpins, loops = pk_free_bpseq.compute_elements(
                 dotbracket_override=full_dotbracket_str
             )
-
-            # Identify pseudoknot stems: stems from the full structure whose
-            # base pairs are all absent in the pseudoknot-free BpSeq
-            pk_free_paired = set()
-            for entry in pk_free_bpseq.entries:
-                if entry.pair != 0:
-                    pk_free_paired.add(
-                        (min(entry.index_, entry.pair), max(entry.index_, entry.pair))
-                    )
-
-            full_stems, _, _, _ = mapping.bpseq.elements
-            for stem in full_stems:
-                stem_in_pk_free = False
-                for idx in range(stem.strand5p.first, stem.strand5p.last + 1):
-                    partner = mapping.bpseq.pairs.get(idx, 0)
-                    if (
-                        partner != 0
-                        and (min(idx, partner), max(idx, partner)) in pk_free_paired
-                    ):
-                        stem_in_pk_free = True
-                        break
-                if not stem_in_pk_free:
-                    # Rebuild the stem with the full dot-bracket for Strand.structure
-                    pseudoknot_stems.append(
-                        Stem(
-                            Strand(
-                                stem.strand5p.first,
-                                stem.strand5p.last,
-                                stem.strand5p.sequence,
-                                full_dotbracket_str[
-                                    stem.strand5p.first - 1 : stem.strand5p.last
-                                ],
-                            ),
-                            Strand(
-                                stem.strand3p.first,
-                                stem.strand3p.last,
-                                stem.strand3p.sequence,
-                                full_dotbracket_str[
-                                    stem.strand3p.first - 1 : stem.strand3p.last
-                                ],
-                            ),
-                        )
-                    )
         else:
             stems, single_strands, hairpins, loops = mapping.bpseq.elements
+
+        # Identify pseudoknot stems: stems whose Strand.structure contains
+        # characters other than '(' and ')' (i.e. higher-order brackets like
+        # '[', ']', '{', '}', etc.).  This works in both modes because
+        # Strand.structure always reflects the full dot-bracket notation.
+        canonical = set("()")
+        full_stems, _, _, _ = mapping.bpseq.elements
+        pseudoknot_stems = [
+            stem
+            for stem in full_stems
+            if any(c not in canonical for c in stem.strand5p.structure)
+            or any(c not in canonical for c in stem.strand3p.structure)
+        ]
 
         # Calculate inter-stem parameters using the helper function
         inter_stem_params = calculate_all_inter_stem_parameters(mapping)

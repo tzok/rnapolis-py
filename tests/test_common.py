@@ -336,35 +336,17 @@ def test_compute_elements_without_pseudoknots_multiple_pk_orders():
     # There should be fewer stems in the PK-free version
     assert len(pk_free_stems) < len(full_stems)
 
-    # Identify PK stems by checking which full stems have no pairs in PK-free
-    pk_free_paired = set()
-    for entry in pk_free_bpseq.entries:
-        if entry.pair != 0:
-            pk_free_paired.add(
-                (min(entry.index_, entry.pair), max(entry.index_, entry.pair))
-            )
-
-    pk_stem_count = 0
-    for stem in full_stems:
-        stem_in_pk_free = False
-        for idx in range(stem.strand5p.first, stem.strand5p.last + 1):
-            partner = bpseq.pairs.get(idx, 0)
-            if (
-                partner != 0
-                and (min(idx, partner), max(idx, partner)) in pk_free_paired
-            ):
-                stem_in_pk_free = True
-                break
-        if not stem_in_pk_free:
-            pk_stem_count += 1
+    # Identify PK stems: those whose Strand.structure contains non-() characters
+    canonical = set("()")
+    pk_stems = [
+        stem
+        for stem in full_stems
+        if any(c not in canonical for c in stem.strand5p.structure)
+        or any(c not in canonical for c in stem.strand3p.structure)
+    ]
 
     # There should be multiple PK stems given the structure has [, {, <, A, B, C
-    assert pk_stem_count > 1
-
-    # Full stems = PK-free stems + PK stems (approximately; they come from
-    # different decompositions so exact equality isn't guaranteed, but the
-    # PK stems should be a non-trivial subset)
-    assert pk_stem_count >= 2
+    assert len(pk_stems) >= 2
 
 
 def test_pseudoknot_stems_retain_full_dotbracket():
@@ -377,63 +359,59 @@ def test_pseudoknot_stems_retain_full_dotbracket():
     )
 
     bpseq = BpSeq.from_dotbracket(DotBracket(sequence, structure))
-    full_db = bpseq.dot_bracket.structure
-    pk_free_bpseq = bpseq.without_pseudoknots()
-
     full_stems, _, _, _ = bpseq.elements
 
-    # Find the pseudoknot stem(s)
-    pk_free_paired = set()
-    for entry in pk_free_bpseq.entries:
-        if entry.pair != 0:
-            pk_free_paired.add(
-                (min(entry.index_, entry.pair), max(entry.index_, entry.pair))
-            )
-
-    pk_stems = []
-    for stem in full_stems:
-        stem_in_pk_free = False
-        for idx in range(stem.strand5p.first, stem.strand5p.last + 1):
-            partner = bpseq.pairs.get(idx, 0)
-            if (
-                partner != 0
-                and (min(idx, partner), max(idx, partner)) in pk_free_paired
-            ):
-                stem_in_pk_free = True
-                break
-        if not stem_in_pk_free:
-            pk_stems.append(stem)
+    # Find pseudoknot stems by checking for non-() characters in Strand.structure
+    canonical = set("()")
+    pk_stems = [
+        stem
+        for stem in full_stems
+        if any(c not in canonical for c in stem.strand5p.structure)
+        or any(c not in canonical for c in stem.strand3p.structure)
+    ]
 
     assert len(pk_stems) == 1
 
     pk_stem = pk_stems[0]
-    # The 5' strand of the PK stem should contain "[" characters
-    assert "[" in full_db[pk_stem.strand5p.first - 1 : pk_stem.strand5p.last]
-    # The 3' strand should contain "]" characters
-    assert "]" in full_db[pk_stem.strand3p.first - 1 : pk_stem.strand3p.last]
-
-    # When we rebuild with full dot-bracket, the structure should reflect that
-    from rnapolis.common import Stem, Strand
-
-    rebuilt_stem = Stem(
-        Strand(
-            pk_stem.strand5p.first,
-            pk_stem.strand5p.last,
-            pk_stem.strand5p.sequence,
-            full_db[pk_stem.strand5p.first - 1 : pk_stem.strand5p.last],
-        ),
-        Strand(
-            pk_stem.strand3p.first,
-            pk_stem.strand3p.last,
-            pk_stem.strand3p.sequence,
-            full_db[pk_stem.strand3p.first - 1 : pk_stem.strand3p.last],
-        ),
-    )
-    assert "[" in rebuilt_stem.strand5p.structure
-    assert "]" in rebuilt_stem.strand3p.structure
+    assert "[" in pk_stem.strand5p.structure
+    assert "]" in pk_stem.strand3p.structure
 
 
-def test_structure2d_pseudoknot_stems_json_serialization():
+def test_pseudoknot_stems_populated_in_default_mode():
+    """pseudoknot_stems is populated even without decompose-pseudoknot-free."""
+    # 1EHZ tRNA has one pseudoknot stem (the [ ] pair)
+    bpseq = BpSeq.from_dotbracket(DotBracket.from_file("tests/1EHZ.dbn"))
+    full_stems, _, _, _ = bpseq.elements
+
+    canonical = set("()")
+    pk_stems = [
+        stem
+        for stem in full_stems
+        if any(c not in canonical for c in stem.strand5p.structure)
+        or any(c not in canonical for c in stem.strand3p.structure)
+    ]
+
+    assert len(pk_stems) == 1
+    assert "[" in pk_stems[0].strand5p.structure
+    assert "]" in pk_stems[0].strand3p.structure
+
+
+def test_pseudoknot_stems_empty_when_no_pseudoknots():
+    """pseudoknot_stems is empty for a structure without pseudoknots."""
+    sequence = "GGGGAAAACCCC"
+    structure = "((((....))))"
+    bpseq = BpSeq.from_dotbracket(DotBracket(sequence, structure))
+    full_stems, _, _, _ = bpseq.elements
+
+    canonical = set("()")
+    pk_stems = [
+        stem
+        for stem in full_stems
+        if any(c not in canonical for c in stem.strand5p.structure)
+        or any(c not in canonical for c in stem.strand3p.structure)
+    ]
+
+    assert len(pk_stems) == 0
     """Structure2D.pseudoknot_stems serializes correctly to JSON."""
     import copy
     import orjson
