@@ -808,6 +808,15 @@ class BpSeq:
                     break
 
             if self.entries[loop[0].first - 1].pair == loop[-1].last:
+                # Skip degenerate 2-strand "loops" where both strands consist
+                # solely of paired boundary residues (length <= 2) with no
+                # unpaired nucleotides.  Such a loop merely re-describes the
+                # outer boundary of a single stem.
+                if len(loop) == 2 and all(
+                    s.last - s.first + 1 <= 2 for s in loop
+                ):
+                    used.update(loop)
+                    continue
                 loops.append(Loop(loop))
                 used.update(loop)
 

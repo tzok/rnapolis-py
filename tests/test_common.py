@@ -122,7 +122,7 @@ def test_elements_four_way_junction_zero_linkers():
     assert len(stems) == 8
     assert len(single_strands) == 0
     assert len(hairpins) == 3
-    assert len(loops) == 6
+    assert len(loops) == 5
 
     # Find the 4-way junction (the loop with 4 strands)
     four_way = [loop for loop in loops if len(loop.strands) == 4]
@@ -132,6 +132,29 @@ def test_elements_four_way_junction_zero_linkers():
     # Verify the junction strand positions
     strand_positions = [(s.first, s.last) for s in junction.strands]
     assert strand_positions == [(12, 13), (55, 56), (80, 81), (90, 91)]
+
+    # Verify no degenerate 2-strand loops with only paired residues
+    for loop in loops:
+        if len(loop.strands) == 2:
+            assert any(s.last - s.first + 1 > 2 for s in loop.strands)
+
+
+def test_no_degenerate_two_strand_loop():
+    """Two directly stacking stems should not produce a spurious 2-strand loop."""
+    # Use the same 9E9Q structure which previously produced a degenerate
+    # Loop 64 65 GG (( 72 73 CC )) — two paired residues on each side,
+    # no unpaired nucleotides, just re-describing a stem boundary.
+    sequence = "CUCGUCUAUCUUCUGCAGGCUGCUUACGGGAAACCGUGUUGCAGCCGAUCAUCAGCACAUCUAGGUUUCGUCCGGGUGUGACCGAAAGGUAAGAUGGAGAG"
+    structure = "(((.(((((((((((..((((((.(((((....)))))..))))))......)))(((((((.((......)))))))))(((....))))))))))))))"
+
+    bpseq = BpSeq.from_dotbracket(DotBracket(sequence, structure))
+    stems, single_strands, hairpins, loops = bpseq.elements
+
+    # No loop should consist of exactly 2 strands where both strands are
+    # only paired residues (length <= 2)
+    for loop in loops:
+        if len(loop.strands) == 2:
+            assert any(s.last - s.first + 1 > 2 for s in loop.strands)
 
 
 def test_pseudoknot_order_assignment():
