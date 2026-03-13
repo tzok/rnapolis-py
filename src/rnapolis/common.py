@@ -696,8 +696,32 @@ class BpSeq:
         Returns:
             Four lists describing each structural element type.
         """
+        return self.compute_elements()
+
+    def compute_elements(
+        self,
+        dotbracket_override: Optional[str] = None,
+    ) -> Tuple[List[Stem], List[SingleStrand], List[Hairpin], List[Loop]]:
+        """Decompose structure into stems, single strands, hairpins and loops.
+
+        Args:
+            dotbracket_override: If provided, use this dot-bracket string for
+                ``Strand.structure`` fields instead of the one derived from this
+                BpSeq. This is useful when the element decomposition is done on
+                a pseudoknot-free BpSeq but the strand annotations should still
+                reflect the full dot-bracket with pseudoknot characters.
+
+        Returns:
+            Four lists describing each structural element type.
+        """
         if not self.__stems_entries:
             return [], [], [], []
+
+        dotbracket_str = (
+            dotbracket_override
+            if dotbracket_override is not None
+            else self.dot_bracket.structure
+        )
 
         stems, single_strands, hairpins, loops = [], [], [], []
         stopset = set()
@@ -705,7 +729,7 @@ class BpSeq:
         # stems
         for stem_entries in self.__stems_entries:
             stem = Stem.from_bpseq_entries(
-                stem_entries, self.entries, self.dot_bracket.structure
+                stem_entries, self.entries, dotbracket_str
             )
             stems.append(stem)
             stopset.add(stem.strand5p.first - 1)
@@ -722,7 +746,7 @@ class BpSeq:
                 SingleStrand(
                     Strand.from_bpseq_entries(
                         self.entries[: stops[0] + 1],
-                        self.dot_bracket.structure,
+                        dotbracket_str,
                     ),
                     True,
                     False,
@@ -737,13 +761,13 @@ class BpSeq:
                     hairpins.append(
                         Hairpin(
                             Strand.from_bpseq_entries(
-                                candidate, self.dot_bracket.structure
+                                candidate, dotbracket_str
                             )
                         )
                     )
                 else:
                     loop_candidates.append(
-                        Strand.from_bpseq_entries(candidate, self.dot_bracket.structure)
+                        Strand.from_bpseq_entries(candidate, dotbracket_str)
                     )
 
         # 3' single strand
@@ -751,7 +775,7 @@ class BpSeq:
             single_strands.append(
                 SingleStrand(
                     Strand.from_bpseq_entries(
-                        self.entries[stops[-1] :], self.dot_bracket.structure
+                        self.entries[stops[-1] :], dotbracket_str
                     ),
                     False,
                     True,
@@ -1473,4 +1497,5 @@ class Structure2D:
     single_strands: List[SingleStrand]
     hairpins: List[Hairpin]
     loops: List[Loop]
+    pseudoknot_stems: List[Stem]
     inter_stem_parameters: List[InterStemParameters]

@@ -541,7 +541,10 @@ class Structure3D:
         return None
 
     def extract_secondary_structure(
-        self, base_interactions: BaseInteractions, find_gaps: bool = False
+        self,
+        base_interactions: BaseInteractions,
+        find_gaps: bool = False,
+        remove_pseudoknots: bool = False,
     ) -> Tuple[Structure2D, "Mapping2D3D"]:
         """
         Create a secondary structure representation.
@@ -549,6 +552,12 @@ class Structure3D:
         Args:
             base_interactions: Interactions
             find_gaps: Whether to detect gaps in the structure
+            remove_pseudoknots: If True, structural elements (stems, hairpins,
+                loops, single strands) are decomposed from the pseudoknot-free
+                structure, but dot-bracket strings inside ``Strand`` objects
+                retain the full notation with pseudoknot characters.
+                Pseudoknotted stems are collected separately in the
+                ``pseudoknot_stems`` field of the returned ``Structure2D``.
 
         Returns:
             A tuple containing the Structure2D object and the Mapping2D3D object.
@@ -559,7 +568,53 @@ class Structure3D:
             base_interactions.stackings,
             find_gaps,
         )
-        stems, single_strands, hairpins, loops = mapping.bpseq.elements
+
+        full_dotbracket_str = mapping.bpseq.dot_bracket.structure
+        pseudoknot_stems = []
+
+        if remove_pseudoknots:
+            pk_free_bpseq = mapping.bpseq.without_pseudoknots()
+            stems, single_strands, hairpins, loops = pk_free_bpseq.compute_elements(
+                dotbracket_override=full_dotbracket_str
+            )
+
+            # Identify pseudoknot stems: stems from the full structure whose
+            # base pairs are all absent in the pseudoknot-free BpSeq
+            pk_free_paired = set()
+            for entry in pk_free_bpseq.entries:
+                if entry.pair != 0:
+                    pk_free_paired.add(
+                        (min(entry.index_, entry.pair), max(entry.index_, entry.pair))
+                    )
+
+            full_stems, _, _, _ = mapping.bpseq.elements
+            for stem in full_stems:
+                stem_in_pk_free = False
+                for idx in range(stem.strand5p.first, stem.strand5p.last + 1):
+                    partner = mapping.bpseq.pairs.get(idx, 0)
+                    if partner != 0 and (min(idx, partner), max(idx, partner)) in pk_free_paired:
+                        stem_in_pk_free = True
+                        break
+                if not stem_in_pk_free:
+                    # Rebuild the stem with the full dot-bracket for Strand.structure
+                    pseudoknot_stems.append(
+                        Stem(
+                            Strand(
+                                stem.strand5p.first,
+                                stem.strand5p.last,
+                                stem.strand5p.sequence,
+                                full_dotbracket_str[stem.strand5p.first - 1 : stem.strand5p.last],
+                            ),
+                            Strand(
+                                stem.strand3p.first,
+                                stem.strand3p.last,
+                                stem.strand3p.sequence,
+                                full_dotbracket_str[stem.strand3p.first - 1 : stem.strand3p.last],
+                            ),
+                        )
+                    )
+        else:
+            stems, single_strands, hairpins, loops = mapping.bpseq.elements
 
         # Calculate inter-stem parameters using the helper function
         inter_stem_params = calculate_all_inter_stem_parameters(mapping)
@@ -578,6 +633,7 @@ class Structure3D:
             single_strands,
             hairpins,
             loops,
+            pseudoknot_stems,
             inter_stem_params,
         )
         return structure2d, mapping

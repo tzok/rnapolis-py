@@ -823,6 +823,16 @@ def add_common_output_arguments(parser: argparse.ArgumentParser):
         "--stems-csv",
         help="(optional) path to output CSV file for stem details",
     )
+    parser.add_argument(
+        "--remove-pseudoknots",
+        action="store_true",
+        help=(
+            "(optional) if set, structural elements (stems, hairpins, loops, "
+            "single strands) are decomposed from the pseudoknot-free structure, "
+            "but dot-bracket strings retain pseudoknot characters; pseudoknotted "
+            "stems are reported separately in the JSON output"
+        ),
+    )
 
 
 def handle_output_arguments(
@@ -990,7 +1000,7 @@ def main():
     structure3d = read_3d_structure(file, None)
     base_interactions = extract_base_interactions(structure3d)
     structure2d, mapping = structure3d.extract_secondary_structure(
-        base_interactions, args.find_gaps
+        base_interactions, args.find_gaps, args.remove_pseudoknots
     )
 
     handle_output_arguments(args, structure2d, mapping, args.input)
