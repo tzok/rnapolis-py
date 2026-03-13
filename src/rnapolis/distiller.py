@@ -745,9 +745,7 @@ def _print_clustering_summary(clustering: dict) -> None:
         )
 
 
-def _labels_from_clustering(
-    clustering: dict, file_paths: List[Path]
-) -> np.ndarray:
+def _labels_from_clustering(clustering: dict, file_paths: List[Path]) -> np.ndarray:
     """Reconstruct a per-structure label array from a clustering dict.
 
     Args:
@@ -1399,9 +1397,7 @@ def _run_approximate_auto(
 
         if visualize:
             labels = _labels_from_clustering(clustering, file_paths)
-            exemplar_indices = _exemplar_indices_from_clustering(
-                clustering, file_paths
-            )
+            exemplar_indices = _exemplar_indices_from_clustering(clustering, file_paths)
             _visualize_flat_clustering(
                 distance_matrix,
                 labels,
@@ -1540,9 +1536,7 @@ def _run_approximate_auto(
             try:
                 plt.show()
             except Exception:
-                print(
-                    "Note: Could not display plot interactively, but saved to file"
-                )
+                print("Note: Could not display plot interactively, but saved to file")
         except ImportError:
             print(
                 "Warning: matplotlib not available, skipping visualization",

@@ -555,9 +555,7 @@ def main():
         args.output_dir,
     )
 
-    results_list = [[str(key) for key in results.keys()]] + [
-        list(results.values())
-    ]
+    results_list = [[str(key) for key in results.keys()]] + [list(results.values())]
     save_csv(os.path.join(args.output_dir, "result.csv"), results_list)
     print(results["score"])
 

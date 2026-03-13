@@ -592,7 +592,10 @@ class Structure3D:
                 stem_in_pk_free = False
                 for idx in range(stem.strand5p.first, stem.strand5p.last + 1):
                     partner = mapping.bpseq.pairs.get(idx, 0)
-                    if partner != 0 and (min(idx, partner), max(idx, partner)) in pk_free_paired:
+                    if (
+                        partner != 0
+                        and (min(idx, partner), max(idx, partner)) in pk_free_paired
+                    ):
                         stem_in_pk_free = True
                         break
                 if not stem_in_pk_free:
@@ -603,13 +606,17 @@ class Structure3D:
                                 stem.strand5p.first,
                                 stem.strand5p.last,
                                 stem.strand5p.sequence,
-                                full_dotbracket_str[stem.strand5p.first - 1 : stem.strand5p.last],
+                                full_dotbracket_str[
+                                    stem.strand5p.first - 1 : stem.strand5p.last
+                                ],
                             ),
                             Strand(
                                 stem.strand3p.first,
                                 stem.strand3p.last,
                                 stem.strand3p.sequence,
-                                full_dotbracket_str[stem.strand3p.first - 1 : stem.strand3p.last],
+                                full_dotbracket_str[
+                                    stem.strand3p.first - 1 : stem.strand3p.last
+                                ],
                             ),
                         )
                     )

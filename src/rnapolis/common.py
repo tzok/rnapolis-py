@@ -728,9 +728,7 @@ class BpSeq:
 
         # stems
         for stem_entries in self.__stems_entries:
-            stem = Stem.from_bpseq_entries(
-                stem_entries, self.entries, dotbracket_str
-            )
+            stem = Stem.from_bpseq_entries(stem_entries, self.entries, dotbracket_str)
             stems.append(stem)
             stopset.add(stem.strand5p.first - 1)
             stopset.add(stem.strand5p.last - 1)
@@ -759,11 +757,7 @@ class BpSeq:
             if all([entry.pair == 0 for entry in candidate[1:-1]]):
                 if candidate[0].pair == candidate[-1].index_:
                     hairpins.append(
-                        Hairpin(
-                            Strand.from_bpseq_entries(
-                                candidate, dotbracket_str
-                            )
-                        )
+                        Hairpin(Strand.from_bpseq_entries(candidate, dotbracket_str))
                     )
                 else:
                     loop_candidates.append(

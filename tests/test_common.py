@@ -331,9 +331,7 @@ def test_compute_elements_without_pseudoknots_multiple_pk_orders():
 
     # PK-free decomposition
     pk_free_bpseq = bpseq.without_pseudoknots()
-    pk_free_stems, _, _, _ = pk_free_bpseq.compute_elements(
-        dotbracket_override=full_db
-    )
+    pk_free_stems, _, _, _ = pk_free_bpseq.compute_elements(dotbracket_override=full_db)
 
     # There should be fewer stems in the PK-free version
     assert len(pk_free_stems) < len(full_stems)
@@ -351,7 +349,10 @@ def test_compute_elements_without_pseudoknots_multiple_pk_orders():
         stem_in_pk_free = False
         for idx in range(stem.strand5p.first, stem.strand5p.last + 1):
             partner = bpseq.pairs.get(idx, 0)
-            if partner != 0 and (min(idx, partner), max(idx, partner)) in pk_free_paired:
+            if (
+                partner != 0
+                and (min(idx, partner), max(idx, partner)) in pk_free_paired
+            ):
                 stem_in_pk_free = True
                 break
         if not stem_in_pk_free:
@@ -394,7 +395,10 @@ def test_pseudoknot_stems_retain_full_dotbracket():
         stem_in_pk_free = False
         for idx in range(stem.strand5p.first, stem.strand5p.last + 1):
             partner = bpseq.pairs.get(idx, 0)
-            if partner != 0 and (min(idx, partner), max(idx, partner)) in pk_free_paired:
+            if (
+                partner != 0
+                and (min(idx, partner), max(idx, partner)) in pk_free_paired
+            ):
                 stem_in_pk_free = True
                 break
         if not stem_in_pk_free:
@@ -473,8 +477,7 @@ def test_structure2d_pseudoknot_stems_json_serialization():
     # Serialize to JSON
     processed = copy.deepcopy(structure2d)
     processed.bpseq_index = {
-        k: Residue(v.label, v.auth)
-        for k, v in structure2d.bpseq_index.items()
+        k: Residue(v.label, v.auth) for k, v in structure2d.bpseq_index.items()
     }
     data = orjson.loads(
         orjson.dumps(
