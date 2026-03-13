@@ -544,7 +544,7 @@ class Structure3D:
         self,
         base_interactions: BaseInteractions,
         find_gaps: bool = False,
-        remove_pseudoknots: bool = False,
+        decompose_pseudoknot_free: bool = False,
     ) -> Tuple[Structure2D, "Mapping2D3D"]:
         """
         Create a secondary structure representation.
@@ -552,7 +552,7 @@ class Structure3D:
         Args:
             base_interactions: Interactions
             find_gaps: Whether to detect gaps in the structure
-            remove_pseudoknots: If True, structural elements (stems, hairpins,
+            decompose_pseudoknot_free: If True, structural elements (stems, hairpins,
                 loops, single strands) are decomposed from the pseudoknot-free
                 structure, but dot-bracket strings inside ``Strand`` objects
                 retain the full notation with pseudoknot characters.
@@ -572,7 +572,7 @@ class Structure3D:
         full_dotbracket_str = mapping.bpseq.dot_bracket.structure
         pseudoknot_stems = []
 
-        if remove_pseudoknots:
+        if decompose_pseudoknot_free:
             pk_free_bpseq = mapping.bpseq.without_pseudoknots()
             stems, single_strands, hairpins, loops = pk_free_bpseq.compute_elements(
                 dotbracket_override=full_dotbracket_str
