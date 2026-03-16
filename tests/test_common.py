@@ -496,3 +496,60 @@ def test_pseudoknot_stems_empty_when_no_pseudoknots():
     assert pk["strand3p"]["first"] == 57
     assert pk["strand3p"]["last"] == 58
     assert pk["strand3p"]["structure"] == "]]"
+
+
+def test_decompose_pseudoknot_free_produces_pk_stems():
+    """compute_elements with dotbracket_override retains PK info for stem detection."""
+    # This is the user-reported BPSEQ with two pseudoknot stems:
+    #   Stem 7-9 / 20-22 (order 1, brackets [])
+    #   Stem 11 / 30     (order 2, brackets {})
+    sequence = "GGAACCGGUGCGCAUAACCACCUCAGUGCGAGCAA"
+    structure = "......[[[.{((....((]]]...).).}.)).."
+
+    bpseq = BpSeq.from_dotbracket(DotBracket(sequence, structure))
+    full_dotbracket_str = bpseq.dot_bracket.structure
+
+    # Decompose from PK-free structure, but override Strand.structure with full DB
+    pk_free_bpseq = bpseq.without_pseudoknots()
+    stems, single_strands, hairpins, loops = pk_free_bpseq.compute_elements(
+        dotbracket_override=full_dotbracket_str
+    )
+
+    # PK-free decomposition should only have the non-pseudoknotted stems
+    stem_positions = sorted(
+        (s.strand5p.first, s.strand5p.last) for s in stems
+    )
+    assert (7, 9) not in stem_positions, "PK stem 7-9 should not be in PK-free stems"
+    assert (11, 11) not in stem_positions, "PK stem 11 should not be in PK-free stems"
+    assert (12, 13) in stem_positions
+    assert (18, 18) in stem_positions
+    assert (19, 19) in stem_positions
+
+    # But Strand.structure should retain full dot-bracket characters
+    # e.g., the hairpin at 19-26 should contain ]]] from the pseudoknot
+    hairpin_19 = [h for h in hairpins if h.strand.first == 19]
+    assert len(hairpin_19) == 1
+    assert "]" in hairpin_19[0].strand.structure
+
+    # Now compute pseudoknot stems from full structure
+    canonical = set("()")
+    full_stems, _, _, _ = bpseq.elements
+    pk_stems = [
+        stem
+        for stem in full_stems
+        if any(c not in canonical for c in stem.strand5p.structure)
+        or any(c not in canonical for c in stem.strand3p.structure)
+    ]
+
+    assert len(pk_stems) == 2
+    pk_positions = sorted((s.strand5p.first, s.strand5p.last) for s in pk_stems)
+    assert pk_positions == [(7, 9), (11, 11)]
+
+    # Verify bracket types
+    pk_7_9 = [s for s in pk_stems if s.strand5p.first == 7][0]
+    assert "[" in pk_7_9.strand5p.structure
+    assert "]" in pk_7_9.strand3p.structure
+
+    pk_11 = [s for s in pk_stems if s.strand5p.first == 11][0]
+    assert "{" in pk_11.strand5p.structure
+    assert "}" in pk_11.strand3p.structure
