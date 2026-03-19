@@ -62,3 +62,7 @@ rfam-folder = "rnapolis.rfam_folder:main"
 unifier = "rnapolis.unifier:main"
 splitter = "rnapolis.splitter:main"
 quick-filter = "rnapolis.quick_filter:main"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
