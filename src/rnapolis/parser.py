@@ -441,7 +441,7 @@ def group_atoms(
                 one_letter_name = detect_one_letter_name(residue_atoms)
 
             residues.append(
-                Residue3D(label, auth, model, one_letter_name, tuple(residue_atoms))
+                Residue3D(label, auth, model, one_letter_name, tuple(residue_atoms), name)
             )
 
             key_previous = key
@@ -458,7 +458,7 @@ def group_atoms(
         one_letter_name = detect_one_letter_name(residue_atoms)
 
     residues.append(
-        Residue3D(label, auth, model, one_letter_name, tuple(residue_atoms))
+        Residue3D(label, auth, model, one_letter_name, tuple(residue_atoms), name)
     )
 
     if nucleic_acid_only:

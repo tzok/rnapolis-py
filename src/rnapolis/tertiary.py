@@ -151,6 +151,7 @@ class Residue3D(Residue):
     model: int
     one_letter_name: str
     atoms: Tuple[Atom, ...]
+    standard_residue_name: str = ""
 
     # Dict representing expected name of atom involved in glycosidic bond
     outermost_atoms = {"A": "N9", "G": "N9", "C": "N1", "U": "N1", "T": "N1"}
@@ -325,13 +326,21 @@ class Residue3D(Residue):
 
     @cached_property
     def molecule_type(self) -> Molecule:
-        """Classify residue as RNA, DNA or Other based on available atoms.
+        """Classify residue as RNA, DNA or Other.
 
-        Detection is based on the presence of O2' atom:
+        First, the standard residue name (with MODRES lookup) is checked against
+        known canonical names, mirroring the logic in common.Residue.molecule_type.
+        If the name is inconclusive, detection falls back to atom-based heuristics:
         - O2' present: ribose (RNA)
         - O2' absent but other sugar atoms present: deoxyribose (DNA)
         - Otherwise: Other
         """
+        name = self.standard_residue_name.upper()
+        if name in ("A", "C", "G", "U", "I"):
+            return Molecule.RNA
+        if name in ("DA", "DC", "DG", "DT", "DU", "DI"):
+            return Molecule.DNA
+
         atom_names = {atom.name for atom in self.atoms}
         if "O2'" in atom_names:
             return Molecule.RNA
