@@ -314,7 +314,7 @@ class Residue:
         if self.name is not None:
             if self.name.upper() in ("A", "C", "G", "U", "I"):
                 return Molecule.RNA
-            if self.name.upper() in ("DA", "DC", "DG", "DT", "DU", "DT"):
+            if self.name.upper() in ("DA", "DC", "DG", "DT", "DU", "DI"):
                 return Molecule.DNA
         return Molecule.Other
 
