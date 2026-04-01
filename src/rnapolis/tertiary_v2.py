@@ -5,7 +5,7 @@ from typing import List, Optional, Tuple
 import numpy as np
 import pandas as pd
 
-from rnapolis.common import Molecule
+from rnapolis.common import Molecule, classify_molecule
 from rnapolis.parser_v2 import parse_cif_atoms, write_cif
 
 # Constants
@@ -972,27 +972,12 @@ class Residue:
     def molecule_type(self) -> Molecule:
         """Classify residue as RNA, DNA or Other.
 
-        First, the standard residue name (with MODRES lookup) is checked against
-        known canonical names, mirroring the logic in common.Residue.molecule_type.
-        If the name is inconclusive, detection falls back to atom-based heuristics:
-        - O2' present: ribose (RNA)
-        - O2' absent but other sugar atoms present: deoxyribose (DNA)
-        - Otherwise: Other
+        Delegates to :func:`~rnapolis.common.classify_molecule`, passing the
+        standard residue name and the set of atom names present in this residue.
         """
-        name = self.standard_residue_name.upper()
-        if name in ("A", "C", "G", "U", "I"):
-            return Molecule.RNA
-        if name in ("DA", "DC", "DG", "DT", "DU", "DI"):
-            return Molecule.DNA
-
-        atom_names = self._atom_names
-        if "O2'" in atom_names:
-            return Molecule.RNA
-        sugar_atoms = {"C1'", "C2'", "C3'", "C4'", "O4'"}
-        sugar_atoms_present = len(atom_names.intersection(sugar_atoms)) >= 4
-        if sugar_atoms_present:
-            return Molecule.DNA
-        return Molecule.Other
+        return classify_molecule(
+            self.standard_residue_name, frozenset(self._atom_names)
+        )
 
     @cached_property
     def one_letter_name(self) -> str:

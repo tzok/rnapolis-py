@@ -27,6 +27,7 @@ from rnapolis.common import (
     Stem,
     Strand,
     Structure2D,
+    classify_molecule,
 )
 
 BASE_ATOMS = {
@@ -152,6 +153,11 @@ class Residue3D(Residue):
     one_letter_name: str
     atoms: Tuple[Atom, ...]
     standard_residue_name: str = ""
+
+    def __post_init__(self):
+        """Default standard_residue_name to self.name when not provided."""
+        if not self.standard_residue_name:
+            object.__setattr__(self, "standard_residue_name", self.name or "")
 
     # Dict representing expected name of atom involved in glycosidic bond
     outermost_atoms = {"A": "N9", "G": "N9", "C": "N1", "U": "N1", "T": "N1"}
@@ -328,26 +334,11 @@ class Residue3D(Residue):
     def molecule_type(self) -> Molecule:
         """Classify residue as RNA, DNA or Other.
 
-        First, the standard residue name (with MODRES lookup) is checked against
-        known canonical names, mirroring the logic in common.Residue.molecule_type.
-        If the name is inconclusive, detection falls back to atom-based heuristics:
-        - O2' present: ribose (RNA)
-        - O2' absent but other sugar atoms present: deoxyribose (DNA)
-        - Otherwise: Other
+        Delegates to :func:`~rnapolis.common.classify_molecule`, passing the
+        standard residue name and the set of atom names present in this residue.
         """
-        name = self.standard_residue_name.upper()
-        if name in ("A", "C", "G", "U", "I"):
-            return Molecule.RNA
-        if name in ("DA", "DC", "DG", "DT", "DU", "DI"):
-            return Molecule.DNA
-
-        atom_names = {atom.name for atom in self.atoms}
-        if "O2'" in atom_names:
-            return Molecule.RNA
-        sugar_atoms_present = len(atom_names.intersection(self.sugar_atoms)) >= 4
-        if sugar_atoms_present:
-            return Molecule.DNA
-        return Molecule.Other
+        atom_names = frozenset(atom.name for atom in self.atoms)
+        return classify_molecule(self.standard_residue_name, atom_names)
 
     @cached_property
     def has_all_nucleobase_heavy_atoms(self) -> bool:

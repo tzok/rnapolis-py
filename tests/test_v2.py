@@ -6,6 +6,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from conftest import build_pdb_residue_direct
+
 from rnapolis.parser_v2 import (
     fit_to_pdb,
     parse_cif_atoms,
@@ -637,53 +639,17 @@ def test_is_amino_acid_rejects_water():
     assert not residue.is_amino_acid
 
 
-def _build_pdb_residue_direct(residue_name: str, atom_names, modres=None):
-    """Build a Residue directly (bypassing Structure filtering) for unit tests.
-
-    Creates a minimal DataFrame with the given atom names and constructs
-    a Residue object. If atom_names is empty, a single dummy atom is used
-    so the DataFrame is never empty.
-    """
-    if not atom_names:
-        atom_names = ["_DUMMY"]
-    records = []
-    for serial, atom_name in enumerate(atom_names, 1):
-        records.append(
-            {
-                "record_type": "ATOM",
-                "serial": serial,
-                "name": atom_name,
-                "altLoc": None,
-                "resName": residue_name,
-                "chainID": "A",
-                "resSeq": 1,
-                "iCode": None,
-                "x": 0.0,
-                "y": 0.0,
-                "z": 0.0,
-                "occupancy": 1.0,
-                "tempFactor": 0.0,
-                "element": atom_name[0],
-                "charge": None,
-                "model": 1,
-            }
-        )
-    df = pd.DataFrame(records)
-    df.attrs["format"] = "PDB"
-    return Residue(df, modres=modres)
-
-
 def test_molecule_type_rna_by_name():
     """Standard RNA residue names should be classified by name, no atoms needed."""
     for name in ("A", "C", "G", "U", "I"):
-        residue = _build_pdb_residue_direct(name, [])
+        residue = build_pdb_residue_direct(name, [])
         assert residue.molecule_type == Molecule.RNA, f"{name} should be RNA"
 
 
 def test_molecule_type_dna_by_name():
     """Standard DNA residue names should be classified by name, no atoms needed."""
     for name in ("DA", "DC", "DG", "DT", "DU", "DI"):
-        residue = _build_pdb_residue_direct(name, [])
+        residue = build_pdb_residue_direct(name, [])
         assert residue.molecule_type == Molecule.DNA, f"{name} should be DNA"
 
 
@@ -716,7 +682,7 @@ def test_molecule_type_modres_rna():
             "stdRes": ["U"],
         }
     )
-    residue = _build_pdb_residue_direct("PSU", [], modres=modres)
+    residue = build_pdb_residue_direct("PSU", [], modres=modres)
     assert residue.molecule_type == Molecule.RNA
 
 
@@ -731,5 +697,5 @@ def test_molecule_type_modres_dna():
             "stdRes": ["DC"],
         }
     )
-    residue = _build_pdb_residue_direct("5MC", [], modres=modres)
+    residue = build_pdb_residue_direct("5MC", [], modres=modres)
     assert residue.molecule_type == Molecule.DNA
