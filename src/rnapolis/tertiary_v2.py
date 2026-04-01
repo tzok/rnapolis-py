@@ -5,6 +5,7 @@ from typing import List, Optional, Tuple
 import numpy as np
 import pandas as pd
 
+from rnapolis.common import Molecule
 from rnapolis.parser_v2 import parse_cif_atoms, write_cif
 
 # Constants
@@ -932,6 +933,24 @@ class Residue:
             else:
                 return self.atoms["label_comp_id"].iloc[0]
         return ""
+
+    @cached_property
+    def molecule_type(self) -> Molecule:
+        """Classify residue as RNA, DNA or Other based on available atoms.
+
+        Detection is based on the presence of O2' atom:
+        - O2' present: ribose (RNA)
+        - O2' absent but other sugar atoms present: deoxyribose (DNA)
+        - Otherwise: Other
+        """
+        atom_names = self._atom_names
+        if "O2'" in atom_names:
+            return Molecule.RNA
+        sugar_atoms = {"C1'", "C2'", "C3'", "C4'", "O4'"}
+        sugar_atoms_present = len(atom_names.intersection(sugar_atoms)) >= 4
+        if sugar_atoms_present:
+            return Molecule.DNA
+        return Molecule.Other
 
     @cached_property
     def one_letter_name(self) -> str:

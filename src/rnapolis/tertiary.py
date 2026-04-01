@@ -18,6 +18,7 @@ from rnapolis.common import (
     GlycosidicBond,
     InterStemParameters,
     LeontisWesthof,
+    Molecule,
     Residue,
     ResidueAuth,
     ResidueLabel,
@@ -321,6 +322,23 @@ class Residue3D(Residue):
             v2 = o2.coordinates - n1.coordinates
         normal: numpy.typing.NDArray[numpy.floating] = numpy.cross(v1, v2)
         return normal / numpy.linalg.norm(normal)
+
+    @cached_property
+    def molecule_type(self) -> Molecule:
+        """Classify residue as RNA, DNA or Other based on available atoms.
+
+        Detection is based on the presence of O2' atom:
+        - O2' present: ribose (RNA)
+        - O2' absent but other sugar atoms present: deoxyribose (DNA)
+        - Otherwise: Other
+        """
+        atom_names = {atom.name for atom in self.atoms}
+        if "O2'" in atom_names:
+            return Molecule.RNA
+        sugar_atoms_present = len(atom_names.intersection(self.sugar_atoms)) >= 4
+        if sugar_atoms_present:
+            return Molecule.DNA
+        return Molecule.Other
 
     @cached_property
     def has_all_nucleobase_heavy_atoms(self) -> bool:

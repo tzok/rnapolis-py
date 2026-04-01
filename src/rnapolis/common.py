@@ -312,9 +312,9 @@ class Residue:
     def molecule_type(self) -> Molecule:
         """Classify residue as RNA, DNA or Other based on its name."""
         if self.name is not None:
-            if self.name.upper() in ("A", "C", "G", "U"):
+            if self.name.upper() in ("A", "C", "G", "U", "I"):
                 return Molecule.RNA
-            if self.name.upper() in ("DA", "DC", "DG", "DT"):
+            if self.name.upper() in ("DA", "DC", "DG", "DT", "DU", "DT"):
                 return Molecule.DNA
         return Molecule.Other
 
@@ -812,9 +812,7 @@ class BpSeq:
                 # solely of paired boundary residues (length <= 2) with no
                 # unpaired nucleotides.  Such a loop merely re-describes the
                 # outer boundary of a single stem.
-                if len(loop) == 2 and all(
-                    s.last - s.first + 1 <= 2 for s in loop
-                ):
+                if len(loop) == 2 and all(s.last - s.first + 1 <= 2 for s in loop):
                     used.update(loop)
                     continue
                 loops.append(Loop(loop))
