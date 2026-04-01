@@ -560,14 +560,17 @@ class Structure:
     accessors for residues, connected segments and backbone torsion angles.
     """
 
-    def __init__(self, atoms: pd.DataFrame):
+    def __init__(self, atoms: pd.DataFrame, modres: Optional[pd.DataFrame] = None):
         """Initialize a Structure with atom coordinates and metadata.
 
         Args:
             atoms: DataFrame created by ``parse_pdb_atoms`` or ``parse_cif_atoms``.
+            modres: Optional DataFrame with modified residue mappings, created by
+                ``parse_pdb_modres`` or ``parse_cif_modres``.
         """
         self.atoms = atoms
         self.format = atoms.attrs.get("format", "unknown")
+        self.modres = modres
 
     @cached_property
     def residues(self) -> List["Residue"]:
@@ -625,7 +628,7 @@ class Structure:
         for _, group in grouped:
             residue_df = group.copy()
             residue_df.attrs["format"] = self.format
-            residues.append(Residue(residue_df))
+            residues.append(Residue(residue_df, self.modres))
 
         return residues
 
@@ -846,14 +849,16 @@ class Residue:
     basic properties like chain ID, residue number, name and connectivity.
     """
 
-    def __init__(self, residue_df: pd.DataFrame):
+    def __init__(self, residue_df: pd.DataFrame, modres: Optional[pd.DataFrame] = None):
         """Initialize a Residue from a DataFrame with atom records.
 
         Args:
             residue_df: DataFrame containing atom data for a single residue.
+            modres: Optional DataFrame with modified residue mappings.
         """
         self.atoms = residue_df
         self.format = residue_df.attrs.get("format", "unknown")
+        self.modres = modres
 
     @property
     def chain_id(self) -> str:
@@ -933,6 +938,35 @@ class Residue:
             else:
                 return self.atoms["label_comp_id"].iloc[0]
         return ""
+
+    @cached_property
+    def standard_residue_name(self) -> str:
+        """Return the standard residue name, looking up MODRES if available.
+
+        If this residue is found in the MODRES mapping, returns the standard
+        name. Otherwise returns the original residue_name.
+        """
+        if self.modres is None or self.modres.empty:
+            return self.residue_name
+
+        chain_id = self.chain_id
+        res_num = self.residue_number
+        i_code = self.insertion_code or ""
+
+        mask = (
+            (self.modres["chainID"].astype(str) == chain_id)
+            & (self.modres["seqNum"] == res_num)
+            & (self.modres["iCode"] == i_code)
+            & (self.modres["resName"].astype(str) == self.residue_name)
+        )
+
+        matching_rows = self.modres[mask]
+        if not matching_rows.empty:
+            std_res = matching_rows.iloc[0]["stdRes"]
+            if pd.notna(std_res) and std_res:
+                return str(std_res)
+
+        return self.residue_name
 
     @cached_property
     def molecule_type(self) -> Molecule:
