@@ -4,7 +4,7 @@ import pandas as pd
 
 from rnapolis.common import ResidueAuth, ResidueLabel
 from rnapolis.tertiary import Atom, Residue3D
-from rnapolis.tertiary_v2 import Residue as ResidueV2
+from rnapolis.tertiary_v2 import ModifiedResidues, Residue as ResidueV2
 
 
 def make_residue3d(
@@ -45,6 +45,12 @@ def build_pdb_residue_direct(
     Creates a minimal DataFrame with the given atom names and constructs
     a Residue object. If atom_names is empty, a single dummy atom is used
     so the DataFrame is never empty.
+
+    Args:
+        residue_name: Residue name (e.g. "A", "PSU").
+        atom_names: Iterable of atom name strings.
+        modres: Optional DataFrame with PDB-style MODRES columns.  Will be
+            wrapped in :class:`ModifiedResidues` automatically.
     """
     if not atom_names:
         atom_names = ["_DUMMY"]
@@ -72,4 +78,13 @@ def build_pdb_residue_direct(
         )
     df = pd.DataFrame(records)
     df.attrs["format"] = "PDB"
-    return ResidueV2(df, modres=modres)
+
+    modres_obj = None
+    if modres is not None:
+        if not isinstance(modres, pd.DataFrame):
+            modres_obj = modres
+        else:
+            modres.attrs.setdefault("format", "PDB")
+            modres_obj = ModifiedResidues(modres)
+
+    return ResidueV2(df, modres=modres_obj)

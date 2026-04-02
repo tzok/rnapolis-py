@@ -1058,7 +1058,8 @@ def parse_cif_modres(content: Union[str, IO[str]]) -> pd.DataFrame:
         content: mmCIF content as a string or file-like object.
 
     Returns:
-        DataFrame with columns: resName, chainID, seqNum, iCode, stdRes, comment.
+        DataFrame with native mmCIF column names: auth_comp_id, auth_asym_id,
+        auth_seq_id, pdbx_PDB_ins_code, parent_comp_id, details.
         Empty DataFrame with correct columns if no pdbx_struct_mod_residue found.
     """
     adapter = IoAdapterPy()
@@ -1088,10 +1089,17 @@ def parse_cif_modres(content: Union[str, IO[str]]) -> pd.DataFrame:
 
     category = data[0].getObj("pdbx_struct_mod_residue") if data else None
 
+    result_cols = [
+        "auth_comp_id",
+        "auth_asym_id",
+        "auth_seq_id",
+        "pdbx_PDB_ins_code",
+        "parent_comp_id",
+        "details",
+    ]
+
     if not category:
-        df = pd.DataFrame(
-            columns=["resName", "chainID", "seqNum", "iCode", "stdRes", "comment"]
-        )
+        df = pd.DataFrame(columns=result_cols)
         df.attrs["format"] = "mmCIF"
         return df
 
@@ -1107,33 +1115,20 @@ def parse_cif_modres(content: Union[str, IO[str]]) -> pd.DataFrame:
 
     df = pd.DataFrame(records)
 
-    column_mapping = {
-        "auth_comp_id": "resName",
-        "auth_asym_id": "chainID",
-        "auth_seq_id": "seqNum",
-        "pdbx_PDB_ins_code": "iCode",
-        "parent_comp_id": "stdRes",
-        "details": "comment",
-    }
-
-    for cif_col, pdb_col in column_mapping.items():
-        if cif_col in df.columns:
-            if pdb_col not in df.columns:
-                df[pdb_col] = df[cif_col]
-            else:
-                df[pdb_col] = df[pdb_col].fillna(df[cif_col])
-
-    for col in ["resName", "chainID", "stdRes"]:
+    for col in ["auth_comp_id", "auth_asym_id", "parent_comp_id"]:
         if col in df.columns:
             df[col] = df[col].astype("category")
 
-    if "iCode" in df.columns:
-        df["iCode"] = df["iCode"].fillna("").astype(str).replace("None", "")
+    if "pdbx_PDB_ins_code" in df.columns:
+        df["pdbx_PDB_ins_code"] = (
+            df["pdbx_PDB_ins_code"].fillna("").astype(str).replace("None", "")
+        )
 
-    if "seqNum" in df.columns:
-        df["seqNum"] = pd.to_numeric(df["seqNum"], errors="coerce").astype("Int64")
+    if "auth_seq_id" in df.columns:
+        df["auth_seq_id"] = pd.to_numeric(
+            df["auth_seq_id"], errors="coerce"
+        ).astype("Int64")
 
-    result_cols = ["resName", "chainID", "seqNum", "iCode", "stdRes", "comment"]
     existing_cols = [col for col in result_cols if col in df.columns]
     df = df[existing_cols] if existing_cols else pd.DataFrame(columns=result_cols)
 

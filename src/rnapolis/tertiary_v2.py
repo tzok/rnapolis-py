@@ -1,6 +1,6 @@
 import string
 from functools import cached_property
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -104,6 +104,113 @@ AMINO_ACID_NAMES = {
     "MSE",
     "UNK",
 }
+
+# ---------------------------------------------------------------------------
+# Column maps: semantic name -> format-specific column name(s)
+# ---------------------------------------------------------------------------
+# For mmCIF, a tuple means (preferred, fallback).  For PDB, always a plain str.
+
+_ATOM_COLUMN_MAP: Dict[str, Dict[str, Union[str, Tuple[str, str]]]] = {
+    "record_type": {"PDB": "record_type", "mmCIF": "group_PDB"},
+    "serial": {"PDB": "serial", "mmCIF": "id"},
+    "atom_name": {"PDB": "name", "mmCIF": ("auth_atom_id", "label_atom_id")},
+    "alt_loc": {"PDB": "altLoc", "mmCIF": "label_alt_id"},
+    "residue_name": {"PDB": "resName", "mmCIF": ("auth_comp_id", "label_comp_id")},
+    "chain_id": {"PDB": "chainID", "mmCIF": ("auth_asym_id", "label_asym_id")},
+    "residue_number": {"PDB": "resSeq", "mmCIF": ("auth_seq_id", "label_seq_id")},
+    "insertion_code": {"PDB": "iCode", "mmCIF": "pdbx_PDB_ins_code"},
+    "x": {"PDB": "x", "mmCIF": "Cartn_x"},
+    "y": {"PDB": "y", "mmCIF": "Cartn_y"},
+    "z": {"PDB": "z", "mmCIF": "Cartn_z"},
+    "occupancy": {"PDB": "occupancy", "mmCIF": "occupancy"},
+    "b_factor": {"PDB": "tempFactor", "mmCIF": "B_iso_or_equiv"},
+    "element": {"PDB": "element", "mmCIF": "type_symbol"},
+    "charge": {"PDB": "charge", "mmCIF": "pdbx_formal_charge"},
+    "model": {"PDB": "model", "mmCIF": "pdbx_PDB_model_num"},
+}
+
+_MODRES_COLUMN_MAP: Dict[str, Dict[str, Union[str, Tuple[str, str]]]] = {
+    "residue_name": {"PDB": "resName", "mmCIF": "auth_comp_id"},
+    "chain_id": {"PDB": "chainID", "mmCIF": "auth_asym_id"},
+    "residue_number": {"PDB": "seqNum", "mmCIF": "auth_seq_id"},
+    "insertion_code": {"PDB": "iCode", "mmCIF": "pdbx_PDB_ins_code"},
+    "standard_name": {"PDB": "stdRes", "mmCIF": "parent_comp_id"},
+    "comment": {"PDB": "comment", "mmCIF": "details"},
+}
+
+
+class _ColumnAccessorMixin:
+    """Resolves semantic column names to actual DataFrame columns.
+
+    At init, resolves mmCIF fallbacks (auth_* -> label_*) once and caches the
+    result.  After that, :meth:`_col` is a simple dict lookup.
+    """
+
+    format: str
+
+    def _init_columns(
+        self,
+        available: Union[pd.Index, "frozenset[str]", "set[str]"],
+        fmt: str,
+        column_map: Dict[str, Dict[str, Union[str, Tuple[str, str]]]],
+    ) -> None:
+        """Resolve and cache column names for *fmt*.
+
+        Parameters
+        ----------
+        available:
+            Column (or index) names present in the underlying data.
+            For a DataFrame pass ``df.columns``; for a Series pass
+            ``series.index``.
+        fmt:
+            Data format, e.g. ``"PDB"`` or ``"mmCIF"``.
+        column_map:
+            Semantic-name -> per-format column specification.
+        """
+        resolved: Dict[str, str] = {}
+        for semantic_name, format_entry in column_map.items():
+            spec = format_entry.get(fmt)
+            if spec is None:
+                continue
+            if isinstance(spec, tuple):
+                preferred, fallback = spec
+                if preferred in available:
+                    resolved[semantic_name] = preferred
+                elif fallback in available:
+                    resolved[semantic_name] = fallback
+            else:
+                if spec in available:
+                    resolved[semantic_name] = spec
+        self._resolved_columns = resolved
+
+    def _col(self, key: str) -> str:
+        """Return the actual DataFrame column name for a semantic *key*."""
+        try:
+            return self._resolved_columns[key]
+        except KeyError:
+            raise KeyError(
+                f"Column '{key}' could not be resolved for format '{self.format}'"
+            ) from None
+
+    def _write_cols(
+        self,
+        key: str,
+        available: Union[pd.Index, "frozenset[str]", "set[str]"],
+        column_map: Dict[str, Dict[str, Union[str, Tuple[str, str]]]],
+    ) -> List[str]:
+        """Return all DataFrame columns that should be written for *key*.
+
+        For PDB (or any single-column spec), returns the one resolved column.
+        For mmCIF tuple specs (preferred, fallback), returns every column from
+        the spec that actually exists in *available* — so both ``auth_*`` and
+        ``label_*`` get updated when they are present.
+        """
+        spec = column_map.get(key, {}).get(self.format)
+        if spec is None:
+            return []
+        if isinstance(spec, tuple):
+            return [c for c in spec if c in available]
+        return [spec] if spec in available else []
 
 
 def calculate_torsion_angle(
@@ -553,24 +660,97 @@ def nrmsd_validate_residues(
     return nrmsd_validate(coords1, coords2)
 
 
-class Structure:
+class ModifiedResidues(_ColumnAccessorMixin):
+    """Wrapper around a MODRES DataFrame with format-agnostic lookup.
+
+    Uses :class:`_ColumnAccessorMixin` with :data:`_MODRES_COLUMN_MAP` so that
+    callers never need to know whether the underlying data came from a PDB
+    MODRES section or an mmCIF ``_pdbx_struct_mod_residue`` category.
+    """
+
+    def __init__(self, df: pd.DataFrame):
+        """Initialize from a MODRES DataFrame.
+
+        Args:
+            df: DataFrame produced by ``parse_pdb_modres`` or
+                ``parse_cif_modres``.  Must carry ``attrs["format"]``.
+        """
+        self.df = df
+        self.format = df.attrs.get("format", "unknown")
+        self._init_columns(df.columns, self.format, _MODRES_COLUMN_MAP)
+
+    @property
+    def empty(self) -> bool:
+        """Return True if there are no MODRES records."""
+        return self.df.empty
+
+    def lookup(
+        self,
+        chain_id: str,
+        residue_number: int,
+        insertion_code: str,
+        residue_name: str,
+    ) -> Optional[str]:
+        """Look up the standard parent residue name for a modified residue.
+
+        Args:
+            chain_id: Chain identifier of the residue.
+            residue_number: Sequence number of the residue.
+            insertion_code: Insertion code (use ``""`` if none).
+            residue_name: The (possibly modified) residue name.
+
+        Returns:
+            Standard residue name if a MODRES mapping exists and is non-empty,
+            otherwise ``None``.
+        """
+        if self.df.empty:
+            return None
+
+        chain_col = self._col("chain_id")
+        resnum_col = self._col("residue_number")
+        icode_col = self._col("insertion_code")
+        resname_col = self._col("residue_name")
+        stdname_col = self._col("standard_name")
+
+        mask = (
+            (self.df[chain_col].astype(str) == chain_id)
+            & (self.df[resnum_col] == residue_number)
+            & (self.df[icode_col] == insertion_code)
+            & (self.df[resname_col].astype(str) == residue_name)
+        )
+
+        matching = self.df[mask]
+        if not matching.empty:
+            std_res = matching.iloc[0][stdname_col]
+            if pd.notna(std_res) and std_res:
+                return str(std_res)
+
+        return None
+
+
+class Structure(_ColumnAccessorMixin):
     """Molecular structure parsed from PDB or mmCIF.
 
     Wraps a DataFrame of atoms (from parser_v2) and exposes convenient
     accessors for residues, connected segments and backbone torsion angles.
     """
 
-    def __init__(self, atoms: pd.DataFrame, modres: Optional[pd.DataFrame] = None):
+    def __init__(
+        self,
+        atoms: pd.DataFrame,
+        modres: Optional["ModifiedResidues"] = None,
+    ):
         """Initialize a Structure with atom coordinates and metadata.
 
         Args:
             atoms: DataFrame created by ``parse_pdb_atoms`` or ``parse_cif_atoms``.
-            modres: Optional DataFrame with modified residue mappings, created by
-                ``parse_pdb_modres`` or ``parse_cif_modres``.
+            modres: Optional :class:`ModifiedResidues` wrapper, created from
+                ``parse_pdb_modres`` or ``parse_cif_modres`` output.
         """
         self.atoms = atoms
         self.format = atoms.attrs.get("format", "unknown")
         self.modres = modres
+        self._init_columns(atoms.columns, self.format, _ATOM_COLUMN_MAP)
 
     @cached_property
     def residues(self) -> List["Residue"]:
@@ -585,43 +765,20 @@ class Structure:
         Returns:
             List of Residue objects.
         """
-        if self.format == "PDB":
-            # Group by chain ID, residue sequence number, and insertion code
-            groupby_cols = ["chainID", "resSeq", "iCode"]
-
-            # Filter out columns that don't exist in the DataFrame
-            groupby_cols = [col for col in groupby_cols if col in self.atoms.columns]
-
-            # Group atoms by residue
-            grouped = self.atoms.groupby(groupby_cols, dropna=False, observed=True)
-
-        elif self.format == "mmCIF":
-            # Prefer auth_* columns if they exist
-            if (
-                "auth_asym_id" in self.atoms.columns
-                and "auth_seq_id" in self.atoms.columns
-            ):
-                groupby_cols = ["auth_asym_id", "auth_seq_id"]
-
-                # Add insertion code if it exists
-                if "pdbx_PDB_ins_code" in self.atoms.columns:
-                    groupby_cols.append("pdbx_PDB_ins_code")
-            else:
-                # Fall back to label_* columns
-                groupby_cols = ["label_asym_id", "label_seq_id"]
-
-                # Add insertion code if it exists
-                if "pdbx_PDB_ins_code" in self.atoms.columns:
-                    groupby_cols.append("pdbx_PDB_ins_code")
-
-            # Group atoms by residue
-            grouped = self.atoms.groupby(
-                groupby_cols, dropna=False, observed=True, sort=False
-            )
-
-        else:
-            # For unknown formats, return an empty list
+        if self.format == "unknown":
             return []
+
+        groupby_cols = [self._col("chain_id"), self._col("residue_number")]
+
+        # Insertion code is optional (not all formats / files have it)
+        if "insertion_code" in self._resolved_columns:
+            groupby_cols.append(self._col("insertion_code"))
+
+        # mmCIF needs sort=False to preserve file order
+        sort = self.format == "PDB"
+        grouped = self.atoms.groupby(
+            groupby_cols, dropna=False, observed=True, sort=sort
+        )
 
         # Convert groups to a list of Residue objects
         residues = []
@@ -842,102 +999,74 @@ class Structure:
         return df
 
 
-class Residue:
+class Residue(_ColumnAccessorMixin):
     """Single residue in a molecular structure.
 
     Wraps a DataFrame with atoms belonging to one residue and exposes
     basic properties like chain ID, residue number, name and connectivity.
     """
 
-    def __init__(self, residue_df: pd.DataFrame, modres: Optional[pd.DataFrame] = None):
+    def __init__(
+        self,
+        residue_df: pd.DataFrame,
+        modres: Optional["ModifiedResidues"] = None,
+    ):
         """Initialize a Residue from a DataFrame with atom records.
 
         Args:
             residue_df: DataFrame containing atom data for a single residue.
-            modres: Optional DataFrame with modified residue mappings.
+            modres: Optional :class:`ModifiedResidues` wrapper with modified
+                residue mappings.
         """
         self.atoms = residue_df
         self.format = residue_df.attrs.get("format", "unknown")
         self.modres = modres
+        self._init_columns(residue_df.columns, self.format, _ATOM_COLUMN_MAP)
 
     @property
     def chain_id(self) -> str:
         """Return the chain identifier for this residue."""
-        if self.format == "PDB":
-            return self.atoms["chainID"].iloc[0]
-        elif self.format == "mmCIF":
-            if "auth_asym_id" in self.atoms.columns:
-                return self.atoms["auth_asym_id"].iloc[0]
-            else:
-                return self.atoms["label_asym_id"].iloc[0]
-        return ""
+        return self.atoms[self._col("chain_id")].iloc[0]
 
     @chain_id.setter
     def chain_id(self, value: str) -> None:
         """Set the chain identifier for this residue."""
-        if self.format == "PDB":
-            self.atoms["chainID"] = value
-        elif self.format == "mmCIF":
-            if "auth_asym_id" in self.atoms.columns:
-                self.atoms["auth_asym_id"] = value
-            if "label_asym_id" in self.atoms.columns:
-                self.atoms["label_asym_id"] = value
+        for col in self._write_cols("chain_id", self.atoms.columns, _ATOM_COLUMN_MAP):
+            self.atoms[col] = value
 
     @property
     def residue_number(self) -> int:
         """Return the residue sequence number."""
-        if self.format == "PDB":
-            return int(self.atoms["resSeq"].iloc[0])
-        elif self.format == "mmCIF":
-            if "auth_seq_id" in self.atoms.columns:
-                return int(self.atoms["auth_seq_id"].iloc[0])
-            else:
-                return int(self.atoms["label_seq_id"].iloc[0])
-        return 0
+        return int(self.atoms[self._col("residue_number")].iloc[0])
 
     @residue_number.setter
     def residue_number(self, value: int) -> None:
         """Set the residue sequence number."""
-        if self.format == "PDB":
-            self.atoms["resSeq"] = value
-        elif self.format == "mmCIF":
-            if "auth_seq_id" in self.atoms.columns:
-                self.atoms["auth_seq_id"] = value
-            if "label_seq_id" in self.atoms.columns:
-                self.atoms["label_seq_id"] = value
+        for col in self._write_cols(
+            "residue_number", self.atoms.columns, _ATOM_COLUMN_MAP
+        ):
+            self.atoms[col] = value
 
     @property
     def insertion_code(self) -> Optional[str]:
         """Return the insertion code, if present."""
-        if self.format == "PDB":
-            icode = self.atoms["iCode"].iloc[0]
-            return icode if pd.notna(icode) else None
-        elif self.format == "mmCIF":
-            if "pdbx_PDB_ins_code" in self.atoms.columns:
-                icode = self.atoms["pdbx_PDB_ins_code"].iloc[0]
-                return icode if pd.notna(icode) else None
-        return None
+        if "insertion_code" not in self._resolved_columns:
+            return None
+        icode = self.atoms[self._col("insertion_code")].iloc[0]
+        return icode if pd.notna(icode) else None
 
     @insertion_code.setter
     def insertion_code(self, value: Optional[str]) -> None:
         """Set the insertion code."""
-        if self.format == "PDB":
-            self.atoms["iCode"] = value
-        elif self.format == "mmCIF":
-            if "pdbx_PDB_ins_code" in self.atoms.columns:
-                self.atoms["pdbx_PDB_ins_code"] = value
+        for col in self._write_cols(
+            "insertion_code", self.atoms.columns, _ATOM_COLUMN_MAP
+        ):
+            self.atoms[col] = value
 
     @cached_property
     def residue_name(self) -> str:
         """Return the residue name (e.g. A, G, C, U, DA...)."""
-        if self.format == "PDB":
-            return self.atoms["resName"].iloc[0]
-        elif self.format == "mmCIF":
-            if "auth_comp_id" in self.atoms.columns:
-                return self.atoms["auth_comp_id"].iloc[0]
-            else:
-                return self.atoms["label_comp_id"].iloc[0]
-        return ""
+        return self.atoms[self._col("residue_name")].iloc[0]
 
     @cached_property
     def standard_residue_name(self) -> str:
@@ -949,24 +1078,13 @@ class Residue:
         if self.modres is None or self.modres.empty:
             return self.residue_name
 
-        chain_id = self.chain_id
-        res_num = self.residue_number
-        i_code = self.insertion_code or ""
-
-        mask = (
-            (self.modres["chainID"].astype(str) == chain_id)
-            & (self.modres["seqNum"] == res_num)
-            & (self.modres["iCode"] == i_code)
-            & (self.modres["resName"].astype(str) == self.residue_name)
+        result = self.modres.lookup(
+            self.chain_id,
+            self.residue_number,
+            self.insertion_code or "",
+            self.residue_name,
         )
-
-        matching_rows = self.modres[mask]
-        if not matching_rows.empty:
-            std_res = matching_rows.iloc[0]["stdRes"]
-            if pd.notna(std_res) and std_res:
-                return str(std_res)
-
-        return self.residue_name
+        return result if result is not None else self.residue_name
 
     @cached_property
     def molecule_type(self) -> Molecule:
@@ -1030,42 +1148,21 @@ class Residue:
     @cached_property
     def _atom_dict(self) -> dict[str, "Atom"]:
         """Map atom names to Atom objects for fast lookup."""
+        atom_name_col = self._col("atom_name")
         atom_dict = {}
 
         for i in range(len(self.atoms)):
             atom_data = self.atoms.iloc[i]
             atom = Atom(atom_data, self.format)
-
-            # Get the atom name based on format
-            if self.format == "PDB":
-                atom_name = atom_data["name"]
-            elif self.format == "mmCIF":
-                if "auth_atom_id" in self.atoms.columns:
-                    atom_name = atom_data["auth_atom_id"]
-                else:
-                    atom_name = atom_data["label_atom_id"]
-            else:
-                continue
-
-            atom_dict[atom_name] = atom
+            atom_dict[atom_data[atom_name_col]] = atom
 
         return atom_dict
 
     @cached_property
     def _atom_names(self) -> set[str]:
         """Cache the set of atom names in this residue."""
-        if self.format == "PDB":
-            column = "name"
-        elif self.format == "mmCIF":
-            if "auth_atom_id" in self.atoms.columns:
-                column = "auth_atom_id"
-            else:
-                column = "label_atom_id"
-        else:
-            return set()
-
         atom_names = set()
-        series = self.atoms[column]
+        series = self.atoms[self._col("atom_name")]
 
         for atom_name in series:
             if pd.isna(atom_name):
@@ -1166,7 +1263,7 @@ class Residue:
         return f"Residue({self.__str__()}, {len(self.atoms)} atoms)"
 
 
-class Atom:
+class Atom(_ColumnAccessorMixin):
     """Single atom in a molecular structure.
 
     Wraps a pandas Series with atom data and exposes basic properties such as
@@ -1182,75 +1279,44 @@ class Atom:
         """
         self.data = atom_data
         self.format = format
+        self._init_columns(atom_data.index, self.format, _ATOM_COLUMN_MAP)
 
     @cached_property
     def name(self) -> str:
         """Return the atom name (e.g. C1', N1, O3')."""
-        if self.format == "PDB":
-            return self.data["name"]
-        elif self.format == "mmCIF":
-            if "auth_atom_id" in self.data:
-                return self.data["auth_atom_id"]
-            else:
-                return self.data["label_atom_id"]
-        return ""
+        return self.data[self._col("atom_name")]
 
     @cached_property
     def element(self) -> str:
         """Return the element symbol (e.g. C, N, O, P)."""
-        if self.format == "PDB":
-            return self.data["element"]
-        elif self.format == "mmCIF":
-            if "type_symbol" in self.data:
-                return self.data["type_symbol"]
-        return ""
+        if "element" not in self._resolved_columns:
+            return ""
+        return self.data[self._col("element")]
 
     @cached_property
     def coordinates(self) -> np.ndarray:
         """Return atom coordinates as a NumPy array [x, y, z]."""
-        if self.format == "PDB":
-            return np.array([self.data["x"], self.data["y"], self.data["z"]])
-        elif self.format == "mmCIF":
-            return np.array(
-                [self.data["Cartn_x"], self.data["Cartn_y"], self.data["Cartn_z"]]
-            )
-        return np.array([0.0, 0.0, 0.0])
+        return np.array([
+            self.data[self._col("x")],
+            self.data[self._col("y")],
+            self.data[self._col("z")],
+        ])
 
     @cached_property
     def occupancy(self) -> float:
         """Return atom occupancy (defaults to 1.0 if missing)."""
-        if self.format == "PDB":
-            return (
-                float(self.data["occupancy"])
-                if pd.notna(self.data["occupancy"])
-                else 1.0
-            )
-        elif self.format == "mmCIF":
-            if "occupancy" in self.data:
-                return (
-                    float(self.data["occupancy"])
-                    if pd.notna(self.data["occupancy"])
-                    else 1.0
-                )
-        return 1.0
+        if "occupancy" not in self._resolved_columns:
+            return 1.0
+        val = self.data[self._col("occupancy")]
+        return float(val) if pd.notna(val) else 1.0
 
     @cached_property
     def temperature_factor(self) -> float:
         """Return the B-factor (temperature factor) for this atom."""
-        if self.format == "PDB":
-            return (
-                float(self.data["tempFactor"])
-                if pd.notna(self.data["tempFactor"])
-                else 0.0
-            )
-        elif self.format == "mmCIF":
-            if "B_iso_or_equiv" in self.data:
-                return (
-                    float(self.data["B_iso_or_equiv"])
-                    if pd.notna(self.data["B_iso_or_equiv"])
-                    else 0.0
-                )
-        return 0.0
+        if "b_factor" not in self._resolved_columns:
+            return 0.0
+        val = self.data[self._col("b_factor")]
+        return float(val) if pd.notna(val) else 0.0
 
     def __str__(self) -> str:
         """Return a compact representation ``'NAME (ELEMENT)'``."""
