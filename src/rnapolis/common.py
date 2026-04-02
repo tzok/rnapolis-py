@@ -25,6 +25,42 @@ class Molecule(Enum):
     Other = "Other"
 
 
+RNA_NAMES = frozenset({"A", "C", "G", "U", "I"})
+DNA_NAMES = frozenset({"DA", "DC", "DG", "DT", "DU", "DI"})
+SUGAR_ATOMS = frozenset({"C1'", "C2'", "C3'", "C4'", "O4'"})
+
+
+def classify_molecule(
+    name: str, atom_names: Optional[frozenset] = None
+) -> Molecule:
+    """Classify a residue as RNA, DNA or Other.
+
+    First checks the residue name against canonical RNA/DNA name sets.
+    If the name is inconclusive and ``atom_names`` is provided, falls back
+    to atom-based heuristics (O2' presence for RNA, sugar atoms for DNA).
+
+    Args:
+        name: Residue name (will be upper-cased internally).
+        atom_names: Optional set of atom names present in the residue.
+
+    Returns:
+        Molecule classification.
+    """
+    upper = name.upper()
+    if upper in RNA_NAMES:
+        return Molecule.RNA
+    if upper in DNA_NAMES:
+        return Molecule.DNA
+
+    if atom_names is not None:
+        if "O2'" in atom_names:
+            return Molecule.RNA
+        if len(atom_names & SUGAR_ATOMS) >= 4:
+            return Molecule.DNA
+
+    return Molecule.Other
+
+
 class GlycosidicBond(Enum):
     """Orientation of the glycosidic bond."""
 
@@ -311,12 +347,7 @@ class Residue:
     @property
     def molecule_type(self) -> Molecule:
         """Classify residue as RNA, DNA or Other based on its name."""
-        if self.name is not None:
-            if self.name.upper() in ("A", "C", "G", "U"):
-                return Molecule.RNA
-            if self.name.upper() in ("DA", "DC", "DG", "DT"):
-                return Molecule.DNA
-        return Molecule.Other
+        return classify_molecule(self.name or "")
 
     @property
     @cache
@@ -812,9 +843,7 @@ class BpSeq:
                 # solely of paired boundary residues (length <= 2) with no
                 # unpaired nucleotides.  Such a loop merely re-describes the
                 # outer boundary of a single stem.
-                if len(loop) == 2 and all(
-                    s.last - s.first + 1 <= 2 for s in loop
-                ):
+                if len(loop) == 2 and all(s.last - s.first + 1 <= 2 for s in loop):
                     used.update(loop)
                     continue
                 loops.append(Loop(loop))

@@ -516,9 +516,7 @@ def test_decompose_pseudoknot_free_produces_pk_stems():
     )
 
     # PK-free decomposition should only have the non-pseudoknotted stems
-    stem_positions = sorted(
-        (s.strand5p.first, s.strand5p.last) for s in stems
-    )
+    stem_positions = sorted((s.strand5p.first, s.strand5p.last) for s in stems)
     assert (7, 9) not in stem_positions, "PK stem 7-9 should not be in PK-free stems"
     assert (11, 11) not in stem_positions, "PK stem 11 should not be in PK-free stems"
     assert (12, 13) in stem_positions

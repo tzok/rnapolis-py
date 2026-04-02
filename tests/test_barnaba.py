@@ -40,7 +40,8 @@ def _make_residue3d(
         for name in sorted(atom_names)
     )
     return Residue3D(
-        label=label, auth=auth, model=1, one_letter_name=one_letter, atoms=atoms
+        label=label, auth=auth, model=1, one_letter_name=one_letter, atoms=atoms,
+        standard_residue_name=auth_name,
     )
 
 

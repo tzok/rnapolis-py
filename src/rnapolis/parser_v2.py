@@ -995,6 +995,147 @@ def write_pdb(
         return content
 
 
+def parse_pdb_modres(content: Union[str, IO[str]]) -> pd.DataFrame:
+    """Parse PDB MODRES records into a DataFrame.
+
+    Args:
+        content: PDB content as a string or file-like object.
+
+    Returns:
+        DataFrame with columns: resName, chainID, seqNum, iCode, stdRes, comment.
+        Empty DataFrame with correct columns if no MODRES records found.
+    """
+    records = []
+
+    if isinstance(content, str):
+        lines = content.splitlines()
+    else:
+        content.seek(0)
+        lines = content.readlines()
+        if isinstance(lines[0], bytes):
+            lines = [line.decode("utf-8") for line in lines]
+
+    for line in lines:
+        if not line.startswith("MODRES"):
+            continue
+
+        res_name = line[12:15].strip() if len(line) > 12 else ""
+        chain_id = line[16:17].strip() if len(line) > 16 else ""
+        seq_num = line[18:22].strip() if len(line) > 18 else ""
+        i_code = line[22:23].strip() if len(line) > 22 else ""
+        std_res = line[24:27].strip() if len(line) > 24 else ""
+        comment = line[29:70].strip() if len(line) > 29 else ""
+
+        record = {
+            "resName": res_name,
+            "chainID": chain_id,
+            "seqNum": seq_num,
+            "iCode": None if not i_code else i_code,
+            "stdRes": std_res,
+            "comment": None if not comment else comment,
+        }
+        records.append(record)
+
+    if not records:
+        df = pd.DataFrame(
+            columns=["resName", "chainID", "seqNum", "iCode", "stdRes", "comment"]
+        )
+    else:
+        df = pd.DataFrame(records)
+        df["seqNum"] = pd.to_numeric(df["seqNum"], errors="coerce").astype("Int64")
+        for col in ["resName", "chainID", "stdRes"]:
+            df[col] = df[col].astype("category")
+        df["iCode"] = df["iCode"].fillna("").astype(str).replace("nan", "")
+
+    df.attrs["format"] = "PDB"
+    return df
+
+
+def parse_cif_modres(content: Union[str, IO[str]]) -> pd.DataFrame:
+    """Parse mmCIF pdbx_struct_mod_residue category into a DataFrame.
+
+    Args:
+        content: mmCIF content as a string or file-like object.
+
+    Returns:
+        DataFrame with native mmCIF column names: auth_comp_id, auth_asym_id,
+        auth_seq_id, pdbx_PDB_ins_code, parent_comp_id, details.
+        Empty DataFrame with correct columns if no pdbx_struct_mod_residue found.
+    """
+    adapter = IoAdapterPy()
+
+    if isinstance(content, str):
+        cif_text = content
+    elif isinstance(content, io.StringIO):
+        content.seek(0)
+        cif_text = content.read()
+    elif hasattr(content, "read"):
+        content.seek(0)
+        cif_text = content.read()
+        if isinstance(cif_text, bytes):
+            cif_text = cif_text.decode("utf-8")
+    else:
+        raise TypeError("Unsupported input type for parse_cif_modres.")
+
+    with tempfile.NamedTemporaryFile(
+        mode="w+", suffix=".cif", delete=False
+    ) as temp_file:
+        temp_file.write(cif_text)
+        temp_file_path = temp_file.name
+    try:
+        data = adapter.readFile(temp_file_path)
+    finally:
+        os.remove(temp_file_path)
+
+    category = data[0].getObj("pdbx_struct_mod_residue") if data else None
+
+    result_cols = [
+        "auth_comp_id",
+        "auth_asym_id",
+        "auth_seq_id",
+        "pdbx_PDB_ins_code",
+        "parent_comp_id",
+        "details",
+    ]
+
+    if not category:
+        df = pd.DataFrame(columns=result_cols)
+        df.attrs["format"] = "mmCIF"
+        return df
+
+    attributes = category.getAttributeList()
+    rows = category.getRowList()
+
+    records = []
+    for row in rows:
+        record = {}
+        for attr, value in zip(attributes, row):
+            record[attr] = None if value in ["?", "."] else value
+        records.append(record)
+
+    df = pd.DataFrame(records)
+
+    for col in ["auth_comp_id", "auth_asym_id", "parent_comp_id"]:
+        if col in df.columns:
+            df[col] = df[col].astype("category")
+
+    if "pdbx_PDB_ins_code" in df.columns:
+        df["pdbx_PDB_ins_code"] = (
+            df["pdbx_PDB_ins_code"].fillna("").astype(str).replace("None", "")
+        )
+
+    if "auth_seq_id" in df.columns:
+        df["auth_seq_id"] = pd.to_numeric(
+            df["auth_seq_id"], errors="coerce"
+        ).astype("Int64")
+
+    existing_cols = [col for col in result_cols if col in df.columns]
+    df = df[existing_cols] if existing_cols else pd.DataFrame(columns=result_cols)
+
+    df.attrs["format"] = "mmCIF"
+    return df
+
+
 def write_cif(
     df: pd.DataFrame, output: Union[str, TextIO, None] = None
 ) -> Union[str, None]:

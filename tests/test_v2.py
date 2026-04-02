@@ -6,6 +6,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from conftest import build_pdb_residue_direct
+
 from rnapolis.parser_v2 import (
     fit_to_pdb,
     parse_cif_atoms,
@@ -13,8 +15,10 @@ from rnapolis.parser_v2 import (
     write_cif,
     write_pdb,
 )
+from rnapolis.common import Molecule
 from rnapolis.tertiary_v2 import (
     REQUIRED_NUCLEOTIDE_ATOMS,
+    Residue,
     Structure,
     calculate_torsion_angle,
 )
@@ -633,3 +637,65 @@ def test_is_amino_acid_detects_standard_residue():
 def test_is_amino_acid_rejects_water():
     residue = _build_pdb_residue("HOH", ["O"])
     assert not residue.is_amino_acid
+
+
+def test_molecule_type_rna_by_name():
+    """Standard RNA residue names should be classified by name, no atoms needed."""
+    for name in ("A", "C", "G", "U", "I"):
+        residue = build_pdb_residue_direct(name, [])
+        assert residue.molecule_type == Molecule.RNA, f"{name} should be RNA"
+
+
+def test_molecule_type_dna_by_name():
+    """Standard DNA residue names should be classified by name, no atoms needed."""
+    for name in ("DA", "DC", "DG", "DT", "DU", "DI"):
+        residue = build_pdb_residue_direct(name, [])
+        assert residue.molecule_type == Molecule.DNA, f"{name} should be DNA"
+
+
+def test_molecule_type_atom_fallback_rna():
+    """When the residue name is non-standard, O2' presence means RNA."""
+    residue = _build_pdb_residue("UNK", ["O2'"])
+    assert residue.molecule_type == Molecule.RNA
+
+
+def test_molecule_type_atom_fallback_dna():
+    """When the residue name is non-standard, sugar atoms without O2' means DNA."""
+    residue = _build_pdb_residue("UNK", ["C1'", "C2'", "C3'", "C4'", "O4'"])
+    assert residue.molecule_type == Molecule.DNA
+
+
+def test_molecule_type_atom_fallback_other():
+    """When name is non-standard and atoms are inconclusive, classify as Other."""
+    residue = _build_pdb_residue("UNK", ["N", "CA", "C", "O"])
+    assert residue.molecule_type == Molecule.Other
+
+
+def test_molecule_type_modres_rna():
+    """Modified residue mapped to a standard RNA name via MODRES should be RNA."""
+    modres = pd.DataFrame(
+        {
+            "chainID": ["A"],
+            "seqNum": [1],
+            "iCode": [""],
+            "resName": ["PSU"],
+            "stdRes": ["U"],
+        }
+    )
+    residue = build_pdb_residue_direct("PSU", [], modres=modres)
+    assert residue.molecule_type == Molecule.RNA
+
+
+def test_molecule_type_modres_dna():
+    """Modified residue mapped to a standard DNA name via MODRES should be DNA."""
+    modres = pd.DataFrame(
+        {
+            "chainID": ["A"],
+            "seqNum": [1],
+            "iCode": [""],
+            "resName": ["5MC"],
+            "stdRes": ["DC"],
+        }
+    )
+    residue = build_pdb_residue_direct("5MC", [], modres=modres)
+    assert residue.molecule_type == Molecule.DNA

@@ -1,7 +1,10 @@
 import math
 
+from conftest import make_residue3d
+
+from rnapolis.common import Molecule, ResidueAuth, ResidueLabel
 from rnapolis.parser import read_3d_structure
-from rnapolis.tertiary import Atom, torsion_angle
+from rnapolis.tertiary import Atom, Residue3D, torsion_angle
 
 
 def test_torsion_angle():
@@ -25,3 +28,47 @@ def test_nucleobase_atoms():
     assert all(
         not residue.has_all_nucleobase_heavy_atoms for residue in structure3d.residues
     )
+
+
+def test_molecule_type_rna_by_name():
+    """Standard RNA residue names should be classified by name, no atoms needed."""
+    for name in ("A", "C", "G", "U", "I"):
+        residue = make_residue3d(name, [])
+        assert residue.molecule_type == Molecule.RNA, f"{name} should be RNA"
+
+
+def test_molecule_type_dna_by_name():
+    """Standard DNA residue names should be classified by name, no atoms needed."""
+    for name in ("DA", "DC", "DG", "DT", "DU", "DI"):
+        residue = make_residue3d(name, [])
+        assert residue.molecule_type == Molecule.DNA, f"{name} should be DNA"
+
+
+def test_molecule_type_atom_fallback_rna():
+    """When the residue name is non-standard, O2' presence means RNA."""
+    residue = make_residue3d("UNK", ["O2'"])
+    assert residue.molecule_type == Molecule.RNA
+
+
+def test_molecule_type_atom_fallback_dna():
+    """When the residue name is non-standard, sugar atoms without O2' means DNA."""
+    residue = make_residue3d("UNK", ["C1'", "C2'", "C3'", "C4'", "O4'"])
+    assert residue.molecule_type == Molecule.DNA
+
+
+def test_molecule_type_atom_fallback_other():
+    """When name is non-standard and atoms are inconclusive, classify as Other."""
+    residue = make_residue3d("UNK", ["N", "CA", "C", "O"])
+    assert residue.molecule_type == Molecule.Other
+
+
+def test_molecule_type_modres_rna():
+    """Modified residue with standard_residue_name resolved to RNA name should be RNA."""
+    residue = make_residue3d("PSU", [], standard_residue_name="U")
+    assert residue.molecule_type == Molecule.RNA
+
+
+def test_molecule_type_modres_dna():
+    """Modified residue with standard_residue_name resolved to DNA name should be DNA."""
+    residue = make_residue3d("5MC", [], standard_residue_name="DC")
+    assert residue.molecule_type == Molecule.DNA
