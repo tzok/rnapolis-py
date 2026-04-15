@@ -89,21 +89,30 @@ def parse_bpnet_output(
                 data = orjson.loads(f.read())
 
             for entry in data["basepairs"]:
+                chain1 = entry["chain1"] if entry["chain1"] != "?" else None
+                chain2 = entry["chain2"] if entry["chain2"] != "?" else None
+                ins1 = entry["ins1"]
+                ins2 = entry["ins2"]
+                if ins1 in (" ", "?"):
+                    ins1 = None
+                if ins2 in (" ", "?"):
+                    ins2 = None
+
                 nt1 = Residue(
                     None,
                     ResidueAuth(
-                        entry["chain1"],
+                        chain1,
                         entry["resnum1"],
-                        entry["ins1"],
+                        ins1,
                         entry["resname1"],
                     ),
                 )
                 nt2 = Residue(
                     None,
                     ResidueAuth(
-                        entry["chain2"],
+                        chain2,
                         entry["resnum2"],
-                        entry["ins2"],
+                        ins2,
                         entry["resname2"],
                     ),
                 )

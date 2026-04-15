@@ -145,23 +145,24 @@ def parse_cif(
             for row in atom_site.getRowList():
                 row_dict = dict(zip(atom_site.getAttributeList(), row))
 
-                label_entity_id = row_dict.get("label_entity_id", None)
-                label_chain_name = row_dict.get("label_asym_id", None)
-                label_residue_number = try_parse_int(row_dict.get("label_seq_id", None))
-                label_residue_name = row_dict.get("label_comp_id", None)
-                auth_chain_name = row_dict.get("auth_asym_id", None)
-                auth_residue_number = try_parse_int(row_dict.get("auth_seq_id", None))
-                auth_residue_name = row_dict.get("auth_comp_id", None)
-                insertion_code = row_dict.get("pdbx_PDB_ins_code", None)
-
-                # mmCIF marks empty values with ?
-                if insertion_code == "?":
-                    insertion_code = None
+                label_entity_id = _mmcif_value(row_dict.get("label_entity_id", None))
+                label_chain_name = _mmcif_value(row_dict.get("label_asym_id", None))
+                label_residue_number = try_parse_int(
+                    _mmcif_value(row_dict.get("label_seq_id", None))
+                )
+                label_residue_name = _mmcif_value(row_dict.get("label_comp_id", None))
+                auth_chain_name = _mmcif_value(row_dict.get("auth_asym_id", None))
+                auth_residue_number = try_parse_int(
+                    _mmcif_value(row_dict.get("auth_seq_id", None))
+                )
+                auth_residue_name = _mmcif_value(row_dict.get("auth_comp_id", None))
+                insertion_code = _mmcif_value(row_dict.get("pdbx_PDB_ins_code", None))
 
                 if label_chain_name is None and auth_chain_name is None:
-                    raise RuntimeError(
-                        f"Cannot parse an atom line with empty chain name: {row}"
+                    logger.warning(
+                        f"Skipping atom line with both label and auth chain names empty: {row}"
                     )
+                    continue
                 if label_residue_number is None and auth_residue_number is None:
                     raise RuntimeError(
                         f"Cannot parse an atom line with empty residue number: {row}"
@@ -172,21 +173,13 @@ def parse_cif(
                     )
 
                 label = None
-                if (
-                    label_chain_name is not None
-                    and label_residue_number is not None
-                    and label_residue_name is not None
-                ):
+                if label_residue_number is not None and label_residue_name is not None:
                     label = ResidueLabel(
                         label_chain_name, label_residue_number, label_residue_name
                     )
 
                 auth = None
-                if (
-                    auth_chain_name is not None
-                    and auth_residue_number is not None
-                    and auth_residue_name is not None
-                ):
+                if auth_residue_number is not None and auth_residue_name is not None:
                     auth = ResidueAuth(
                         auth_chain_name,
                         auth_residue_number,
@@ -210,7 +203,8 @@ def parse_cif(
 
                 occupancy = (
                     float(row_dict["occupancy"])
-                    if "occupancy" in row_dict and row_dict["occupancy"] != "."
+                    if "occupancy" in row_dict
+                    and row_dict["occupancy"] not in (".", "?")
                     else None
                 )
 
@@ -232,31 +226,26 @@ def parse_cif(
             for row in mod_residue.getRowList():
                 row_dict = dict(zip(mod_residue.getAttributeList(), row))
 
-                label_chain_name = row_dict.get("label_asym_id", None)
-                label_residue_number = try_parse_int(row_dict.get("label_seq_id", None))
-                label_residue_name = row_dict.get("label_comp_id", None)
-                auth_chain_name = row_dict.get("auth_asym_id", None)
-                auth_residue_number = try_parse_int(row_dict.get("auth_seq_id", None))
-                auth_residue_name = row_dict.get("auth_comp_id", None)
-                insertion_code = row_dict.get("PDB_ins_code", None)
+                label_chain_name = _mmcif_value(row_dict.get("label_asym_id", None))
+                label_residue_number = try_parse_int(
+                    _mmcif_value(row_dict.get("label_seq_id", None))
+                )
+                label_residue_name = _mmcif_value(row_dict.get("label_comp_id", None))
+                auth_chain_name = _mmcif_value(row_dict.get("auth_asym_id", None))
+                auth_residue_number = try_parse_int(
+                    _mmcif_value(row_dict.get("auth_seq_id", None))
+                )
+                auth_residue_name = _mmcif_value(row_dict.get("auth_comp_id", None))
+                insertion_code = _mmcif_value(row_dict.get("PDB_ins_code", None))
 
                 label = None
-                if (
-                    label_chain_name is not None
-                    and label_residue_number is not None
-                    and label_residue_name is not None
-                ):
+                if label_residue_number is not None and label_residue_name is not None:
                     label = ResidueLabel(
                         label_chain_name, label_residue_number, label_residue_name
                     )
 
                 auth = None
-                if (
-                    auth_chain_name is not None
-                    and auth_residue_number is not None
-                    and auth_residue_name is not None
-                    and insertion_code is not None
-                ):
+                if auth_residue_number is not None and auth_residue_name is not None:
                     auth = ResidueAuth(
                         auth_chain_name,
                         auth_residue_number,
@@ -277,10 +266,10 @@ def parse_cif(
             for row in entity_poly.getRowList():
                 row_dict = dict(zip(entity_poly.getAttributeList(), row))
 
-                entity_id = row_dict.get("entity_id", None)
-                type_ = row_dict.get("type", None)
-                pdbx_seq_one_letter_code_can = row_dict.get(
-                    "pdbx_seq_one_letter_code_can", None
+                entity_id = _mmcif_value(row_dict.get("entity_id", None))
+                type_ = _mmcif_value(row_dict.get("type", None))
+                pdbx_seq_one_letter_code_can = _mmcif_value(
+                    row_dict.get("pdbx_seq_one_letter_code_can", None)
                 )
 
                 if entity_id and type_:
@@ -300,8 +289,8 @@ def parse_cif(
             for row in entity.getRowList():
                 row_dict = dict(zip(entity.getAttributeList(), row))
 
-                entity_id = row_dict.get("id", None)
-                type_ = row_dict.get("type", None)
+                entity_id = _mmcif_value(row_dict.get("id", None))
+                type_ = _mmcif_value(row_dict.get("type", None))
 
                 if entity_id:
                     sequence_by_entity[entity_id] = sequence_by_entity.get(
@@ -441,7 +430,9 @@ def group_atoms(
                 one_letter_name = detect_one_letter_name(residue_atoms)
 
             residues.append(
-                Residue3D(label, auth, model, one_letter_name, tuple(residue_atoms), name)
+                Residue3D(
+                    label, auth, model, one_letter_name, tuple(residue_atoms), name
+                )
             )
 
             key_previous = key
@@ -566,6 +557,17 @@ def detect_one_letter_name(atoms: List[Atom]) -> str:
     if items[0][1] == 0:
         return "?"
     return items[0][0]
+
+
+def _mmcif_value(s: Optional[str]) -> Optional[str]:
+    """Return *None* when *s* is an mmCIF missing-data marker (``?`` or ``.``).
+
+    In mmCIF files, ``?`` means *unknown* and ``.`` means *inapplicable*.
+    Both should be treated as absent/None in the data model.
+    """
+    if s in ("?", "."):
+        return None
+    return s
 
 
 def try_parse_int(s: Optional[str]) -> Optional[int]:
