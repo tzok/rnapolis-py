@@ -255,7 +255,11 @@ def parse_cif(
 
                 # TODO: is processing this data for each model separately required?
                 # model = row_dict.get('PDB_model_num', '1')
-                standard_residue_name = row_dict.get("parent_comp_id", "n")
+                standard_residue_name = _mmcif_value(
+                    row_dict.get("parent_comp_id", "n")
+                )
+                if standard_residue_name is None:
+                    standard_residue_name = "n"
 
                 if label is not None:
                     modified[label] = standard_residue_name

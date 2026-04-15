@@ -330,7 +330,7 @@ class Residue:
     def icode(self) -> Optional[str]:
         """Return insertion code or ``None`` if not set or blank."""
         if self.auth is not None:
-            return self.auth.icode if self.auth.icode not in (" ", "?") else None
+            return self.auth.icode if self.auth.icode not in (" ", "?", ".") else None
         return None
 
     @property
