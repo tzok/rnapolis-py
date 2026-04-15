@@ -51,7 +51,7 @@ class _RNAViewPotentialResidue:
 
 # RNAView regex pattern from the reference implementation
 _RNAVIEW_REGEX = re.compile(
-    r"\s*(\d+)_(\d+),\s+(\w):\s+(-?\d+)\s+(\w+)-(\w+)\s+(-?\d+)\s+(\w):\s+(syn|\s+)*((./.)\s+(cis|tran)(syn|\s+)*([IVX,]+|n/a|![^.]+)|stacked)\.?"
+    r"\s*(\d+)_(\d+),\s+(\S):\s+(-?\d+)\s+(\w+)-(\w+)\s+(-?\d+)\s+(\S):\s+(syn|\s+)*((./.)\s+(cis|tran)(syn|\s+)*([IVX,]+|n/a|![^.]+)|stacked)\.?"
 )
 
 # RNAView tokens
