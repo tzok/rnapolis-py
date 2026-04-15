@@ -276,11 +276,17 @@ def parse_rnaview_output(
                         continue
                 else:
                     # Fallback: create residues from regex groups
+                    # RNAView outputs literal '?' for unknown chains —
+                    # normalise to None for consistency with mmCIF semantics.
                     chain_left = rnaview_regex_groups[2]
+                    if chain_left in ("?", "."):
+                        chain_left = None
                     number_left = int(rnaview_regex_groups[3])
                     name_left = rnaview_regex_groups[4]
 
                     chain_right = rnaview_regex_groups[7]
+                    if chain_right in ("?", "."):
+                        chain_right = None
                     number_right = int(rnaview_regex_groups[6])
                     name_right = rnaview_regex_groups[5]
 

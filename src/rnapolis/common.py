@@ -30,9 +30,7 @@ DNA_NAMES = frozenset({"DA", "DC", "DG", "DT", "DU", "DI"})
 SUGAR_ATOMS = frozenset({"C1'", "C2'", "C3'", "C4'", "O4'"})
 
 
-def classify_molecule(
-    name: str, atom_names: Optional[frozenset] = None
-) -> Molecule:
+def classify_molecule(name: str, atom_names: Optional[frozenset] = None) -> Molecule:
     """Classify a residue as RNA, DNA or Other.
 
     First checks the residue name against canonical RNA/DNA name sets.
@@ -279,7 +277,7 @@ class BPh(Enum):
 class ResidueLabel:
     """Label-style residue identifier (label chain/number/name)."""
 
-    chain: str
+    chain: Optional[str]
     number: int
     name: str
 
@@ -288,7 +286,7 @@ class ResidueLabel:
 class ResidueAuth:
     """Auth-style residue identifier (auth chain/number/icode/name)."""
 
-    chain: str
+    chain: Optional[str]
     number: int
     icode: Optional[str]
     name: str
@@ -304,8 +302,8 @@ class Residue:
 
     def __lt__(self, other):
         """Compare residues by chain, number and insertion code."""
-        return (self.chain, self.number, self.icode or " ") < (
-            other.chain,
+        return (self.chain or "", self.number, self.icode or " ") < (
+            other.chain or "",
             other.number,
             other.icode or " ",
         )
@@ -354,7 +352,7 @@ class Residue:
     def full_name(self) -> Optional[str]:
         """Return human-readable residue identifier (e.g. A.A/23^A)."""
         if self.auth is not None:
-            if self.auth.chain.isspace():
+            if self.auth.chain is None or self.auth.chain.isspace():
                 builder = f"{self.auth.name}"
             else:
                 builder = f"{self.auth.chain}.{self.auth.name}"
@@ -365,7 +363,7 @@ class Residue:
                 builder += f"^{self.auth.icode}"
             return builder
         elif self.label is not None:
-            if self.label.chain.isspace():
+            if self.label.chain is None or self.label.chain.isspace():
                 builder = f"{self.label.name}"
             else:
                 builder = f"{self.label.chain}.{self.label.name}"

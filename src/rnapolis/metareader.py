@@ -13,6 +13,10 @@ def convert_category(data: List[DataContainer], category_name: str) -> List[Dict
     """
     Convert a single mmCIF category into a list of dictionaries.
 
+    In mmCIF, ``?`` means *unknown* and ``.`` means *inapplicable*.  Both
+    markers are converted to ``None`` so that downstream consumers never
+    see raw placeholder strings.
+
     Args:
         data (List[DataContainer]): Parsed mmCIF data blocks.
         category_name (str): Name of the mmCIF category to extract.
@@ -22,9 +26,13 @@ def convert_category(data: List[DataContainer], category_name: str) -> List[Dict
     """
     category = data[0].getObj(category_name)
     if category:
-        return [
-            dict(zip(category.getAttributeList(), row)) for row in category.getRowList()
-        ]
+        result = []
+        for row in category.getRowList():
+            record = {}
+            for attr, value in zip(category.getAttributeList(), row):
+                record[attr] = None if value in ("?", ".") else value
+            result.append(record)
+        return result
     return []
 
 

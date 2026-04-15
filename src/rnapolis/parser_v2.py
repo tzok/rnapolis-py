@@ -1125,9 +1125,9 @@ def parse_cif_modres(content: Union[str, IO[str]]) -> pd.DataFrame:
         )
 
     if "auth_seq_id" in df.columns:
-        df["auth_seq_id"] = pd.to_numeric(
-            df["auth_seq_id"], errors="coerce"
-        ).astype("Int64")
+        df["auth_seq_id"] = pd.to_numeric(df["auth_seq_id"], errors="coerce").astype(
+            "Int64"
+        )
 
     existing_cols = [col for col in result_cols if col in df.columns]
     df = df[existing_cols] if existing_cols else pd.DataFrame(columns=result_cols)

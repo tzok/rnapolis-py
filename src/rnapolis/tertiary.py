@@ -177,9 +177,9 @@ class Residue3D(Residue):
 
     def __lt__(self, other):
         """Order residues by (model, chain, residue number, insertion code)."""
-        return (self.model, self.chain, self.number, self.icode or " ") < (
+        return (self.model, self.chain or "", self.number, self.icode or " ") < (
             other.model,
-            other.chain,
+            other.chain or "",
             other.number,
             other.icode or " ",
         )

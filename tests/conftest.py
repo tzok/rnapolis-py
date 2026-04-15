@@ -37,9 +37,7 @@ def make_residue3d(
     )
 
 
-def build_pdb_residue_direct(
-    residue_name: str, atom_names, modres=None
-) -> ResidueV2:
+def build_pdb_residue_direct(residue_name: str, atom_names, modres=None) -> ResidueV2:
     """Build a v2 Residue directly (bypassing Structure filtering) for unit tests.
 
     Creates a minimal DataFrame with the given atom names and constructs

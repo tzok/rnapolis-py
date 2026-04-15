@@ -18,6 +18,14 @@ def _dssr_match_name_to_residue(
 ) -> Optional[Residue]:
     if nt_id is not None:
         nt_id = nt_id.split(":")[-1]
+
+        # DSSR uses literal '?' as chain name for residues without a chain
+        # identifier.  After mmCIF parsing, these residues have chain=None
+        # and full_name without a chain prefix (e.g. "G22" instead of "?.G22").
+        # Strip the "?." prefix so that matching works correctly.
+        if nt_id.startswith("?."):
+            nt_id = nt_id[2:]
+
         for residue in structure3d.residues:
             if residue.full_name == nt_id:
                 return Residue(residue.label, residue.auth)
