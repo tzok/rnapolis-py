@@ -35,13 +35,16 @@ def _bpnet_residues_from_overlap_info(fields):
     icode1, icode2 = fields[2], fields[4]
     names = fields[5].split(":")
 
-    if icode1 in " ?":
+    chain1 = chains[0] if chains[0] not in ("?", ".") else None
+    chain2 = chains[1] if chains[1] not in ("?", ".") else None
+
+    if icode1 in (" ", "?", "."):
         icode1 = None
-    if icode2 in " ?":
+    if icode2 in (" ", "?", "."):
         icode2 = None
 
-    nt1 = Residue(None, ResidueAuth(chains[0], numbers[0], icode1, names[0]))
-    nt2 = Residue(None, ResidueAuth(chains[1], numbers[1], icode2, names[1]))
+    nt1 = Residue(None, ResidueAuth(chain1, numbers[0], icode1, names[0]))
+    nt2 = Residue(None, ResidueAuth(chain2, numbers[1], icode2, names[1]))
     return nt1, nt2
 
 
@@ -89,13 +92,13 @@ def parse_bpnet_output(
                 data = orjson.loads(f.read())
 
             for entry in data["basepairs"]:
-                chain1 = entry["chain1"] if entry["chain1"] != "?" else None
-                chain2 = entry["chain2"] if entry["chain2"] != "?" else None
+                chain1 = entry["chain1"] if entry["chain1"] not in ("?", ".") else None
+                chain2 = entry["chain2"] if entry["chain2"] not in ("?", ".") else None
                 ins1 = entry["ins1"]
                 ins2 = entry["ins2"]
-                if ins1 in (" ", "?"):
+                if ins1 in (" ", "?", "."):
                     ins1 = None
-                if ins2 in (" ", "?"):
+                if ins2 in (" ", "?", "."):
                     ins2 = None
 
                 nt1 = Residue(

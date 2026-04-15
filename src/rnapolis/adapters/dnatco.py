@@ -54,9 +54,15 @@ def _parse_residues(row: pd.Series):
     res: List[ResidueAuth] = []
     for i in range(1, 3):
         chain = row[f"chain{i}"]
+        if isinstance(chain, str) and chain in ("?", "."):
+            chain = None
         number = int(row[f"nr{i}"])
         res_name = row[f"res{i}"]
+        if isinstance(res_name, str) and res_name in ("?", "."):
+            res_name = None
         i_code = row.get(f"ins{i}", "").strip() or None
+        if i_code in ("?", "."):
+            i_code = None
         res.append(ResidueAuth(chain, number, i_code, res_name))
 
     return Residue(None, res[0]), Residue(None, res[1])

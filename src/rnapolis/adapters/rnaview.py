@@ -136,18 +136,22 @@ def _rnaview_check_indexing_correctness(
     """Check if RNAView internal indexing matches PDB residue information."""
     residue_left = residues_from_pdb[int(regex_result[0])]
 
-    if residue_left.auth.chain.lower() != regex_result[
-        2
-    ].lower() or residue_left.auth.number != int(regex_result[3]):
+    left_chain = (residue_left.auth.chain or "") if residue_left.auth else ""
+    left_number = residue_left.auth.number if residue_left.auth else None
+    if left_chain.lower() != regex_result[2].lower() or left_number != int(
+        regex_result[3]
+    ):
         raise ValueError(
             f"Wrong internal index for {residue_left}. Fix RNAView internal index mapping. Line: {line}"
         )
 
     residue_right = residues_from_pdb[int(regex_result[1])]
 
-    if residue_right.auth.chain.lower() != regex_result[
-        7
-    ].lower() or residue_right.auth.number != int(regex_result[6]):
+    right_chain = (residue_right.auth.chain or "") if residue_right.auth else ""
+    right_number = residue_right.auth.number if residue_right.auth else None
+    if right_chain.lower() != regex_result[7].lower() or right_number != int(
+        regex_result[6]
+    ):
         raise ValueError(
             f"Wrong internal index for {residue_right}. Fix RNAView internal index mapping. Line: {line}"
         )

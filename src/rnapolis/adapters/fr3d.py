@@ -21,8 +21,9 @@ from rnapolis.tertiary import Structure3D
 def _fr3d_parse_unit_id(nt: str) -> Residue:
     """Parse FR3D unit ID format into a Residue object."""
     fields = nt.split("|")
-    icode = fields[7] if len(fields) >= 8 and fields[7] != "" else None
-    auth = ResidueAuth(fields[2], int(fields[4]), icode, fields[3])
+    icode = fields[7] if len(fields) >= 8 and fields[7] not in ("", "?", ".") else None
+    chain = fields[2] if fields[2] not in ("?", ".") else None
+    auth = ResidueAuth(chain, int(fields[4]), icode, fields[3])
     return Residue(None, auth)
 
 
