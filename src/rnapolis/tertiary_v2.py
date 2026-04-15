@@ -1296,11 +1296,13 @@ class Atom(_ColumnAccessorMixin):
     @cached_property
     def coordinates(self) -> np.ndarray:
         """Return atom coordinates as a NumPy array [x, y, z]."""
-        return np.array([
-            self.data[self._col("x")],
-            self.data[self._col("y")],
-            self.data[self._col("z")],
-        ])
+        return np.array(
+            [
+                self.data[self._col("x")],
+                self.data[self._col("y")],
+                self.data[self._col("z")],
+            ]
+        )
 
     @cached_property
     def occupancy(self) -> float:
