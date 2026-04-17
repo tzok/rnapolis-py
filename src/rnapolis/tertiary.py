@@ -772,8 +772,9 @@ class Mapping2D3D:
             if pair.saenger is not None:
                 if pair.saenger in (Saenger.XIX, Saenger.XX):
                     return 0
-                else:
+                if pair.saenger == Saenger.XXVIII:
                     return 1
+                return 2
 
             sequence = "".join(
                 sorted(
@@ -785,7 +786,9 @@ class Mapping2D3D:
             )
             if sequence in ("AU", "AT", "CG"):
                 return 0
-            return 1
+            if sequence in ("GU", "GT"):
+                return 1
+            return 2
 
         canonical = [
             base_pair
