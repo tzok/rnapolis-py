@@ -2049,37 +2049,37 @@ mkdocstrings = ">=0.30"
 
 [[package]]
 name = "mmcif"
-version = "1.1.0"
+version = "1.1.1"
 description = "mmCIF Core Access Library"
 optional = false
-python-versions = ">=3.6"
+python-versions = ">=3.8"
 groups = ["main"]
 files = [
-    {file = "mmcif-1.1.0-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:c907af19fe0cc78e030bacfc9e3301f2c525771890d78509ce4bbb085e2f169d"},
-    {file = "mmcif-1.1.0-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:d7c4e7a73104cdd94bc12a11245e6d1740ba88997ebceda2c688e89c8e69761b"},
-    {file = "mmcif-1.1.0-cp310-cp310-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:5dc17abe7847004d828fb3676bb5b47a971a529ed4ce91fbc1bb5429148b6a51"},
-    {file = "mmcif-1.1.0-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:cf5f004b35fa68b56f04a54f34230af47ba97ce99a6d532a0cbcfbc47bee20ae"},
-    {file = "mmcif-1.1.0-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:533877fb04196a517f539a9844b59168298366e0061f887a2b4ff456e9bbc516"},
-    {file = "mmcif-1.1.0-cp311-cp311-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:592a189bb4acf3a982dded5a44e672245798ab6fc7cc23c937253026f07be989"},
-    {file = "mmcif-1.1.0-cp312-cp312-macosx_10_13_x86_64.whl", hash = "sha256:617134ece766d1f64d235aa6664e530e286b059e1d3295f28068e9f87779fc83"},
-    {file = "mmcif-1.1.0-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:92ec71b362d2a07a2fdc2ad4e710f36492a033474609c6f455e10c48f3ea64db"},
-    {file = "mmcif-1.1.0-cp312-cp312-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:47b8730ba8de120a9c3754d4134a1d5fcc126e916bbfb478d720c03e736575cc"},
-    {file = "mmcif-1.1.0-cp313-cp313-macosx_10_13_x86_64.whl", hash = "sha256:c2d88221fc7d95d6138e5a467028340bffa39015e40fa78c7f2809f1da1f91cf"},
-    {file = "mmcif-1.1.0-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:5fdab663481215511c5b508b9d07b109313bcd3e58ff0bc3bc484a32d328cb32"},
-    {file = "mmcif-1.1.0-cp313-cp313-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:36b53f921f718db58ed207fdd7b3f427a32e2c2780a8272c9e4c2e2ba598cb11"},
-    {file = "mmcif-1.1.0-cp314-cp314-macosx_10_15_x86_64.whl", hash = "sha256:6d84940f32ec48c32256b97950dfd7594f28c54151edf0a920d8b001dbcdeab9"},
-    {file = "mmcif-1.1.0-cp314-cp314-macosx_11_0_arm64.whl", hash = "sha256:24529470ee825495c58e93d330b7c956879aaf6a2b4c4d749d27286298a91dfe"},
-    {file = "mmcif-1.1.0-cp314-cp314-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:7b7c7d02256ad314fd1d6fb8116a3e22537758a22faf00ca90431d4975500291"},
-    {file = "mmcif-1.1.0-cp314-cp314t-macosx_10_15_x86_64.whl", hash = "sha256:3bc76ad1a5d7aaf0d22c3119dfd9f1e3f669aeee2b9e9e990a071a3a7b8217db"},
-    {file = "mmcif-1.1.0-cp314-cp314t-macosx_11_0_arm64.whl", hash = "sha256:7b019e7270659dbac4afcc0aeda074cf310ba987b218ab590909da58dabf5c4f"},
-    {file = "mmcif-1.1.0-cp314-cp314t-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:d8e2d2ba4b75c72c5d7ea8cac3cd79db18d72a303cccc7e2bd5932e5c1995ea8"},
-    {file = "mmcif-1.1.0-cp38-cp38-macosx_10_9_x86_64.whl", hash = "sha256:a286eb09d4da11f4f19d300f9c1064c3ea8ecb620732cf70ddfa81790980d97c"},
-    {file = "mmcif-1.1.0-cp38-cp38-macosx_11_0_arm64.whl", hash = "sha256:765aa115a4695366207e57de531f937bbd8e59fdd92a4ba91816df82b6001039"},
-    {file = "mmcif-1.1.0-cp38-cp38-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:438f2991662378856645f1f42c3de35ba26810af4afdb414e10a8c8df35f54cc"},
-    {file = "mmcif-1.1.0-cp39-cp39-macosx_10_9_x86_64.whl", hash = "sha256:933c9c265867b199e461f5962ffaa7811088d11d761ba51e326d3f6d9d9ce70e"},
-    {file = "mmcif-1.1.0-cp39-cp39-macosx_11_0_arm64.whl", hash = "sha256:92fe1cf1aff09026c6d44cab9414335892e04cc35dcade9a7e99f3b125f3e075"},
-    {file = "mmcif-1.1.0-cp39-cp39-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:9a9c836ef178c6773bd7489123a91fcb2fc012003acadd665be225801e2e0388"},
-    {file = "mmcif-1.1.0.tar.gz", hash = "sha256:ad33f85b581218c3df0e231b2b034244e9f2380d2c8d05244a262a24d30b2f91"},
+    {file = "mmcif-1.1.1-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:429e4000c7a8bae18149b46b02a2961430afbf53ed2847057555d901e5cb93bf"},
+    {file = "mmcif-1.1.1-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:274155aaa2c124b7397c52cf0b74d2e6e4eb45efbd2a21a5a22e9bab4095b468"},
+    {file = "mmcif-1.1.1-cp310-cp310-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:ca5ab7a1bdc35159815f872300d477665047b97681f2ca09d7d6077bf979e38c"},
+    {file = "mmcif-1.1.1-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:d0a2ca133d7487642d0ff7313ef4debcc9d9cfc8fefb1ca63791c87638df5322"},
+    {file = "mmcif-1.1.1-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:e6a44acbafc3e9901708b17ea61d12b1894118249a798e240ed5dafb49f10c4f"},
+    {file = "mmcif-1.1.1-cp311-cp311-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:79d9c20df8f316c2b9b5011b97402f5889d0e0de6b3554202131c0d5bf17dd92"},
+    {file = "mmcif-1.1.1-cp312-cp312-macosx_10_13_x86_64.whl", hash = "sha256:b82763c276906e62568fbf960a6d269290536fac0fa05db69d8895ff8116e90e"},
+    {file = "mmcif-1.1.1-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:68977d43945de1008ef9aec5d015813871616db0bc7bda936832025b81a93f08"},
+    {file = "mmcif-1.1.1-cp312-cp312-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:34fed63ffcc714ca7053f5e3dd320ca5276ed02a6cbcd62574c66f8e84cd22ce"},
+    {file = "mmcif-1.1.1-cp313-cp313-macosx_10_13_x86_64.whl", hash = "sha256:f80aea78a702be22c02a330ba0c1e4a1f4714187f1074dba9e369c4cc24d1ad9"},
+    {file = "mmcif-1.1.1-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:841e2ea71aaa5d2c990caf38657a72ccc689ba984b62d9e9ed6b9f7ea80e2002"},
+    {file = "mmcif-1.1.1-cp313-cp313-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:4bc7a445d89fc3282403756ecc01a53b977cb7826752b65f3e54f7d0c5e151aa"},
+    {file = "mmcif-1.1.1-cp314-cp314-macosx_10_15_x86_64.whl", hash = "sha256:99dcb90df4b994173d649d8ef5d611147790638d030fa758c2308a8d1f4bd827"},
+    {file = "mmcif-1.1.1-cp314-cp314-macosx_11_0_arm64.whl", hash = "sha256:514c4ce999fe1c470c9ba256c4b07ef56001d3f21bd6280705e608398ad0b6b4"},
+    {file = "mmcif-1.1.1-cp314-cp314-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:19f1704a499ea1ab3f9a5903095690f5fa1e92df8efd09d0a4ab2288976e68ae"},
+    {file = "mmcif-1.1.1-cp314-cp314t-macosx_10_15_x86_64.whl", hash = "sha256:540f6c66081b074708567b70bb4e131c67ed0abfeeed260bfa483c86d9135e9a"},
+    {file = "mmcif-1.1.1-cp314-cp314t-macosx_11_0_arm64.whl", hash = "sha256:ff8275af5db5a5b61bad1c90da97cb41e4df5df5affc6224618ea14cb3642ac1"},
+    {file = "mmcif-1.1.1-cp314-cp314t-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:fe91c138f728be82f0e97a616bd601833763e8d9322e49352cb36e517dfd03d9"},
+    {file = "mmcif-1.1.1-cp38-cp38-macosx_10_9_x86_64.whl", hash = "sha256:a0718606f9e4c923a1fbf4f3bd1a26498d1dbdc25947d2b07e39f2713ffa966c"},
+    {file = "mmcif-1.1.1-cp38-cp38-macosx_11_0_arm64.whl", hash = "sha256:25a1eb4ed77ddb80e32afbf0aec792af9b36ba70907ecaaf86af80e7ebbcacc3"},
+    {file = "mmcif-1.1.1-cp38-cp38-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:1eb8c85fdf64c9bb8fe67f5a53eb803dbd3a40c3177df4fa87f205c0fb0882ce"},
+    {file = "mmcif-1.1.1-cp39-cp39-macosx_10_9_x86_64.whl", hash = "sha256:a2f45ac838213a7d2bd4f92cd293e07a33787d21a300bd8aeab84ab11d037a90"},
+    {file = "mmcif-1.1.1-cp39-cp39-macosx_11_0_arm64.whl", hash = "sha256:0b71231d261acffe6b87234a5e817ee80d7f9c116a136f7e46b7eee4833877d9"},
+    {file = "mmcif-1.1.1-cp39-cp39-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:c401b30a9603d33108bf3ca132f96f701fabbc12d75ccbfab8a55092210aef85"},
+    {file = "mmcif-1.1.1.tar.gz", hash = "sha256:00f7075a824a90f9148f209e5dd1907cdb9e4329357b3ae55e664e6d37dadafd"},
 ]
 
 [package.dependencies]
