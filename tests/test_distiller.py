@@ -1,3 +1,4 @@
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -15,6 +16,7 @@ from rnapolis.distiller import (
     connected_components_from_adjacency,
     determine_optimal_representative_count,
     get_clustering_at_cutoff,
+    parse_arguments,
     pairwise_squared_l2,
     validate_cli_arguments,
 )
@@ -207,6 +209,26 @@ def test_pairwise_squared_l2_returns_dense_distance_matrix():
     distance_matrix = pairwise_squared_l2(embedding)
 
     assert np.allclose(distance_matrix, np.array([[0.0, 5.0], [5.0, 0.0]]))
+
+
+def test_parse_arguments_accepts_visualize_output_path(monkeypatch):
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["distiller", "--visualize", "results.png", "example.cif"],
+    )
+
+    args = parse_arguments()
+
+    assert args.visualize == "results.png"
+    assert args.files == [Path("example.cif")]
+
+
+def test_parse_arguments_requires_visualize_output_path(monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["distiller", "--visualize"])
+
+    with pytest.raises(SystemExit):
+        parse_arguments()
 
 
 def test_validate_cli_arguments_rejects_graph_backend_with_dense_only_methods():

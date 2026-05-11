@@ -98,7 +98,7 @@ examples:
   distiller --radius 1.0 *.cif
 
   # Save results and produce plots
-  distiller --output-json results.json --visualize *.cif""",
+  distiller --output-json results.json --visualize results.png *.cif""",
     )
 
     parser.add_argument(
@@ -120,8 +120,9 @@ examples:
 
     output_group.add_argument(
         "--visualize",
-        action="store_true",
-        help="show dendrogram / MDS scatter plots of the clustering",
+        type=str,
+        metavar="FILE",
+        help="save dendrogram / MDS scatter plots to FILE",
     )
 
     # -- Mode & method ----------------------------------------------------
@@ -1029,7 +1030,7 @@ def run_radius_graph_workflow(
     n_neighbors: int,
     neighbor_search: str,
     output_json: Optional[str],
-    visualize: bool,
+    visualize: Optional[str],
     extra_parameters: Optional[dict] = None,
 ) -> None:
     """Run scalable radius-graph clustering in PCA space."""
@@ -1583,7 +1584,7 @@ def run_distance_matrix_workflow(
     damping: float,
     n_representatives: Optional[int],
     method: str,
-    visualize: bool,
+    visualize: Optional[str],
     output_json: Optional[str],
     extra_parameters: Optional[dict] = None,
 ) -> None:
@@ -1604,7 +1605,7 @@ def run_distance_matrix_workflow(
                 labels,
                 exemplar_indices,
                 f"Facility Location Selection ({distance_metric})",
-                "facility_location_analysis.png",
+                visualize,
                 gains=diagnostics.get("gains"),
             )
 
@@ -1638,7 +1639,7 @@ def run_distance_matrix_workflow(
                 labels,
                 exemplar_indices,
                 f"Affinity Propagation Clustering ({distance_metric})",
-                "clustering_analysis.png",
+                visualize,
             )
 
         if output_json:
@@ -1692,11 +1693,7 @@ def run_distance_matrix_workflow(
             x_label=hierarchical_value_unit,
             y_label=hierarchical_value_unit,
             selected_label=hierarchical_value_name.capitalize(),
-            output_file=(
-                "approximate_clustering_analysis.png"
-                if mode == "approximate"
-                else "clustering_analysis.png"
-            ),
+            output_file=visualize,
         )
 
     summarize_hierarchical_candidates(
@@ -2000,7 +1997,7 @@ def find_structure_clusters(
     structures: List[Structure],
     file_paths: List[Path],
     cache: NRMSDCache,
-    visualize: bool = False,
+    visualize: Optional[str] = None,
     rmsd_method: str = "quaternions",
 ) -> np.ndarray:
     """Compute pairwise nRMSD distance matrix for a set of structures.
@@ -2011,7 +2008,7 @@ def find_structure_clusters(
         structures (List[Structure]): Structures to compare.
         file_paths (List[Path]): Paths corresponding to the structures.
         cache (NRMSDCache): Cache object storing previously computed nRMSD values.
-        visualize (bool): Unused here, kept for interface compatibility.
+        visualize (Optional[str]): Unused here, kept for interface compatibility.
         rmsd_method (str): RMSD method name ("quaternions", "svd", "qcp", "validate").
 
     Returns:
