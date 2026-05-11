@@ -15,9 +15,13 @@ from rnapolis.distiller import (
     build_radius_graph_candidates,
     connected_components_from_adjacency,
     determine_optimal_representative_count,
+    find_cluster_boundaries,
     get_clustering_at_cutoff,
+    get_dendrogram_leaf_order,
     parse_arguments,
     pairwise_squared_l2,
+    reorder_distance_matrix,
+    run_distance_matrix_workflow,
     validate_cli_arguments,
 )
 
@@ -209,6 +213,81 @@ def test_pairwise_squared_l2_returns_dense_distance_matrix():
     distance_matrix = pairwise_squared_l2(embedding)
 
     assert np.allclose(distance_matrix, np.array([[0.0, 5.0], [5.0, 0.0]]))
+
+
+def test_get_dendrogram_leaf_order_and_reorder_distance_matrix():
+    distance_matrix = np.array(
+        [
+            [0.0, 0.1, 3.0, 3.0],
+            [0.1, 0.0, 3.0, 3.0],
+            [3.0, 3.0, 0.0, 0.2],
+            [3.0, 3.0, 0.2, 0.0],
+        ]
+    )
+    linkage_matrix = np.array(
+        [
+            [0.0, 1.0, 0.1, 2.0],
+            [2.0, 3.0, 0.2, 2.0],
+            [4.0, 5.0, 3.0, 4.0],
+        ]
+    )
+
+    leaf_order = get_dendrogram_leaf_order(linkage_matrix)
+    reordered = reorder_distance_matrix(distance_matrix, leaf_order)
+
+    assert sorted(leaf_order) == [0, 1, 2, 3]
+    assert reordered.shape == distance_matrix.shape
+    assert np.allclose(reordered, reordered.T)
+    assert np.allclose(np.diag(reordered), 0.0)
+    assert reordered[0, 1] in {0.1, 0.2}
+    assert reordered[2, 3] in {0.1, 0.2}
+
+
+def test_find_cluster_boundaries_marks_cluster_transitions():
+    labels = np.array([1, 1, 2, 2, 2, 3])
+
+    assert find_cluster_boundaries(labels) == [2, 5]
+
+
+def test_run_distance_matrix_workflow_passes_matrix_to_approximate_hierarchical_visualization(
+    monkeypatch,
+):
+    distance_matrix = np.array(
+        [
+            [0.0, 0.1, 2.0],
+            [0.1, 0.0, 2.0],
+            [2.0, 2.0, 0.0],
+        ]
+    )
+    file_paths = [Path(name) for name in ["a.cif", "b.cif", "c.cif"]]
+    captured = {}
+
+    def fake_visualize_hierarchical_clustering(**kwargs):
+        captured.update(kwargs)
+
+    monkeypatch.setattr(
+        "rnapolis.distiller.visualize_hierarchical_clustering",
+        fake_visualize_hierarchical_clustering,
+    )
+
+    run_distance_matrix_workflow(
+        distance_matrix=distance_matrix,
+        file_paths=file_paths,
+        mode="approximate",
+        distance_metric="pca-l2",
+        hierarchical_value=0.5,
+        hierarchical_value_name="radius",
+        hierarchical_value_unit="pca-l2",
+        preference=None,
+        damping=0.9,
+        n_representatives=None,
+        method="hierarchical",
+        visualize="approximate.png",
+        output_json=None,
+    )
+
+    assert np.array_equal(captured["distance_matrix"], distance_matrix)
+    assert captured["output_file"] == "approximate.png"
 
 
 def test_parse_arguments_accepts_visualize_output_path(monkeypatch):

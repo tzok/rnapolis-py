@@ -1186,6 +1186,28 @@ def build_clustering_from_groups(
     }
 
 
+def get_dendrogram_leaf_order(linkage_matrix: np.ndarray) -> List[int]:
+    """Return the leaf order induced by a hierarchical clustering dendrogram."""
+    return [int(index) for index in dendrogram(linkage_matrix, no_plot=True)["leaves"]]
+
+
+def reorder_distance_matrix(
+    distance_matrix: np.ndarray, leaf_order: List[int]
+) -> np.ndarray:
+    """Reorder a distance matrix to follow a dendrogram leaf ordering."""
+    indices = np.asarray(leaf_order, dtype=int)
+    return distance_matrix[np.ix_(indices, indices)]
+
+
+def find_cluster_boundaries(labels: np.ndarray) -> List[int]:
+    """Return boundary positions where adjacent ordered cluster labels change."""
+    return [
+        index
+        for index in range(1, len(labels))
+        if int(labels[index]) != int(labels[index - 1])
+    ]
+
+
 def _visualize_flat_clustering(
     distance_matrix: np.ndarray,
     labels: np.ndarray,
@@ -1485,17 +1507,22 @@ def visualize_hierarchical_clustering(
     y_label: str,
     selected_label: str,
     output_file: str,
+    distance_matrix: Optional[np.ndarray] = None,
 ) -> None:
-    """Render the standard hierarchical dendrogram + decay plot."""
+    """Render the standard hierarchical plots and optional reordered heatmap."""
     try:
         import matplotlib.pyplot as plt
     except ImportError:
         print("Warning: matplotlib not available, skipping visualization", file=sys.stderr)
         return
 
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 6))
+    panel_count = 3 if distance_matrix is not None else 2
+    fig, axes = plt.subplots(1, panel_count, figsize=(8 * panel_count, 6))
+    ax1 = axes[0]
+    ax2 = axes[1] if distance_matrix is not None else axes[-1]
+    ax3 = axes[2] if distance_matrix is not None else None
 
-    dendrogram(
+    dendrogram_data = dendrogram(
         linkage_matrix,
         labels=[f"Structure {i}" for i in range(linkage_matrix.shape[0] + 1)],
         ax=ax1,
@@ -1513,13 +1540,49 @@ def visualize_hierarchical_clustering(
     ax1.set_ylabel(y_label)
     ax1.legend()
 
+    if distance_matrix is not None:
+        leaf_order = [int(index) for index in dendrogram_data["leaves"]]
+        reordered_matrix = reorder_distance_matrix(distance_matrix, leaf_order)
+        ordered_labels = fcluster(linkage_matrix, selected_value, criterion="distance")
+        ordered_labels = ordered_labels[np.asarray(leaf_order, dtype=int)]
+        boundaries = find_cluster_boundaries(ordered_labels)
+
+        heatmap = ax2.imshow(
+            reordered_matrix,
+            cmap="viridis",
+            interpolation="nearest",
+            aspect="equal",
+        )
+        if len(leaf_order) <= 40:
+            tick_positions = np.arange(len(leaf_order))
+            tick_labels = [str(index) for index in leaf_order]
+            ax2.set_xticks(tick_positions)
+            ax2.set_yticks(tick_positions)
+            ax2.set_xticklabels(tick_labels, rotation=90, fontsize=7)
+            ax2.set_yticklabels(tick_labels, fontsize=7)
+        else:
+            ax2.set_xticks([])
+            ax2.set_yticks([])
+
+        for boundary in boundaries:
+            ax2.axhline(boundary - 0.5, color="white", linewidth=1.5, alpha=0.9)
+            ax2.axvline(boundary - 0.5, color="white", linewidth=1.5, alpha=0.9)
+
+        ax2.set_title("Reordered Distance Matrix")
+        ax2.set_xlabel("Structure Index (dendrogram order)")
+        ax2.set_ylabel("Structure Index (dendrogram order)")
+        colorbar = fig.colorbar(heatmap, ax=ax2, fraction=0.046, pad=0.04)
+        colorbar.set_label(y_label)
+
     x = np.array([entry["value"] for entry in candidates], dtype=float)
     y = np.array([entry["n_clusters"] for entry in candidates], dtype=float)
     x_smooth, y_smooth, inflection_x = fit_exponential_decay(x, y)
 
-    ax2.scatter(x, y, alpha=0.7, s=30, label="Data points")
+    decay_axis = ax3 if ax3 is not None else ax2
+
+    decay_axis.scatter(x, y, alpha=0.7, s=30, label="Data points")
     if len(x_smooth) > 0:
-        ax2.plot(
+        decay_axis.plot(
             x_smooth,
             y_smooth,
             "b-",
@@ -1530,7 +1593,7 @@ def visualize_hierarchical_clustering(
 
     if len(inflection_x) > 0 and len(x_smooth) > 0:
         inflection_y = np.interp(inflection_x, x_smooth, y_smooth)
-        ax2.scatter(
+        decay_axis.scatter(
             inflection_x,
             inflection_y,
             color="orange",
@@ -1540,14 +1603,14 @@ def visualize_hierarchical_clustering(
             label=f"Key points ({len(inflection_x)})",
         )
 
-    ax2.axvline(
+    decay_axis.axvline(
         x=selected_value,
         color="red",
         linestyle="--",
         linewidth=2,
         label=f"{selected_label} = {selected_value:.6f}",
     )
-    ax2.scatter(
+    decay_axis.scatter(
         [selected_value],
         [selected_clustering["n_clusters"]],
         color="red",
@@ -1555,11 +1618,11 @@ def visualize_hierarchical_clustering(
         zorder=5,
         label=f"Selected ({selected_clustering['n_clusters']} clusters)",
     )
-    ax2.set_xlabel(x_label)
-    ax2.set_ylabel("Number of Clusters")
-    ax2.set_title(f"{selected_label} vs Cluster Count with Exponential Decay Fit")
-    ax2.grid(True, alpha=0.3)
-    ax2.legend()
+    decay_axis.set_xlabel(x_label)
+    decay_axis.set_ylabel("Number of Clusters")
+    decay_axis.set_title(f"{selected_label} vs Cluster Count with Exponential Decay Fit")
+    decay_axis.grid(True, alpha=0.3)
+    decay_axis.legend()
 
     plt.tight_layout()
     plt.savefig(output_file, dpi=300, bbox_inches="tight")
@@ -1694,6 +1757,7 @@ def run_distance_matrix_workflow(
             y_label=hierarchical_value_unit,
             selected_label=hierarchical_value_name.capitalize(),
             output_file=visualize,
+            distance_matrix=distance_matrix,
         )
 
     summarize_hierarchical_candidates(
