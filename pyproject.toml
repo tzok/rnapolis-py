@@ -26,7 +26,7 @@ repository = "https://github.com/tzok/rnapolis-py"
 python = "^3.12"
 appdirs = "*"
 apricot-select = "*"
-faiss-cpu = "*"
+faiss-cpu = { version = "*", optional = true }
 graphviz = "*"
 mmcif = "*"
 numpy = "*"
@@ -41,6 +41,9 @@ scipy = "*"
 shapely = "*"
 tqdm = "*"
 viennarna = "*"
+
+[tool.poetry.extras]
+faiss = ["faiss-cpu"]
 
 [tool.poetry.group.dev.dependencies]
 pytest = "*"
