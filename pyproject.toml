@@ -1,15 +1,15 @@
 [build-system]
-requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
+requires = ["uv_build>=0.9.30,<0.10.0"]
+build-backend = "uv_build"
 
-[tool.poetry]
+[project]
 name = "RNApolis"
 version = "0.16.6"
 description = "A Python library containing RNA-related bioinformatics functions and classes"
-authors = ["Tomasz Zok <tomasz.zok@cs.put.poznan.pl>"]
+authors = [{ name = "Tomasz Zok", email = "tomasz.zok@cs.put.poznan.pl" }]
 readme = "README.md"
-packages = [{ include = "rnapolis", from = "src" }]
-include = ["src/rnapolis/default_config.ini"]
+requires-python = ">=3.12,<4"
+license-files = ["LICENSE"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Environment :: Console",
@@ -19,43 +19,48 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Topic :: Scientific/Engineering :: Bio-Informatics",
 ]
-homepage = "https://github.com/tzok/rnapolis-py"
-repository = "https://github.com/tzok/rnapolis-py"
+dependencies = [
+    "appdirs",
+    "apricot-select",
+    "graphviz",
+    "mmcif",
+    "numpy",
+    "ordered-set",
+    "orjson",
+    "pandas",
+    "pulp",
+    "pycircstat2",
+    "requests",
+    "scikit-learn",
+    "scipy",
+    "shapely",
+    "tqdm",
+    "viennarna",
+]
 
-[tool.poetry.dependencies]
-python = "^3.12"
-appdirs = "*"
-apricot-select = "*"
-faiss-cpu = { version = "*", optional = true }
-graphviz = "*"
-mmcif = "*"
-numpy = "*"
-ordered-set = "*"
-orjson = "*"
-pandas = "*"
-pulp = "*"
-pycircstat2 = "*"
-requests = "*"
-scikit-learn = "*"
-scipy = "*"
-shapely = "*"
-tqdm = "*"
-viennarna = "*"
+[project.urls]
+Homepage = "https://github.com/tzok/rnapolis-py"
+Repository = "https://github.com/tzok/rnapolis-py"
 
-[tool.poetry.extras]
+[project.optional-dependencies]
 faiss = ["faiss-cpu"]
 
-[tool.poetry.group.dev.dependencies]
-pytest = "*"
-hypothesis = "*"
-notebook = "*"
+[dependency-groups]
+dev = [
+    "pytest",
+    "hypothesis",
+    "notebook",
+]
+docs = [
+    "mkdocs",
+    "mkdocs-material",
+    "mkdocstrings[python]",
+]
 
-[tool.poetry.group.docs.dependencies]
-mkdocs = "*"
-mkdocs-material = "*"
-mkdocstrings = { extras = ["python"], version = "*" }
+[tool.uv]
+default-groups = []
 
-[tool.poetry.scripts]
+[project.scripts]
 annotator = "rnapolis.annotator:main"
 adapter = "rnapolis.adapter:main"
 aligner = "rnapolis.aligner:main"

@@ -2,8 +2,13 @@
 {
   languages.python = {
     enable = true;
-    poetry.enable = true;
-    poetry.install.groups = [ "docs" ];
+    venv.enable = true;
+    uv.enable = true;
+    uv.sync = {
+      enable = true;
+      arguments = [ "--locked" ];
+      groups = [ "docs" ];
+    };
   };
   packages = [
     pkgs.graphviz
@@ -11,7 +16,4 @@
     pkgs.zlib
     pkgs.jupyter
   ];
-  enterShell = ''
-    export PYTHONPATH=src/
-  '';
 }
