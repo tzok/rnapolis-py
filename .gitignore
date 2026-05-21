@@ -13,4 +13,5 @@ notebooks/outputs
 # Devenv
 .direnv
 .devenv*
+devenv.lock
 devenv.local.nix
