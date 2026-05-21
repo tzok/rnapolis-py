@@ -2,6 +2,36 @@
 
 A Python library and utilities containing RNA-related bioinformatics functions and classes.
 
+## Development
+
+This repository uses `uv` for environment management, locking, and builds.
+
+Install the runtime environment:
+
+```bash
+uv sync --locked
+```
+
+Install the development tools and run tests:
+
+```bash
+uv sync --locked --group dev
+uv run --no-sync python -m pytest
+```
+
+Install the documentation toolchain and build the site:
+
+```bash
+uv sync --locked --group docs
+uv run --no-sync mkdocs build --site-dir site
+```
+
+Build source and wheel distributions:
+
+```bash
+uv build
+```
+
 ## Utilities
 
 ### `annotator`
