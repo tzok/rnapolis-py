@@ -16,6 +16,7 @@ from scipy.optimize import curve_fit
 from scipy.spatial.distance import pdist, squareform
 from sklearn.cluster import AffinityPropagation
 from sklearn.decomposition import PCA
+from sklearn.metrics import silhouette_score
 from sklearn.neighbors import NearestNeighbors
 from tqdm import tqdm
 
@@ -125,6 +126,14 @@ examples:
         help="save dendrogram / MDS scatter plots to FILE",
     )
 
+    output_group.add_argument(
+        "--heatmap-colormap",
+        type=str,
+        default="viridis",
+        metavar="NAME",
+        help="matplotlib colormap name for hierarchical heatmaps (default: viridis)",
+    )
+
     # -- Mode & method ----------------------------------------------------
     mode_group = parser.add_argument_group("mode & method")
 
@@ -162,6 +171,16 @@ examples:
         ),
     )
 
+    mode_group.add_argument(
+        "--facility-auto-method",
+        choices=["knee", "silhouette"],
+        default="knee",
+        help=(
+            "automatic representative-count selection for --method facility-location "
+            "when --n-representatives is omitted (default: knee)"
+        ),
+    )
+
     # -- Hierarchical options ---------------------------------------------
     hier_group = parser.add_argument_group("hierarchical clustering options")
 
@@ -171,7 +190,7 @@ examples:
         default=None,
         help=(
             "nRMSD distance threshold (exact mode). "
-            "if omitted, auto-detected from the exponential-decay knee"
+            "if omitted, auto-detected with the selected hierarchical auto method"
         ),
     )
 
@@ -181,7 +200,17 @@ examples:
         default=None,
         help=(
             "PCA-space radius for approximate hierarchical or radius-graph "
-            "clustering. if omitted, auto-detected from the exponential-decay knee"
+            "clustering. if omitted, auto-detected with the selected hierarchical auto method"
+        ),
+    )
+
+    hier_group.add_argument(
+        "--hierarchical-auto-method",
+        choices=["knee", "silhouette"],
+        default="knee",
+        help=(
+            "automatic cutoff selection for --method hierarchical when no "
+            "--threshold/--radius is given (default: knee)"
         ),
     )
 
@@ -289,6 +318,13 @@ def validate_cli_arguments(args: argparse.Namespace) -> None:
         )
         sys.exit(1)
 
+    if args.facility_auto_method != "knee" and args.method != "facility-location":
+        print(
+            "Error: --facility-auto-method is only valid with --method facility-location",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
     if args.mode != "exact" and args.threshold is not None:
         print("Error: --threshold is only valid in --mode exact", file=sys.stderr)
         sys.exit(1)
@@ -359,6 +395,18 @@ def validate_cli_arguments(args: argparse.Namespace) -> None:
     if args.approx_backend != "graph" and args.neighbor_search != "sklearn":
         print(
             "Error: --neighbor-search is only valid with --approx-backend graph",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    if (
+        args.method == "facility-location"
+        and args.facility_auto_method == "silhouette"
+        and args.n_representatives is None
+        and args.approx_backend == "graph"
+    ):
+        print(
+            "Error: facility-location silhouette auto-selection is only supported with --approx-backend dense",
             file=sys.stderr,
         )
         sys.exit(1)
@@ -681,6 +729,7 @@ def cluster_facility_location(
     distance_matrix: np.ndarray,
     file_paths: List[Path],
     n_representatives: Optional[int] = None,
+    auto_method: str = "knee",
 ) -> Tuple[dict, dict, dict]:
     """Select *n_representatives* using submodular facility location.
 
@@ -692,7 +741,8 @@ def cluster_facility_location(
         distance_matrix: Square symmetric distance matrix.
         file_paths: Paths corresponding to the structures.
         n_representatives: Exact number of representatives to select.
-            ``None`` triggers auto-detection from the facility-location gain curve.
+            ``None`` triggers auto-detection from the configured facility-location rule.
+        auto_method: Automatic representative-count selection rule.
 
     Returns:
         Tuple of clustering result dict, selection metadata and diagnostics.
@@ -742,15 +792,33 @@ def cluster_facility_location(
 
     full_ranking = [int(r) for r in selector.ranking]
     full_gains = [float(g) for g in selector.gains]
+    silhouette_curve: List[dict] = []
 
     if n_representatives is None:
-        auto_n = determine_optimal_representative_count(full_gains)
+        if auto_method == "silhouette":
+            auto_n, silhouette_curve = (
+                determine_optimal_facility_representative_count_by_silhouette(
+                    distance_matrix, full_ranking
+                )
+            )
+            if auto_n is None:
+                print(
+                    "Warning: facility-location silhouette auto-selection was unavailable; falling back to knee detection",
+                    file=sys.stderr,
+                )
+                auto_n = determine_optimal_representative_count(full_gains)
+                selection_rule = "exponential-decay-knee"
+            else:
+                selection_rule = "silhouette-max"
+        else:
+            auto_n = determine_optimal_representative_count(full_gains)
+            selection_rule = "exponential-decay-knee"
         selection = {
             "variable": "n_representatives",
             "value": auto_n,
             "unit": "count",
             "source": "auto-detected",
-            "rule": "exponential-decay-knee",
+            "rule": selection_rule,
         }
     else:
         auto_n = requested_n
@@ -774,6 +842,7 @@ def cluster_facility_location(
     clustering = build_clustering_from_representatives(groups, file_paths)
     diagnostics = {
         "selection_curve": build_facility_location_selection_curve(full_gains),
+        "silhouette_curve": silhouette_curve,
         "ranking": ranking,
         "gains": gains,
         "full_ranking": full_ranking,
@@ -1091,6 +1160,11 @@ def run_radius_graph_workflow(
                     value=selected_clustering["value"],
                     unit="pca-l2",
                     source=selection_source,
+                    rule=(
+                        "exponential-decay-knee"
+                        if selection_source == "auto-detected"
+                        else None
+                    ),
                 ),
                 diagnostics=diagnostics,
                 parameters={
@@ -1199,13 +1273,86 @@ def reorder_distance_matrix(
     return distance_matrix[np.ix_(indices, indices)]
 
 
-def find_cluster_boundaries(labels: np.ndarray) -> List[int]:
-    """Return boundary positions where adjacent ordered cluster labels change."""
-    return [
-        index
-        for index in range(1, len(labels))
-        if int(labels[index]) != int(labels[index - 1])
-    ]
+def determine_optimal_hierarchical_value_by_silhouette(
+    linkage_matrix: np.ndarray, distance_matrix: np.ndarray
+) -> Tuple[Optional[float], List[dict]]:
+    """Choose the hierarchical cutoff with the best silhouette score."""
+    if distance_matrix.shape[0] < 3:
+        return None, []
+
+    cutoffs = np.sort(linkage_matrix[:, 2])
+    best_value = None
+    best_score = float("-inf")
+    silhouette_curve: List[dict] = []
+    seen_cluster_counts = set()
+
+    for cutoff in cutoffs:
+        labels = fcluster(linkage_matrix, float(cutoff), criterion="distance")
+        n_clusters = int(len(np.unique(labels)))
+        if n_clusters in seen_cluster_counts or n_clusters <= 1 or n_clusters >= len(labels):
+            continue
+        seen_cluster_counts.add(n_clusters)
+
+        score = float(silhouette_score(distance_matrix, labels, metric="precomputed"))
+        silhouette_curve.append(
+            {
+                "value": float(cutoff),
+                "n_clusters": n_clusters,
+                "silhouette_score": score,
+            }
+        )
+
+        if score > best_score:
+            best_score = score
+            best_value = float(cutoff)
+
+    silhouette_curve.sort(key=lambda entry: entry["n_clusters"])
+    if best_value is not None:
+        print(f"Auto-detected optimal value by silhouette: {best_value:.6f}")
+    return best_value, silhouette_curve
+
+
+def determine_optimal_facility_representative_count_by_silhouette(
+    distance_matrix: np.ndarray, ranking: List[int]
+) -> Tuple[Optional[int], List[dict]]:
+    """Choose the facility-location representative count with the best silhouette score."""
+    n = distance_matrix.shape[0]
+    if n < 3:
+        return None, []
+
+    max_n = min(len(ranking), n - 1)
+    best_n = None
+    best_score = float("-inf")
+    silhouette_curve: List[dict] = []
+
+    for n_representatives in range(2, max_n + 1):
+        representative_indices = ranking[:n_representatives]
+        groups = assign_to_representatives(distance_matrix, representative_indices)
+        labels = np.full(n, -1, dtype=int)
+        for label, representative_idx in enumerate(representative_indices):
+            for member_idx in groups[int(representative_idx)]:
+                labels[int(member_idx)] = label
+
+        n_clusters = int(len(np.unique(labels)))
+        if n_clusters <= 1 or n_clusters >= n:
+            continue
+
+        score = float(silhouette_score(distance_matrix, labels, metric="precomputed"))
+        silhouette_curve.append(
+            {
+                "value": int(n_representatives),
+                "n_clusters": n_clusters,
+                "silhouette_score": score,
+            }
+        )
+
+        if score > best_score:
+            best_score = score
+            best_n = int(n_representatives)
+
+    if best_n is not None:
+        print(f"Auto-detected representative count by silhouette: {best_n}")
+    return best_n, silhouette_curve
 
 
 def _visualize_flat_clustering(
@@ -1215,6 +1362,7 @@ def _visualize_flat_clustering(
     title: str,
     output_file: str,
     gains: Optional[List[float]] = None,
+    silhouette_curve: Optional[List[dict]] = None,
 ) -> None:
     """Produce a visualization for a flat (non-hierarchical) clustering.
 
@@ -1229,6 +1377,7 @@ def _visualize_flat_clustering(
         title: Figure super-title.
         output_file: Path to save the PNG.
         gains: Optional marginal gains (facility location only).
+        silhouette_curve: Optional silhouette-vs-count curve for facility location.
     """
     try:
         import matplotlib.pyplot as plt
@@ -1240,7 +1389,7 @@ def _visualize_flat_clustering(
         )
         return
 
-    n_panels = 2 if gains else 1
+    n_panels = 2 if gains or silhouette_curve else 1
     fig, axes = plt.subplots(1, n_panels, figsize=(8 * n_panels, 6))
     if n_panels == 1:
         axes = [axes]
@@ -1276,8 +1425,24 @@ def _visualize_flat_clustering(
     ax.legend()
     ax.grid(True, alpha=0.3)
 
-    # --- Panel 2: Marginal gains (facility location only) ---
-    if gains and len(axes) > 1:
+    # --- Panel 2: Facility-location selection diagnostics ---
+    if silhouette_curve and len(axes) > 1:
+        ax2 = axes[1]
+        silhouette_x = [entry["value"] for entry in silhouette_curve]
+        silhouette_y = [entry["silhouette_score"] for entry in silhouette_curve]
+        ax2.plot(
+            silhouette_x,
+            silhouette_y,
+            "o-",
+            color="steelblue",
+            linewidth=2,
+            markersize=6,
+        )
+        ax2.set_xlabel("Number of Representatives")
+        ax2.set_ylabel("Silhouette Score")
+        ax2.set_title("Facility Location Silhouette Curve")
+        ax2.grid(True, alpha=0.3)
+    elif gains and len(axes) > 1:
         ax2 = axes[1]
         ax2.bar(range(1, len(gains) + 1), gains, color="steelblue", alpha=0.8)
         ax2.set_xlabel("Selection Order")
@@ -1399,6 +1564,7 @@ def build_hierarchical_selection(
     value: float,
     unit: str,
     source: str,
+    rule: Optional[str] = None,
 ) -> dict:
     """Build selection metadata for hierarchical clustering."""
     return {
@@ -1406,16 +1572,23 @@ def build_hierarchical_selection(
         "value": float(value),
         "unit": unit,
         "source": source,
-        "rule": "exponential-decay-knee" if source == "auto-detected" else None,
+        "rule": rule,
     }
 
 
 def build_hierarchical_diagnostics(
-    candidates: List[dict], x_label: str, y_label: str
+    candidates: List[dict],
+    x_label: str,
+    y_label: str,
+    silhouette_curve: Optional[List[dict]] = None,
 ) -> dict:
     """Build diagnostics shared by hierarchical clustering modes."""
     if not candidates:
-        return {"selection_curve": [], "axes": {"x": x_label, "y": y_label}}
+        return {
+            "selection_curve": [],
+            "axes": {"x": x_label, "y": y_label},
+            "silhouette_curve": silhouette_curve or [],
+        }
 
     x = np.array([entry["value"] for entry in candidates], dtype=float)
     y = np.array([entry["n_clusters"] for entry in candidates], dtype=float)
@@ -1429,6 +1602,7 @@ def build_hierarchical_diagnostics(
             "y": [float(value) for value in y_smooth],
             "knee_candidates": [float(value) for value in knee_x],
         },
+        "silhouette_curve": silhouette_curve or [],
     }
 
 
@@ -1508,6 +1682,9 @@ def visualize_hierarchical_clustering(
     selected_label: str,
     output_file: str,
     distance_matrix: Optional[np.ndarray] = None,
+    heatmap_colormap: str = "viridis",
+    selection_rule: Optional[str] = None,
+    silhouette_curve: Optional[List[dict]] = None,
 ) -> None:
     """Render the standard hierarchical plots and optional reordered heatmap."""
     try:
@@ -1543,13 +1720,10 @@ def visualize_hierarchical_clustering(
     if distance_matrix is not None:
         leaf_order = [int(index) for index in dendrogram_data["leaves"]]
         reordered_matrix = reorder_distance_matrix(distance_matrix, leaf_order)
-        ordered_labels = fcluster(linkage_matrix, selected_value, criterion="distance")
-        ordered_labels = ordered_labels[np.asarray(leaf_order, dtype=int)]
-        boundaries = find_cluster_boundaries(ordered_labels)
 
         heatmap = ax2.imshow(
             reordered_matrix,
-            cmap="viridis",
+            cmap=heatmap_colormap,
             interpolation="nearest",
             aspect="equal",
         )
@@ -1564,10 +1738,6 @@ def visualize_hierarchical_clustering(
             ax2.set_xticks([])
             ax2.set_yticks([])
 
-        for boundary in boundaries:
-            ax2.axhline(boundary - 0.5, color="white", linewidth=1.5, alpha=0.9)
-            ax2.axvline(boundary - 0.5, color="white", linewidth=1.5, alpha=0.9)
-
         ax2.set_title("Reordered Distance Matrix")
         ax2.set_xlabel("Structure Index (dendrogram order)")
         ax2.set_ylabel("Structure Index (dendrogram order)")
@@ -1580,49 +1750,95 @@ def visualize_hierarchical_clustering(
 
     decay_axis = ax3 if ax3 is not None else ax2
 
-    decay_axis.scatter(x, y, alpha=0.7, s=30, label="Data points")
-    if len(x_smooth) > 0:
+    if selection_rule == "silhouette-max" and silhouette_curve:
+        silhouette_x = np.array(
+            [entry["n_clusters"] for entry in silhouette_curve], dtype=float
+        )
+        silhouette_y = np.array(
+            [entry["silhouette_score"] for entry in silhouette_curve], dtype=float
+        )
+        selected_silhouette = next(
+            (
+                entry
+                for entry in silhouette_curve
+                if abs(entry["value"] - selected_value) <= 1e-12
+            ),
+            None,
+        )
+
         decay_axis.plot(
-            x_smooth,
-            y_smooth,
-            "b-",
+            silhouette_x,
+            silhouette_y,
+            "o-",
+            color="steelblue",
             linewidth=2,
-            alpha=0.8,
-            label="Exponential decay fit",
+            markersize=6,
+            label="Silhouette score",
         )
+        if selected_silhouette is not None:
+            decay_axis.scatter(
+                [selected_silhouette["n_clusters"]],
+                [selected_silhouette["silhouette_score"]],
+                color="red",
+                s=100,
+                zorder=5,
+                label=(
+                    "Selected "
+                    f"({selected_silhouette['n_clusters']} clusters, "
+                    f"{selected_silhouette['silhouette_score']:.3f})"
+                ),
+            )
+        decay_axis.set_xlabel("Number of Clusters")
+        decay_axis.set_ylabel("Silhouette Score")
+        decay_axis.set_title("Silhouette Score by Cluster Count")
+        decay_axis.grid(True, alpha=0.3)
+        decay_axis.legend()
+    else:
+        decay_axis.scatter(x, y, alpha=0.7, s=30, label="Data points")
+        if len(x_smooth) > 0:
+            decay_axis.plot(
+                x_smooth,
+                y_smooth,
+                "b-",
+                linewidth=2,
+                alpha=0.8,
+                label="Exponential decay fit",
+            )
 
-    if len(inflection_x) > 0 and len(x_smooth) > 0:
-        inflection_y = np.interp(inflection_x, x_smooth, y_smooth)
+        if len(inflection_x) > 0 and len(x_smooth) > 0:
+            inflection_y = np.interp(inflection_x, x_smooth, y_smooth)
+            decay_axis.scatter(
+                inflection_x,
+                inflection_y,
+                color="orange",
+                s=100,
+                marker="*",
+                zorder=6,
+                label=f"Key points ({len(inflection_x)})",
+            )
+
+        decay_axis.axvline(
+            x=selected_value,
+            color="red",
+            linestyle="--",
+            linewidth=2,
+            label=f"{selected_label} = {selected_value:.6f}",
+        )
         decay_axis.scatter(
-            inflection_x,
-            inflection_y,
-            color="orange",
+            [selected_value],
+            [selected_clustering["n_clusters"]],
+            color="red",
             s=100,
-            marker="*",
-            zorder=6,
-            label=f"Key points ({len(inflection_x)})",
+            zorder=5,
+            label=f"Selected ({selected_clustering['n_clusters']} clusters)",
         )
-
-    decay_axis.axvline(
-        x=selected_value,
-        color="red",
-        linestyle="--",
-        linewidth=2,
-        label=f"{selected_label} = {selected_value:.6f}",
-    )
-    decay_axis.scatter(
-        [selected_value],
-        [selected_clustering["n_clusters"]],
-        color="red",
-        s=100,
-        zorder=5,
-        label=f"Selected ({selected_clustering['n_clusters']} clusters)",
-    )
-    decay_axis.set_xlabel(x_label)
-    decay_axis.set_ylabel("Number of Clusters")
-    decay_axis.set_title(f"{selected_label} vs Cluster Count with Exponential Decay Fit")
-    decay_axis.grid(True, alpha=0.3)
-    decay_axis.legend()
+        decay_axis.set_xlabel(x_label)
+        decay_axis.set_ylabel("Number of Clusters")
+        decay_axis.set_title(
+            f"{selected_label} vs Cluster Count with Exponential Decay Fit"
+        )
+        decay_axis.grid(True, alpha=0.3)
+        decay_axis.legend()
 
     plt.tight_layout()
     plt.savefig(output_file, dpi=300, bbox_inches="tight")
@@ -1648,6 +1864,9 @@ def run_distance_matrix_workflow(
     n_representatives: Optional[int],
     method: str,
     visualize: Optional[str],
+    heatmap_colormap: str,
+    hierarchical_auto_method: str,
+    facility_auto_method: str,
     output_json: Optional[str],
     extra_parameters: Optional[dict] = None,
 ) -> None:
@@ -1656,7 +1875,10 @@ def run_distance_matrix_workflow(
 
     if method == "facility-location":
         clustering, selection, diagnostics = cluster_facility_location(
-            distance_matrix, file_paths, n_representatives
+            distance_matrix,
+            file_paths,
+            n_representatives,
+            auto_method=facility_auto_method,
         )
         _print_clustering_summary(clustering)
 
@@ -1670,6 +1892,7 @@ def run_distance_matrix_workflow(
                 f"Facility Location Selection ({distance_metric})",
                 visualize,
                 gains=diagnostics.get("gains"),
+                silhouette_curve=diagnostics.get("silhouette_curve"),
             )
 
         if output_json:
@@ -1733,13 +1956,32 @@ def run_distance_matrix_workflow(
 
     linkage_matrix = linkage(squareform(distance_matrix), method="complete")
     candidates = find_all_cutoffs_and_clusters(distance_matrix, linkage_matrix, file_paths)
+    silhouette_curve: List[dict] = []
 
     if hierarchical_value is None:
-        selected_value = determine_optimal_cutoff(linkage_matrix)
         selection_source = "auto-detected"
+        if hierarchical_auto_method == "silhouette":
+            selected_value, silhouette_curve = determine_optimal_hierarchical_value_by_silhouette(
+                linkage_matrix, distance_matrix
+            )
+            selection_rule = (
+                "silhouette-max"
+                if selected_value is not None
+                else "exponential-decay-knee"
+            )
+            if selected_value is None:
+                print(
+                    "Warning: silhouette auto-selection was unavailable; falling back to knee detection",
+                    file=sys.stderr,
+                )
+                selected_value = determine_optimal_cutoff(linkage_matrix)
+        else:
+            selected_value = determine_optimal_cutoff(linkage_matrix)
+            selection_rule = "exponential-decay-knee"
     else:
         selected_value = hierarchical_value
         selection_source = "user-specified"
+        selection_rule = None
         print(f"Using user-specified {hierarchical_value_name}: {selected_value}")
 
     selected_clustering = get_clustering_at_cutoff(
@@ -1758,6 +2000,9 @@ def run_distance_matrix_workflow(
             selected_label=hierarchical_value_name.capitalize(),
             output_file=visualize,
             distance_matrix=distance_matrix,
+            heatmap_colormap=heatmap_colormap,
+            selection_rule=selection_rule,
+            silhouette_curve=silhouette_curve,
         )
 
     summarize_hierarchical_candidates(
@@ -1780,11 +2025,13 @@ def run_distance_matrix_workflow(
                     value=selected_value,
                     unit=hierarchical_value_unit,
                     source=selection_source,
+                    rule=selection_rule,
                 ),
                 diagnostics=build_hierarchical_diagnostics(
                     candidates,
                     x_label=hierarchical_value_unit,
                     y_label="number_of_clusters",
+                    silhouette_curve=silhouette_curve,
                 ),
                 parameters=extra_parameters,
             ),
@@ -1819,6 +2066,9 @@ def run_exact(
         n_representatives=args.n_representatives,
         method=args.method,
         visualize=args.visualize,
+        heatmap_colormap=args.heatmap_colormap,
+        hierarchical_auto_method=args.hierarchical_auto_method,
+        facility_auto_method=args.facility_auto_method,
         output_json=args.output_json,
         extra_parameters={"rmsd_method": args.rmsd_method},
     )
@@ -2018,6 +2268,9 @@ def run_approximate(
         n_representatives=args.n_representatives,
         method=args.method,
         visualize=args.visualize,
+        heatmap_colormap=args.heatmap_colormap,
+        hierarchical_auto_method=args.hierarchical_auto_method,
+        facility_auto_method=args.facility_auto_method,
         output_json=args.output_json,
         extra_parameters=extra_parameters,
     )
