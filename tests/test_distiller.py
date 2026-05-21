@@ -14,8 +14,9 @@ from rnapolis.distiller import (
     build_output_data,
     build_radius_graph_candidates,
     connected_components_from_adjacency,
+    determine_optimal_facility_representative_count_by_silhouette,
+    determine_optimal_hierarchical_value_by_silhouette,
     determine_optimal_representative_count,
-    find_cluster_boundaries,
     get_clustering_at_cutoff,
     get_dendrogram_leaf_order,
     parse_arguments,
@@ -138,7 +139,7 @@ def test_build_output_data_uses_unified_top_level_schema():
             "value": 1.5,
             "unit": "pca-l2",
             "source": "auto-detected",
-            "rule": "exponential-decay-knee",
+            "rule": None,
         },
         "clustering": {"n_clusters": 1, "cluster_sizes": [3], "clusters": []},
         "diagnostics": {"selection_curve": []},
@@ -243,10 +244,61 @@ def test_get_dendrogram_leaf_order_and_reorder_distance_matrix():
     assert reordered[2, 3] in {0.1, 0.2}
 
 
-def test_find_cluster_boundaries_marks_cluster_transitions():
-    labels = np.array([1, 1, 2, 2, 2, 3])
+def test_determine_optimal_hierarchical_value_by_silhouette_prefers_best_cutoff():
+    distance_matrix = np.array(
+        [
+            [0.0, 0.1, 4.0, 4.0],
+            [0.1, 0.0, 4.0, 4.0],
+            [4.0, 4.0, 0.0, 0.2],
+            [4.0, 4.0, 0.2, 0.0],
+        ]
+    )
+    linkage_matrix = np.array(
+        [
+            [0.0, 1.0, 0.1, 2.0],
+            [2.0, 3.0, 0.2, 2.0],
+            [4.0, 5.0, 4.0, 4.0],
+        ]
+    )
 
-    assert find_cluster_boundaries(labels) == [2, 5]
+    value, silhouette_curve = determine_optimal_hierarchical_value_by_silhouette(
+        linkage_matrix, distance_matrix
+    )
+
+    assert value in {0.1, 0.2}
+    assert [entry["n_clusters"] for entry in silhouette_curve] == [2, 3]
+    assert all("silhouette_score" in entry for entry in silhouette_curve)
+
+
+def test_build_hierarchical_selection_accepts_explicit_rule():
+    selection = build_hierarchical_selection(
+        value=2.0,
+        unit="nrmsd",
+        source="auto-detected",
+        rule="silhouette-max",
+    )
+
+    assert selection["rule"] == "silhouette-max"
+
+
+def test_determine_optimal_facility_representative_count_by_silhouette():
+    distance_matrix = np.array(
+        [
+            [0.0, 0.1, 4.0, 4.0],
+            [0.1, 0.0, 4.0, 4.0],
+            [4.0, 4.0, 0.0, 0.2],
+            [4.0, 4.0, 0.2, 0.0],
+        ]
+    )
+    ranking = [0, 2, 1, 3]
+
+    value, silhouette_curve = determine_optimal_facility_representative_count_by_silhouette(
+        distance_matrix, ranking
+    )
+
+    assert value == 2
+    assert [entry["value"] for entry in silhouette_curve] == [2, 3]
+    assert all("silhouette_score" in entry for entry in silhouette_curve)
 
 
 def test_run_distance_matrix_workflow_passes_matrix_to_approximate_hierarchical_visualization(
@@ -283,23 +335,86 @@ def test_run_distance_matrix_workflow_passes_matrix_to_approximate_hierarchical_
         n_representatives=None,
         method="hierarchical",
         visualize="approximate.png",
+        heatmap_colormap="YlOrBr",
+        hierarchical_auto_method="knee",
+        facility_auto_method="knee",
         output_json=None,
     )
 
     assert np.array_equal(captured["distance_matrix"], distance_matrix)
     assert captured["output_file"] == "approximate.png"
+    assert captured["heatmap_colormap"] == "YlOrBr"
+
+
+def test_run_distance_matrix_workflow_passes_silhouette_curve_to_facility_visualization(
+    monkeypatch,
+):
+    distance_matrix = np.array(
+        [
+            [0.0, 0.1, 4.0, 4.0],
+            [0.1, 0.0, 4.0, 4.0],
+            [4.0, 4.0, 0.0, 0.2],
+            [4.0, 4.0, 0.2, 0.0],
+        ]
+    )
+    file_paths = [Path(name) for name in ["a.cif", "b.cif", "c.cif", "d.cif"]]
+    captured = {}
+
+    def fake_visualize_flat_clustering(*args, **kwargs):
+        captured.update(kwargs)
+
+    monkeypatch.setattr(
+        "rnapolis.distiller._visualize_flat_clustering",
+        fake_visualize_flat_clustering,
+    )
+
+    run_distance_matrix_workflow(
+        distance_matrix=distance_matrix,
+        file_paths=file_paths,
+        mode="exact",
+        distance_metric="nrmsd",
+        hierarchical_value=None,
+        hierarchical_value_name="threshold",
+        hierarchical_value_unit="nrmsd",
+        preference=None,
+        damping=0.9,
+        n_representatives=None,
+        method="facility-location",
+        visualize="facility.png",
+        heatmap_colormap="viridis",
+        hierarchical_auto_method="knee",
+        facility_auto_method="silhouette",
+        output_json=None,
+    )
+
+    assert captured["silhouette_curve"]
+    assert captured["gains"]
 
 
 def test_parse_arguments_accepts_visualize_output_path(monkeypatch):
     monkeypatch.setattr(
         sys,
         "argv",
-        ["distiller", "--visualize", "results.png", "example.cif"],
+        [
+            "distiller",
+            "--visualize",
+            "results.png",
+            "--heatmap-colormap",
+            "YlOrBr",
+            "--hierarchical-auto-method",
+            "silhouette",
+            "--facility-auto-method",
+            "silhouette",
+            "example.cif",
+        ],
     )
 
     args = parse_arguments()
 
     assert args.visualize == "results.png"
+    assert args.heatmap_colormap == "YlOrBr"
+    assert args.hierarchical_auto_method == "silhouette"
+    assert args.facility_auto_method == "silhouette"
     assert args.files == [Path("example.cif")]
 
 
@@ -315,6 +430,7 @@ def test_validate_cli_arguments_rejects_graph_backend_with_dense_only_methods():
         n_neighbors=32,
         neighbor_search="sklearn",
         n_representatives=None,
+        facility_auto_method="knee",
         method="hierarchical",
         mode="approximate",
         threshold=None,
@@ -332,6 +448,7 @@ def test_validate_cli_arguments_accepts_radius_graph_with_graph_backend():
         n_neighbors=16,
         neighbor_search="faiss",
         n_representatives=None,
+        facility_auto_method="knee",
         method="radius-graph",
         mode="approximate",
         threshold=None,
@@ -348,11 +465,30 @@ def test_validate_cli_arguments_rejects_neighbor_search_without_graph_backend():
         n_neighbors=16,
         neighbor_search="faiss",
         n_representatives=None,
+        facility_auto_method="knee",
         method="hierarchical",
         mode="approximate",
         threshold=None,
         radius=None,
         approx_backend="dense",
+        preference=None,
+    )
+
+    with pytest.raises(SystemExit):
+        validate_cli_arguments(args)
+
+
+def test_validate_cli_arguments_rejects_facility_silhouette_with_graph_backend():
+    args = SimpleNamespace(
+        n_neighbors=16,
+        neighbor_search="sklearn",
+        n_representatives=None,
+        facility_auto_method="silhouette",
+        method="facility-location",
+        mode="approximate",
+        threshold=None,
+        radius=None,
+        approx_backend="graph",
         preference=None,
     )
 
