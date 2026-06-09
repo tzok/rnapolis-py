@@ -256,23 +256,35 @@ def filter_by_chains(
     file_content: str,
     chains: Iterable[str],
     retain_categories: Iterable[str] = ["chem_comp"],
+    chain_id_source: str = "auth",
 ) -> str:
-    """Filter a PDBx/mmCIF file by chain IDs (``label_asym_id``).
+    """Filter a PDBx/mmCIF file by chain IDs.
 
     Args:
         file_content (str): Raw PDBx/mmCIF file content.
-        chains (Iterable[str]): Chain IDs (``label_asym_id``) to select.
+        chains (Iterable[str]): Chain IDs to select.
         retain_categories (Iterable[str]): Additional categories to keep verbatim.
+        chain_id_source (str): Chain ID field to match, either ``"auth"``
+            (``auth_asym_id``, default) or ``"label"`` (``label_asym_id``).
 
     Returns:
         str: Filtered PDBx/mmCIF file content.
     """
     data = read_cif(file_content)
-    asym_ids = set(chains)
+    if chain_id_source == "auth":
+        auth_asym_ids = set(chains)
+        asym_ids = select_ids(
+            data, "atom_site", "label_asym_id", "auth_asym_id", auth_asym_ids
+        )
+    elif chain_id_source == "label":
+        asym_ids = set(chains)
+        auth_asym_ids = select_ids(
+            data, "atom_site", "auth_asym_id", "label_asym_id", asym_ids
+        )
+    else:
+        raise ValueError("chain_id_source must be 'auth' or 'label'")
+
     entity_ids = select_ids(data, "struct_asym", "entity_id", "id", asym_ids)
-    auth_asym_ids = select_ids(
-        data, "atom_site", "auth_asym_id", "label_asym_id", asym_ids
-    )
     return filter_cif(data, entity_ids, asym_ids, auth_asym_ids, retain_categories)
 
 
@@ -304,9 +316,15 @@ def main():
     )
     parser.add_argument(
         "--filter-by-chains",
-        help="filter by chain IDs (label_asym_id), e.g. A, B, C",
+        help="filter by chain IDs (auth_asym_id by default), e.g. A, B, C",
         action="append",
         default=[],
+    )
+    parser.add_argument(
+        "--chain-id-source",
+        choices=("auth", "label"),
+        default="auth",
+        help="chain ID field used by --filter-by-chains: auth or label (default: auth)",
     )
     parser.add_argument(
         "--retain-categories",
@@ -340,6 +358,7 @@ def main():
             file.read(),
             chains=args.filter_by_chains,
             retain_categories=args.retain_categories,
+            chain_id_source=args.chain_id_source,
         )
     else:
         parser.print_help()
