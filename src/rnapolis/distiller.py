@@ -733,8 +733,8 @@ def cluster_facility_location(
 ) -> Tuple[dict, dict, dict]:
     """Select *n_representatives* using submodular facility location.
 
-    Uses the *apricot-select* library to greedily pick a maximally
-    representative subset.  The distance matrix is converted to a
+    Uses a pure-Python greedy facility-location selector to pick a
+    maximally representative subset.  The distance matrix is converted to a
     non-negative similarity matrix via ``max(d) - d``.
 
     Args:
@@ -747,15 +747,7 @@ def cluster_facility_location(
     Returns:
         Tuple of clustering result dict, selection metadata and diagnostics.
     """
-    try:
-        from apricot import FacilityLocationSelection
-    except ImportError:
-        print(
-            "Error: apricot-select is required for facility-location clustering. "
-            "Install it with:  pip install apricot-select",
-            file=sys.stderr,
-        )
-        sys.exit(1)
+    from rnapolis.facility_location import FacilityLocationSelection
 
     n = len(file_paths)
     if n == 0:
@@ -778,7 +770,6 @@ def cluster_facility_location(
         )
         requested_n = n
 
-    # apricot requires a non-negative similarity matrix
     similarity = distance_matrix.max() - distance_matrix
     np.fill_diagonal(similarity, 0.0)
 
@@ -859,15 +850,7 @@ def cluster_facility_location_embedding(
     n_representatives: Optional[int] = None,
 ) -> Tuple[dict, dict, dict]:
     """Select representatives directly from PCA embeddings using sparse neighbors."""
-    try:
-        from apricot import FacilityLocationSelection
-    except ImportError:
-        print(
-            "Error: apricot-select is required for facility-location clustering. "
-            "Install it with:  pip install apricot-select",
-            file=sys.stderr,
-        )
-        sys.exit(1)
+    from rnapolis.facility_location import FacilityLocationSelection
 
     n = len(file_paths)
     if n == 0:
