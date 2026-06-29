@@ -4,7 +4,7 @@ build-backend = "uv_build"
 
 [project]
 name = "RNApolis"
-version = "0.16.8"
+version = "0.16.9"
 description = "A Python library containing RNA-related bioinformatics functions and classes"
 authors = [{ name = "Tomasz Zok", email = "tomasz.zok@cs.put.poznan.pl" }]
 readme = "README.md"
@@ -21,7 +21,6 @@ classifiers = [
 ]
 dependencies = [
     "appdirs",
-    "apricot-select",
     "graphviz",
     "mmcif",
     "numpy",
