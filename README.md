@@ -2,6 +2,10 @@
 
 A Python library and CLI utilities for RNA bioinformatics — parsing PDB/mmCIF structures, annotating secondary structure, and clustering 3D conformations.
 
+```bash
+pip install rnapolis
+```
+
 - **Documentation:** https://tzok.github.io/rnapolis-py/
 - **Notebooks:** https://github.com/tzok/rnapolis-py/tree/main/notebooks
 
