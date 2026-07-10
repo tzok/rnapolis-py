@@ -25,12 +25,14 @@ import pandas as pd
 from scipy.spatial import KDTree
 from tqdm import tqdm
 
+from rnapolis.common import DNA_NAMES, RNA_NAMES
 from rnapolis.parser import is_cif
 from rnapolis.parser_v2 import parse_cif_atoms, parse_pdb_atoms
 from rnapolis.util import handle_input_file
 
 DEFAULT_ATOM_NAME = "C1'"
 DEFAULT_DISTANCE_THRESHOLD = 15.0
+_NA_RESIDUE_NAMES = RNA_NAMES | DNA_NAMES
 
 
 def _resolve_columns(fmt: str, columns: pd.Index) -> dict[str, str]:
@@ -45,6 +47,9 @@ def _resolve_columns(fmt: str, columns: pd.Index) -> dict[str, str]:
         "y": "Cartn_y" if fmt == "mmCIF" else "y",
         "z": "Cartn_z" if fmt == "mmCIF" else "z",
         "model": "pdbx_PDB_model_num" if fmt == "mmCIF" else "model",
+        "residue_name": (
+            ("auth_comp_id", "label_comp_id") if fmt == "mmCIF" else "resName"
+        ),
     }
     for key, spec in specs.items():
         if isinstance(spec, tuple):
@@ -88,6 +93,21 @@ def _extract_c1_atoms(
             filtered = filtered[filtered[model_col] == first_model]
         else:
             filtered = filtered[filtered[model_col] == model]
+
+    if filtered.empty:
+        return np.array([], dtype=object), np.empty((0, 3), dtype=float)
+
+    resname_col = cols.get("residue_name")
+    if resname_col and resname_col in filtered.columns:
+        chain_arr = filtered[chain_col].astype(str).to_numpy()
+        resnames = filtered[resname_col].astype(str).str.upper().to_numpy()
+        is_na = np.isin(resnames, list(_NA_RESIDUE_NAMES))
+        na_counts: dict[str, int] = {}
+        for chain, na in zip(chain_arr, is_na):
+            na_counts[chain] = na_counts.get(chain, 0) + int(na)
+        na_chains = {c for c, n in na_counts.items() if n > 0}
+        keep_mask = np.isin(chain_arr, list(na_chains))
+        filtered = filtered[keep_mask]
 
     if filtered.empty:
         return np.array([], dtype=object), np.empty((0, 3), dtype=float)
