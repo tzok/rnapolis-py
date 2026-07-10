@@ -14,9 +14,10 @@ harmless), and only one atom per nucleotide is considered.
 
 import argparse
 import io
+import os
 import sys
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from typing import IO, List, Optional, Set, Union
+from typing import IO, Dict, List, Optional, Set, Union
 
 import numpy as np
 import orjson
@@ -202,6 +203,109 @@ def find_na_chain_groups_file(
     )
 
 
+def _load_cache(path: str) -> Dict[str, Optional[List[List[str]]]]:
+    """Load a JSON cache file mapping file paths to chain groups.
+
+    Returns an empty dict if the file does not exist or is malformed.
+    """
+    if not os.path.exists(path):
+        return {}
+    try:
+        with open(path, "rb") as f:
+            data = orjson.loads(f.read())
+        if isinstance(data, dict):
+            return data
+        print(
+            f"Warning: cache file {path} is not a JSON object, starting fresh.",
+            file=sys.stderr,
+        )
+    except Exception as exc:
+        print(
+            f"Warning: failed to read cache file {path}: {exc}. Starting fresh.",
+            file=sys.stderr,
+        )
+    return {}
+
+
+def _save_cache(path: str, cache: Dict[str, Optional[List[List[str]]]]) -> None:
+    """Write the cache dict to a JSON file."""
+    with open(path, "wb") as f:
+        f.write(orjson.dumps(cache))
+
+
+def _process_paths(
+    paths: List[str],
+    threshold: float,
+    atom_name: str,
+    model: Optional[int],
+    cache_path: Optional[str] = None,
+    cache: Optional[Dict[str, Optional[List[List[str]]]]] = None,
+    save_interval: int = 100,
+) -> Dict[str, Optional[List[List[str]]]]:
+    """Process a list of file paths and return results.
+
+    Uses a single direct call for one file, or ProcessPoolExecutor with
+    a tqdm progress bar for multiple files.
+
+    When ``cache_path`` and ``cache`` are provided, the cache is written
+    to disk every ``save_interval`` completed files so progress is not
+    lost if the process is interrupted.
+    """
+    results: Dict[str, Optional[List[List[str]]]] = {}
+
+    if len(paths) == 1:
+        path = paths[0]
+        try:
+            groups = find_na_chain_groups_file(
+                path,
+                distance_threshold=threshold,
+                atom_name=atom_name,
+                model=model,
+            )
+            results[path] = [sorted(g) for g in groups]
+        except Exception as exc:
+            print(f"Warning: failed to process {path}: {exc}", file=sys.stderr)
+            results[path] = None
+    else:
+        completed = 0
+        with ProcessPoolExecutor() as executor:
+            futures = {
+                executor.submit(
+                    find_na_chain_groups_file,
+                    path,
+                    distance_threshold=threshold,
+                    atom_name=atom_name,
+                    model=model,
+                ): path
+                for path in paths
+            }
+            for future in tqdm(
+                as_completed(futures),
+                total=len(futures),
+                desc="Processing",
+                unit="file",
+            ):
+                path = futures[future]
+                try:
+                    groups = future.result()
+                    results[path] = [sorted(g) for g in groups]
+                except Exception as exc:
+                    print(
+                        f"Warning: failed to process {path}: {exc}",
+                        file=sys.stderr,
+                    )
+                    results[path] = None
+
+                completed += 1
+                if cache_path and cache is not None and completed % save_interval == 0:
+                    cache.update(results)
+                    _save_cache(cache_path, dict(sorted(cache.items())))
+
+        results = dict(sorted(results.items()))
+
+    return results
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description=(
@@ -216,6 +320,18 @@ def main() -> None:
         help=(
             "Path(s) to PDB or mmCIF file(s) (optionally .gz). "
             "If omitted, reads paths from stdin (one per line)."
+        ),
+    )
+    parser.add_argument(
+        "-o",
+        "--output",
+        type=str,
+        default=None,
+        help=(
+            "Write results to this JSON file. If the file already exists, "
+            "cached entries are reused (files already in the cache are "
+            "skipped). New results are merged into the cache and written "
+            "back."
         ),
     )
     parser.add_argument(
@@ -245,57 +361,41 @@ def main() -> None:
         parser.print_help()
         return
 
-    results: dict[str, Optional[List[List[str]]]] = {}
+    if args.output:
+        cache = _load_cache(args.output)
+        new_paths = [p for p in paths if p not in cache]
+        cached_count = len(paths) - len(new_paths)
 
-    if len(paths) == 1:
-        path = paths[0]
-        try:
-            groups = find_na_chain_groups_file(
-                path,
-                distance_threshold=args.threshold,
-                atom_name=args.atom,
-                model=args.model,
+        if cached_count > 0:
+            print(
+                f"Found {cached_count} cached file(s), "
+                f"processing {len(new_paths)} new file(s).",
+                file=sys.stderr,
             )
-            results[path] = [sorted(g) for g in groups]
-        except Exception as exc:
-            print(f"Warning: failed to process {path}: {exc}", file=sys.stderr)
-            results[path] = None
-    else:
-        with ProcessPoolExecutor() as executor:
-            futures = {
-                executor.submit(
-                    find_na_chain_groups_file,
-                    path,
-                    distance_threshold=args.threshold,
-                    atom_name=args.atom,
-                    model=args.model,
-                ): path
-                for path in paths
-            }
-            for future in tqdm(
-                as_completed(futures),
-                total=len(futures),
-                desc="Processing",
-                unit="file",
-            ):
-                path = futures[future]
-                try:
-                    groups = future.result()
-                    results[path] = [sorted(g) for g in groups]
-                except Exception as exc:
-                    print(
-                        f"Warning: failed to process {path}: {exc}",
-                        file=sys.stderr,
-                    )
-                    results[path] = None
 
-        results = dict(sorted(results.items()))
+        if not new_paths:
+            print(f"All {len(paths)} file(s) already cached.", file=sys.stderr)
+            return
 
-    if len(results) == 1:
-        single = next(iter(results.values()))
-        print(orjson.dumps(single).decode("utf-8"))
+        new_results = _process_paths(
+            new_paths,
+            args.threshold,
+            args.atom,
+            args.model,
+            cache_path=args.output,
+            cache=cache,
+        )
+        cache.update(new_results)
+        cache = dict(sorted(cache.items()))
+        _save_cache(args.output, cache)
     else:
-        print(orjson.dumps(results).decode("utf-8"))
+        results = _process_paths(paths, args.threshold, args.atom, args.model)
+
+        if len(results) == 1:
+            single = next(iter(results.values()))
+            print(orjson.dumps(single).decode("utf-8"))
+        else:
+            print(orjson.dumps(results).decode("utf-8"))
 
 
 if __name__ == "__main__":
