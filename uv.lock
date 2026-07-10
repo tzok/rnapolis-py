@@ -2214,7 +2214,7 @@ wheels = [
 
 [[package]]
 name = "rnapolis"
-version = "0.16.10"
+version = "0.16.11"
 source = { editable = "." }
 dependencies = [
     { name = "appdirs" },
