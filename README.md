@@ -97,3 +97,7 @@ Splits a multi-model PDB or mmCIF file (e.g. NMR ensembles) into one file per mo
 ### `quick-filter`
 
 Filters atoms from a PDB/mmCIF file while preserving non-atom records (headers, ANISOU, etc.). `--mode` picks `nucleic-acid` (default) or `protein`; `--keep-ligands`/`--keep-waters`/`--keep-ions` retain those classes; `--altloc`, `--chains`, and `--model` further restrict output. Prints filtered content to stdout.
+
+### `na-chain-groups`
+
+Quickly groups nucleic-acid chains by spatial proximity. Builds a KD-tree from C1' atoms (one per nucleotide) and merges chains whose atoms are within a distance threshold (default 15 Å). Outputs JSON: single file → `[["A","B"],["C"]]`; multiple files → `{"file": [["A","B"],...]}`. Accepts multiple paths as args or reads from stdin. `--threshold`, `--atom`, and `--model` are configurable.

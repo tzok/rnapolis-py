@@ -4,7 +4,7 @@ build-backend = "uv_build"
 
 [project]
 name = "RNApolis"
-version = "0.16.9"
+version = "0.16.10"
 description = "A Python library containing RNA-related bioinformatics functions and classes"
 authors = [{ name = "Tomasz Zok", email = "tomasz.zok@cs.put.poznan.pl" }]
 readme = "README.md"
@@ -73,3 +73,4 @@ rfam-folder = "rnapolis.rfam_folder:main"
 unifier = "rnapolis.unifier:main"
 splitter = "rnapolis.splitter:main"
 quick-filter = "rnapolis.quick_filter:main"
+na-chain-groups = "rnapolis.chain_groups:main"
