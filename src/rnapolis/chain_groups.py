@@ -15,12 +15,14 @@ harmless), and only one atom per nucleotide is considered.
 import argparse
 import io
 import sys
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from typing import IO, List, Optional, Set, Union
 
 import numpy as np
 import orjson
 import pandas as pd
 from scipy.spatial import KDTree
+from tqdm import tqdm
 
 from rnapolis.parser import is_cif
 from rnapolis.parser_v2 import parse_cif_atoms, parse_pdb_atoms
@@ -244,7 +246,9 @@ def main() -> None:
         return
 
     results: dict[str, Optional[List[List[str]]]] = {}
-    for path in paths:
+
+    if len(paths) == 1:
+        path = paths[0]
         try:
             groups = find_na_chain_groups_file(
                 path,
@@ -256,6 +260,36 @@ def main() -> None:
         except Exception as exc:
             print(f"Warning: failed to process {path}: {exc}", file=sys.stderr)
             results[path] = None
+    else:
+        with ProcessPoolExecutor() as executor:
+            futures = {
+                executor.submit(
+                    find_na_chain_groups_file,
+                    path,
+                    distance_threshold=args.threshold,
+                    atom_name=args.atom,
+                    model=args.model,
+                ): path
+                for path in paths
+            }
+            for future in tqdm(
+                as_completed(futures),
+                total=len(futures),
+                desc="Processing",
+                unit="file",
+            ):
+                path = futures[future]
+                try:
+                    groups = future.result()
+                    results[path] = [sorted(g) for g in groups]
+                except Exception as exc:
+                    print(
+                        f"Warning: failed to process {path}: {exc}",
+                        file=sys.stderr,
+                    )
+                    results[path] = None
+
+        results = dict(sorted(results.items()))
 
     if len(results) == 1:
         single = next(iter(results.values()))
