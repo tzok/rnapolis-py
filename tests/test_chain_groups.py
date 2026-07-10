@@ -137,6 +137,36 @@ END
     assert find_na_chain_groups(pdb_no_c1) == []
 
 
+# A protein chain (E) with a bound ATP cofactor.  ATP has a ribose with
+# C1', but its residue name is "ATP" -- not a canonical NA name.  The NA
+# chain (A) is a normal adenosine.  Chain E must be excluded.
+# Note: PDB columns are fixed-width — 3-char residue names (ALA, ATP)
+# have different spacing than 1-char names (A).
+_PROTEIN_WITH_COFACTOR_PDB = """\
+ATOM      1  C1'   A A   1       0.000   0.000   0.000  1.00  0.00           C
+ATOM      2  N9    A A   1       1.500   0.000   0.000  1.00  0.00           N
+ATOM      3  N    ALA E   1      50.000   0.000   0.000  1.00  0.00           N
+ATOM      4  CA   ALA E   1      51.000   0.000   0.000  1.00  0.00           C
+ATOM      5  C    ALA E   1      52.000   0.000   0.000  1.00  0.00           C
+ATOM      6  O    ALA E   1      53.000   0.000   0.000  1.00  0.00           O
+HETATM    7  C1'  ATP E   2      55.000   0.000   0.000  1.00  0.00           C
+HETATM    8  N9   ATP E   2      56.500   0.000   0.000  1.00  0.00           N
+HETATM    9  PA   ATP E   2      57.000   1.000   0.000  1.00  0.00           P
+END
+"""
+
+
+def test_protein_chain_with_cofactor_excluded():
+    """A protein chain with a bound ATP (which has C1') must not appear in results."""
+    groups = find_na_chain_groups(_PROTEIN_WITH_COFACTOR_PDB)
+    assert len(groups) == 1
+    assert groups[0] == {"A"}
+    all_chains = set()
+    for g in groups:
+        all_chains.update(g)
+    assert "E" not in all_chains
+
+
 def test_single_chain():
     """A single nucleic-acid chain should produce one singleton group."""
     single = _TWO_CHAIN_FAR_PDB.replace("B", "A").replace("G A", "G A")
