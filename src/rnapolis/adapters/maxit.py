@@ -1,5 +1,4 @@
 import logging
-from tempfile import NamedTemporaryFile
 from typing import List, Optional
 
 from rnapolis.common import (
@@ -14,6 +13,7 @@ from rnapolis.common import (
 )
 from rnapolis.metareader import read_metadata
 from rnapolis.tertiary import Structure3D
+from rnapolis.util import handle_input_file
 
 
 def _maxit_convert_saenger(hbond_type_28: Optional[str]) -> Optional[Saenger]:
@@ -82,7 +82,8 @@ def parse_maxit_output(
     # Find the first .cif file in the list
     cif_file = None
     for file_path in file_paths:
-        if file_path.endswith(".cif"):
+        normalized = file_path[:-3] if file_path.endswith(".gz") else file_path
+        if normalized.endswith(".cif"):
             cif_file = file_path
             break
 
@@ -99,13 +100,8 @@ def parse_maxit_output(
     logging.info(f"Processing MAXIT file: {cif_file}")
 
     try:
-        with open(cif_file, "r") as f:
-            file_content = f.read()
-
-        with NamedTemporaryFile("w+", suffix=".cif") as mmcif:
-            mmcif.write(file_content)
-            mmcif.seek(0)
-            metadata = read_metadata(mmcif, ["ndb_struct_na_base_pair"])
+        file = handle_input_file(cif_file)
+        metadata = read_metadata(file, ["ndb_struct_na_base_pair"])
 
         # Parse base pairs from this file
         for entry in metadata.get("ndb_struct_na_base_pair", []):
