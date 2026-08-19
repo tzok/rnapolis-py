@@ -97,6 +97,36 @@ UCCCCAUGCGAGAGUAGGCC
     assert mapping.dot_bracket == expected_dot_bracket
 
 
+def test_adapter_rnaview_gz():
+    """Test adapter with RNAView output and a gzipped mmCIF structure input."""
+    test_dir = Path(__file__).parent
+    cif_path = test_dir / "1A4D_1_A-B.cif.gz"
+    rnaview_path = test_dir / "1A4D_1_A-B-input.cif.out"
+
+    # Read 3D structure (handle_input_file transparently decompresses .gz)
+    file = handle_input_file(str(cif_path))
+    structure3d = read_3d_structure(file, None)
+
+    # Process external tool output, passing the .cif.gz path as input_file_path
+    _, mapping = process_external_tool_output(
+        structure3d,
+        [str(rnaview_path)],
+        ExternalTool.RNAVIEW,
+        str(cif_path),
+        find_gaps=False,
+    )
+
+    # The gzipped structure input must produce the same result as the plain one
+    expected_dot_bracket = """>strand_A
+GGCCGAUGGUAGUGUGGGGUC
+((((.......(((((((...
+>strand_B
+UCCCCAUGCGAGAGUAGGCC
+..))))))).......))))"""
+
+    assert mapping.dot_bracket == expected_dot_bracket
+
+
 def test_adapter_maxit():
     """Test adapter with MAXIT output for 1A4D structure."""
     test_dir = Path(__file__).parent
@@ -117,6 +147,36 @@ def test_adapter_maxit():
     )
 
     # Check the dot-bracket output
+    expected_dot_bracket = """>strand_A
+GGCCGAUGGUAGUGUGGGGUC
+((((.......((((((((..
+>strand_B
+UCCCCAUGCGAGAGUAGGCC
+.)))))))).......))))"""
+
+    assert mapping.dot_bracket == expected_dot_bracket
+
+
+def test_adapter_maxit_gz():
+    """Test adapter with MAXIT output delivered as a gzipped mmCIF file."""
+    test_dir = Path(__file__).parent
+    cif_path = test_dir / "1A4D_1_A-B.cif"
+    maxit_path = test_dir / "1A4D_1_A-B-output.cif.gz"
+
+    # Read 3D structure
+    file = handle_input_file(str(cif_path))
+    structure3d = read_3d_structure(file, None)
+
+    # Process external tool output, passing the gzipped MAXIT output
+    _, mapping = process_external_tool_output(
+        structure3d,
+        [str(maxit_path)],
+        ExternalTool.MAXIT,
+        str(cif_path),
+        find_gaps=False,
+    )
+
+    # The gzipped MAXIT output must produce the same result as the plain one
     expected_dot_bracket = """>strand_A
 GGCCGAUGGUAGUGUGGGGUC
 ((((.......((((((((..
