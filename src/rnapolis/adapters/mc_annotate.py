@@ -18,6 +18,7 @@ from rnapolis.common import (
     StackingTopology,
 )
 from rnapolis.tertiary import Structure3D
+from rnapolis.util import handle_input_file
 
 
 class MCAnnotateAdapter:
@@ -318,8 +319,10 @@ def parse_mcannotate_output(
     for file_path in file_paths:
         if os.path.basename(file_path).endswith("stdout.txt"):
             stdout_file = file_path
-        elif file_path.endswith(".pdb"):
-            structure_file = file_path
+        else:
+            normalized = file_path[:-3] if file_path.endswith(".gz") else file_path
+            if normalized.endswith(".pdb"):
+                structure_file = file_path
 
     if not stdout_file:
         logging.warning("No stdout.txt file found for mc-annotate.")
@@ -335,8 +338,8 @@ def parse_mcannotate_output(
     try:
         with open(stdout_file, "r") as f:
             mc_result = f.read()
-        with open(structure_file, "r") as f:
-            pdb_content = f.read()
+        file = handle_input_file(structure_file)
+        pdb_content = file.read()
     except Exception as e:
         logging.warning(f"Could not read input files for mc-annotate: {e}")
         return BaseInteractions([], [], [], [], [])
