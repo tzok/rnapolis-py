@@ -19,6 +19,7 @@ from rnapolis.common import (
 from rnapolis.parser_v2 import parse_cif_atoms, parse_pdb_atoms
 from rnapolis.tertiary import Structure3D
 from rnapolis.tertiary_v2 import Structure as StructureV2
+from rnapolis.util import handle_input_file
 
 
 @dataclass
@@ -175,11 +176,12 @@ def parse_rnaview_output(
     pdb_file = None
     cif_file = None
     for file_path in file_paths:
+        normalized = file_path[:-3] if file_path.endswith(".gz") else file_path
         if file_path.endswith(".out"):
             out_file = file_path
-        elif file_path.endswith(".pdb"):
+        elif normalized.endswith(".pdb"):
             pdb_file = file_path
-        elif file_path.endswith(".cif"):
+        elif normalized.endswith(".cif"):
             cif_file = file_path
 
     if out_file is None:
@@ -216,8 +218,8 @@ def parse_rnaview_output(
     if input_file:
         logging.info(f"Processing RNAView mmCIF file: {input_file}")
         try:
-            with open(input_file, "r", encoding="utf-8") as f:
-                input_content = f.read()
+            file = handle_input_file(input_file)
+            input_content = file.read()
             residues_from_input = (
                 _rnaview_append_residues_from_input_using_rnaview_indexing(
                     input_content, input_type
@@ -225,7 +227,8 @@ def parse_rnaview_output(
             )
         except Exception as e:
             logging.warning(
-                f"Error processing RNAView mmCIF file {cif_file}: {e}", exc_info=True
+                f"Error processing RNAView mmCIF file {input_file}: {e}",
+                exc_info=True,
             )
 
     # Process the RNAView output file
