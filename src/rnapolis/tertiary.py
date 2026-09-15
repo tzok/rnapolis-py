@@ -542,7 +542,29 @@ def _residue_entries_with_missing(
     or, as a fallback, from the reported component identifier.
     """
     if not missing_residues:
-        return [(nt.chain, nt.one_letter_name, nt) for nt in nucleotides]
+        entries: List[Tuple[str, str, Optional[Residue3D]]] = []
+        for position, residue in enumerate(nucleotides):
+            if (
+                position > 0
+                and residue.chain == nucleotides[position - 1].chain
+                and not nucleotides[position - 1].is_connected(residue)
+            ):
+                previous_number = nucleotides[position - 1].number
+                modelled_numbers = {
+                    other.number
+                    for other in nucleotides
+                    if other.chain == residue.chain
+                }
+                for number in range(
+                    min(previous_number, residue.number) + 1,
+                    max(previous_number, residue.number),
+                ):
+                    if number not in modelled_numbers:
+                        entries.append(
+                            (residue.chain, "?", None)
+                        )
+            entries.append((residue.chain, residue.one_letter_name, residue))
+        return entries
 
     modelled_by_chain: Dict[str, Dict[int, Residue3D]] = {}
     chain_order: List[str] = []
