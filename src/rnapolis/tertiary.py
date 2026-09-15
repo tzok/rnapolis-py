@@ -18,6 +18,7 @@ from rnapolis.common import (
     GlycosidicBond,
     InterStemParameters,
     LeontisWesthof,
+    MissingResidue,
     Molecule,
     Residue,
     ResidueAuth,
@@ -534,10 +535,17 @@ class Structure3D:
         residues: List of Residue3D objects in the structure.
         residue_map: Mapping from ResidueLabel/ResidueAuth to Residue3D, filled in
             automatically in __post_init__.
+        missing_residues: Residues reported in the file header as unobserved or
+            zero-occupancy (mmCIF ``_pdbx_unobs_or_zero_occ_residues``, PDB
+            REMARK 465); empty when the source provides no such information.
+        sequence_by_entity: Mapping from entity ID to the full one-letter
+            sequence from the file header, if present.
     """
 
     residues: List[Residue3D]
     residue_map: Dict[Union[ResidueLabel, ResidueAuth], Residue3D] = field(init=False)
+    missing_residues: List[MissingResidue] = field(default_factory=list)
+    sequence_by_entity: Dict[str, str] = field(default_factory=dict)
 
     def __post_init__(self):
         """Populate residue_map for fast residue lookup by label/auth identifiers."""
