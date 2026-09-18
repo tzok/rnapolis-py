@@ -18,6 +18,7 @@ from rnapolis.common import (
     GlycosidicBond,
     InterStemParameters,
     LeontisWesthof,
+    MissingResidue,
     Molecule,
     Residue,
     ResidueAuth,
@@ -526,6 +527,94 @@ class Stacking3D(Stacking):
         )
 
 
+def _residue_entries_with_missing(
+    nucleotides: List[Residue3D],
+    missing_residues: List[MissingResidue],
+    sequence_by_entity: Dict[str, str],
+    find_gaps: bool = False,
+) -> List[Tuple[str, str, Optional[Residue3D]]]:
+    """Merge modelled nucleotides with header-reported missing residues.
+
+    Returns (chain, one-letter code, residue or None) entries ordered per
+    chain by residue number. Chains without modelled nucleotides are ignored.
+    When ``find_gaps`` is False the modelled nucleotides are returned
+    unchanged. Otherwise, when ``missing_residues`` is empty, geometric gap
+    detection inserts '?' placeholders between non-connected residues; when
+    header data is present, missing residues are interleaved with their
+    real one-letter codes (from the entity sequence, indexed by the label
+    residue number, or from the reported component identifier as fallback).
+    """
+    if not find_gaps:
+        return [
+            (residue.chain, residue.one_letter_name, residue) for residue in nucleotides
+        ]
+
+    if not missing_residues:
+        entries: List[Tuple[str, str, Optional[Residue3D]]] = []
+        for position, residue in enumerate(nucleotides):
+            if (
+                position > 0
+                and residue.chain == nucleotides[position - 1].chain
+                and not nucleotides[position - 1].is_connected(residue)
+            ):
+                previous_number = nucleotides[position - 1].number
+                modelled_numbers = {
+                    other.number
+                    for other in nucleotides
+                    if other.chain == residue.chain
+                }
+                for number in range(
+                    min(previous_number, residue.number) + 1,
+                    max(previous_number, residue.number),
+                ):
+                    if number not in modelled_numbers:
+                        entries.append((residue.chain, "?", None))
+            entries.append((residue.chain, residue.one_letter_name, residue))
+        return entries
+
+    modelled_by_chain: Dict[str, Dict[int, Residue3D]] = {}
+    chain_order: List[str] = []
+    entity_by_chain: Dict[str, Optional[str]] = {}
+    for residue in nucleotides:
+        modelled_by_chain.setdefault(residue.chain, {})[residue.number] = residue
+        if residue.chain not in chain_order:
+            chain_order.append(residue.chain)
+            entity_by_chain[residue.chain] = (
+                residue.atoms[0].entity_id if residue.atoms else None
+            )
+
+    missing_by_chain: Dict[str, Dict[int, MissingResidue]] = {}
+    for missing in missing_residues:
+        if missing.chain not in modelled_by_chain or missing.number is None:
+            continue
+        missing_by_chain.setdefault(missing.chain, {})[missing.number] = missing
+
+    entries: List[Tuple[str, str, Optional[Residue3D]]] = []
+    for chain in chain_order:
+        modelled = modelled_by_chain[chain]
+        missing = missing_by_chain.get(chain, {})
+        entity_id = entity_by_chain.get(chain)
+        sequence = sequence_by_entity.get(entity_id) if entity_id else None
+        for number in sorted(set(modelled) | set(missing)):
+            residue = modelled.get(number)
+            if residue is not None:
+                entries.append((chain, residue.one_letter_name, residue))
+                continue
+            missing_residue = missing[number]
+            letter = missing_residue.one_letter_name
+            label_number = (
+                missing_residue.label.number if missing_residue.label else None
+            )
+            if (
+                sequence is not None
+                and label_number
+                and 1 <= label_number <= len(sequence)
+            ):
+                letter = sequence[label_number - 1]
+            entries.append((chain, letter, None))
+    return entries
+
+
 @dataclass
 class Structure3D:
     """Container for a 3D structure composed of Residue3D objects.
@@ -534,10 +623,17 @@ class Structure3D:
         residues: List of Residue3D objects in the structure.
         residue_map: Mapping from ResidueLabel/ResidueAuth to Residue3D, filled in
             automatically in __post_init__.
+        missing_residues: Residues reported in the file header as unobserved or
+            zero-occupancy (mmCIF ``_pdbx_unobs_or_zero_occ_residues``, PDB
+            REMARK 465); empty when the source provides no such information.
+        sequence_by_entity: Mapping from entity ID to the full one-letter
+            sequence from the file header, if present.
     """
 
     residues: List[Residue3D]
     residue_map: Dict[Union[ResidueLabel, ResidueAuth], Residue3D] = field(init=False)
+    missing_residues: List[MissingResidue] = field(default_factory=list)
+    sequence_by_entity: Dict[str, str] = field(default_factory=dict)
 
     def __post_init__(self):
         """Populate residue_map for fast residue lookup by label/auth identifiers."""
@@ -730,27 +826,27 @@ class Mapping2D3D:
         """Return sequences per chain as (chain_id, sequence) tuples.
 
         If find_gaps=True, gaps between non-connected residues are
-        represented with '?' characters.
+        represented with '?' characters; residues reported as missing in the
+        file header (structure3d.missing_residues) are inserted with their
+        real one-letter codes.
         """
-        nucleotides = list(filter(lambda r: r.is_nucleotide, self.structure3d.residues))
+        entries = _residue_entries_with_missing(
+            list(filter(lambda r: r.is_nucleotide, self.structure3d.residues)),
+            self.structure3d.missing_residues if self.find_gaps else [],
+            self.structure3d.sequence_by_entity,
+            self.find_gaps,
+        )
 
-        if not nucleotides:
+        if not entries:
             return []
 
-        result = [(nucleotides[0].chain, [nucleotides[0].one_letter_name])]
+        result = [(entries[0][0], [entries[0][1]])]
 
-        for i in range(1, len(nucleotides)):
-            previous = nucleotides[i - 1]
-            residue = nucleotides[i]
-
-            if residue.chain != previous.chain:
-                result.append((residue.chain, [residue.one_letter_name]))
+        for chain, letter, _ in entries[1:]:
+            if chain != result[-1][0]:
+                result.append((chain, [letter]))
             else:
-                if self.find_gaps:
-                    if not previous.is_connected(residue):
-                        for k in range(residue.number - previous.number - 1):
-                            result[-1][1].append("?")
-                result[-1][1].append(residue.one_letter_name)
+                result[-1][1].append(letter)
 
         return [(chain, "".join(sequence)) for chain, sequence in result]
 
@@ -815,27 +911,22 @@ class Mapping2D3D:
 
     def __generate_bpseq(self, base_pairs) -> Tuple[BpSeq, Dict[int, Residue3D]]:
         """Generates BpSeq entries and a map from index to Residue3D."""
-        nucleotides = list(filter(lambda r: r.is_nucleotide, self.structure3d.residues))
+        entries = _residue_entries_with_missing(
+            list(filter(lambda r: r.is_nucleotide, self.structure3d.residues)),
+            self.structure3d.missing_residues if self.find_gaps else [],
+            self.structure3d.sequence_by_entity,
+            self.find_gaps,
+        )
         result: Dict[int, List] = {}
         residue_map: Dict[Residue3D, int] = {}
         index_to_residue_map: Dict[int, Residue3D] = {}
         i = 1
 
-        for j, residue in enumerate(nucleotides):
-            if self.find_gaps and j > 0:
-                previous = nucleotides[j - 1]
-
-                if (
-                    not previous.is_connected(residue)
-                    and previous.chain == residue.chain
-                ):
-                    for k in range(residue.number - previous.number - 1):
-                        result[i] = [i, "?", 0]
-                        i += 1
-
-            result[i] = [i, residue.one_letter_name, 0]
-            residue_map[residue] = i
-            index_to_residue_map[i] = residue
+        for _, letter, residue in entries:
+            result[i] = [i, letter, 0]
+            if residue is not None:
+                residue_map[residue] = i
+                index_to_residue_map[i] = residue
             i += 1
 
         for base_pair in base_pairs:

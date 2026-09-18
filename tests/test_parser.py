@@ -50,3 +50,40 @@ def test_1gid():
     actual_sequence_b = "".join([residue.one_letter_name for residue in residues_b])
     assert actual_sequence_a == expected_sequence
     assert actual_sequence_b == expected_sequence
+
+
+def test_missing_residues_from_pdb_remark_465():
+    with open("tests/4qln.pdb") as f:
+        structure3d = read_3d_structure(f)
+
+    missing = [
+        (r.chain, r.number, r.one_letter_name) for r in structure3d.missing_residues
+    ]
+    assert ("A", 1, "G") in missing
+    assert ("A", 17, "A") in missing
+    assert ("A", 38, "U") in missing
+    assert all(r.label is None for r in structure3d.missing_residues)
+    assert len(structure3d.sequence_by_entity) == 0
+
+
+def test_missing_residues_from_mmcif_header():
+    with open("tests/1a9n.cif") as f:
+        structure3d = read_3d_structure(f)
+
+    missing = [
+        (r.chain, r.number, r.one_letter_name) for r in structure3d.missing_residues
+    ]
+    assert ("A", 1, "M") in missing
+    assert ("A", 164, "G") in missing
+    assert ("A", 176, "R") in missing
+    # entity sequences come from the header and are exposed for downstream use
+    assert any(
+        len(sequence) > 100 for sequence in structure3d.sequence_by_entity.values()
+    )
+
+
+def test_missing_residues_empty_when_header_absent():
+    with open("tests/184D.cif") as f:
+        structure3d = read_3d_structure(f)
+
+    assert structure3d.missing_residues == []
