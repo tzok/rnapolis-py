@@ -531,16 +531,24 @@ def _residue_entries_with_missing(
     nucleotides: List[Residue3D],
     missing_residues: List[MissingResidue],
     sequence_by_entity: Dict[str, str],
+    find_gaps: bool = False,
 ) -> List[Tuple[str, str, Optional[Residue3D]]]:
     """Merge modelled nucleotides with header-reported missing residues.
 
     Returns (chain, one-letter code, residue or None) entries ordered per
     chain by residue number. Chains without modelled nucleotides are ignored.
-    When ``missing_residues`` is empty the modelled nucleotides are returned
-    unchanged. The one-letter code of a missing residue comes from the
-    entity sequence (the label residue number indexes the entity sequence)
-    or, as a fallback, from the reported component identifier.
+    When ``find_gaps`` is False the modelled nucleotides are returned
+    unchanged. Otherwise, when ``missing_residues`` is empty, geometric gap
+    detection inserts '?' placeholders between non-connected residues; when
+    header data is present, missing residues are interleaved with their
+    real one-letter codes (from the entity sequence, indexed by the label
+    residue number, or from the reported component identifier as fallback).
     """
+    if not find_gaps:
+        return [
+            (residue.chain, residue.one_letter_name, residue) for residue in nucleotides
+        ]
+
     if not missing_residues:
         entries: List[Tuple[str, str, Optional[Residue3D]]] = []
         for position, residue in enumerate(nucleotides):
@@ -560,9 +568,7 @@ def _residue_entries_with_missing(
                     max(previous_number, residue.number),
                 ):
                     if number not in modelled_numbers:
-                        entries.append(
-                            (residue.chain, "?", None)
-                        )
+                        entries.append((residue.chain, "?", None))
             entries.append((residue.chain, residue.one_letter_name, residue))
         return entries
 
@@ -828,6 +834,7 @@ class Mapping2D3D:
             list(filter(lambda r: r.is_nucleotide, self.structure3d.residues)),
             self.structure3d.missing_residues if self.find_gaps else [],
             self.structure3d.sequence_by_entity,
+            self.find_gaps,
         )
 
         if not entries:
@@ -908,6 +915,7 @@ class Mapping2D3D:
             list(filter(lambda r: r.is_nucleotide, self.structure3d.residues)),
             self.structure3d.missing_residues if self.find_gaps else [],
             self.structure3d.sequence_by_entity,
+            self.find_gaps,
         )
         result: Dict[int, List] = {}
         residue_map: Dict[Residue3D, int] = {}
