@@ -357,7 +357,7 @@ def parse_missing_residues_cif(cif: IO[str]) -> List[MissingResidue]:
                     _mmcif_value(row_dict.get("auth_seq_id", None))
                 )
                 auth_name = _mmcif_value(row_dict.get("auth_comp_id", None))
-                icode = _mmcif_value(row_dict.get("pdbx_PDB_ins_code", None)) or " "
+                icode = _mmcif_value(row_dict.get("pdbx_PDB_ins_code", None))
                 name = auth_name or label_name or ""
                 label = (
                     ResidueLabel(label_chain, label_number, label_name or "")
