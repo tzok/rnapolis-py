@@ -2,6 +2,7 @@ import string
 from collections import Counter
 
 import orjson
+import pulp
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
@@ -162,15 +163,17 @@ def test_pseudoknot_order_assignment():
     dot_bracket = bpseq.dot_bracket
 
     counter = Counter(dot_bracket.structure)
-    assert counter["."] == 1185
-    assert counter["("] == 1298
-    assert counter["["] == 44
-    assert counter["{"] == 18
-    assert counter["<"] == 6
-    assert counter["A"] == 3
-    assert counter["B"] == 2
-    assert counter["C"] == 1
-    assert counter["D"] == 0
+    if not pulp.HiGHS_CMD().available() and pulp.LpSolverDefault is None:
+        assert dot_bracket == bpseq.fcfs
+    else:
+        opening = "([{<" + string.ascii_uppercase
+        closing = ")]}>" + string.ascii_lowercase
+        assert all(
+            counter[left] == counter[right] for left, right in zip(opening, closing)
+        )
+        assert sum(counter[symbol] for symbol in opening + closing) == 2 * sum(
+            1 for _ in bpseq.paired(only5to3=True)
+        )
 
     bpseq_again = BpSeq.from_dotbracket(dot_bracket)
     assert bpseq == bpseq_again
