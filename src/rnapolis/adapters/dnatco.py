@@ -20,7 +20,8 @@ class InteractionType(Enum):
 
 def _has_alt_or_symmetry(row: pd.Series) -> bool:
     """Return True if any of the alternative location or symmetry fields are non-empty."""
-    fields = ["alt1", "symmetry_operation1", "alt2", "symmetry_operation2"]
+    #fields = ["alt1", "symmetry_operation1", "alt2", "symmetry_operation2"]
+    fields = ["label_alt_id1", "symmetry_operation1", "label_alt_id2", "symmetry_operation2"]
     return any(
         str(row.get(field, "")).strip() not in ("", "None", "nan") for field in fields
     )
@@ -53,16 +54,16 @@ def _parse_residues(row: pd.Series):
     """
     res: List[ResidueAuth] = []
     for i in range(1, 3):
-        chain = row[f"chain{i}"]
-        if isinstance(chain, str) and chain in ("?", "."):
-            chain = None
-        number = int(row[f"nr{i}"])
-        res_name = row[f"res{i}"]
-        if isinstance(res_name, str) and res_name in ("?", "."):
-            res_name = None
-        i_code = row.get(f"ins{i}", "").strip() or None
-        if i_code in ("?", "."):
-            i_code = None
+        #chain = row[f"chain{i}"]
+        #number = int(row[f"nr{i}"])
+        #res_name = row[f"res{i}"]
+        #i_code = row.get(f"ins{i}", "").strip() or None
+        
+        chain = row[f"auth_asym_id{i}"]
+        number = int(row[f"auth_seq_id{i}"])
+        res_name = row[f"auth_comp_id{i}"]
+        i_code = row.get(f"pdbx_PDB_ins_code{i}", "") or None
+        i_code = None if pd.isna(i_code) else i_code
         res.append(ResidueAuth(chain, number, i_code, res_name))
 
     return Residue(None, res[0]), Residue(None, res[1])
