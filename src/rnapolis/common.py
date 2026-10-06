@@ -1019,7 +1019,7 @@ class BpSeq:
         """
         # if PuLP solvers are not installed, use FCFS
         if solver is None:
-            return self.fcfs()
+            return self.fcfs
 
         # build conflict graph
         regions = self.__regions
@@ -1046,26 +1046,20 @@ class BpSeq:
         problem = pulp.LpProblem("POA", pulp.LpMaximize)
 
         # create decision variables
-        variables = []
         vars_by_region = defaultdict(list)
-        vars_by_order = defaultdict(list)
         var_by_region_order = {}
-        region_by_var = {}
         for i in range(len(regions)):
             for j in range(max_order):
-                variable = pulp.LpVariable(f"x_{i}_{j}", 0, 1, pulp.LpInteger)
-                variables.append(variable)
+                variable = problem.add_variable(f"x_{i}_{j}", 0, 1, pulp.LpInteger)
                 vars_by_region[i].append(variable)
-                vars_by_order[j].append(variable)
                 var_by_region_order[(i, j)] = variable
-                region_by_var[variable] = regions[i]
 
         # define objective function terms
         terms = []
 
-        for order, vars in vars_by_order.items():
-            for var in vars:
-                length = region_by_var[var][2]
+        for i, region_vars in vars_by_region.items():
+            length = regions[i][2]
+            for order, var in enumerate(region_vars):
                 if order == 0:
                     terms.append(var * length)
                 else:
@@ -1091,29 +1085,35 @@ class BpSeq:
         # solve the problem
         try:
             logging.debug(f"POA: problem formulation\n{problem}")
-            problem.solve(solver)
+            stats = problem.solve(solver)
         except pulp.PulpSolverError:
             logging.warning(
                 "POA: failed to solve problem using MILP approach, fallback to FCFS"
             )
-            return self.fcfs()
+            return self.fcfs
 
         # if problem is infeasible, fallback to FCFS
-        if problem.status != pulp.LpStatusOptimal:
+        if hasattr(stats, "status"):
+            optimal = stats.status == pulp.LpSolveStatus.Optimal
+            solve_time = stats.time
+            solver_name = stats.solver
+        else:
+            optimal = problem.status == pulp.LpStatusOptimal
+            solve_time = problem.solutionTime
+            solver_name = solver.name
+
+        if not optimal:
             logging.warning("POA: problem is infeasible, fallback to FCFS")
-            return self.fcfs()
+            return self.fcfs
 
         # log solver time statistics
-        logging.debug(
-            f"POA: solver {solver.name} took {round(problem.solutionTime, 2)} seconds"
-        )
+        logging.debug(f"POA: solver {solver_name} took {round(solve_time, 2)} seconds")
 
         # map variable values to orders
         orders = [0 for _ in range(len(regions))]
         for variable in problem.variables():
-            if variable.varValue == 1:
-                name = variable.getName()
-                i, order = map(int, name.split("_")[1:])
+            if variable.varValue is not None and variable.varValue > 0.5:
+                i, order = map(int, variable.name.split("_")[1:])
                 orders[i] = order
 
         return self.__make_dot_bracket(regions, orders)
