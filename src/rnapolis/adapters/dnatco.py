@@ -9,6 +9,7 @@ from rnapolis.common import (
     LeontisWesthof,
     Residue,
     ResidueAuth,
+    ResidueLabel,
 )
 from rnapolis.tertiary import Structure3D
 
@@ -20,10 +21,18 @@ class InteractionType(Enum):
 
 def _has_alt_or_symmetry(row: pd.Series) -> bool:
     """Return True if any of the alternative location or symmetry fields are non-empty."""
-    fields = ["alt1", "symmetry_operation1", "alt2", "symmetry_operation2"]
-    return any(
-        str(row.get(field, "")).strip() not in ("", "None", "nan") for field in fields
-    )
+    fields = [
+        f"{field}{i}"
+        for i in (1, 2)
+        for field in ("alt", "label_alt_id", "symmetry_operation")
+    ]
+    for field in fields:
+        value = row.get(field)
+        if pd.isna(value):
+            continue
+        if str(value).strip() not in ("", "?", "."):
+            return True
+    return False
 
 
 def _classify_interaction(row: pd.Series):
@@ -47,25 +56,51 @@ def _classify_interaction(row: pd.Series):
     return InteractionType.OTHER, None
 
 
-def _parse_residues(row: pd.Series):
+def _parse_residues(row: pd.Series) -> tuple[Residue, Residue]:
     """
     Parse DNATCO row into 2 Residue objects.
     """
-    res: List[ResidueAuth] = []
-    for i in range(1, 3):
-        chain = row[f"chain{i}"]
-        if isinstance(chain, str) and chain in ("?", "."):
-            chain = None
-        number = int(row[f"nr{i}"])
-        res_name = row[f"res{i}"]
-        if isinstance(res_name, str) and res_name in ("?", "."):
-            res_name = None
-        i_code = row.get(f"ins{i}", "").strip() or None
-        if i_code in ("?", "."):
-            i_code = None
-        res.append(ResidueAuth(chain, number, i_code, res_name))
+    residues = []
 
-    return Residue(None, res[0]), Residue(None, res[1])
+    def value(field: str):
+        result = row.get(field)
+        if pd.isna(result) or (
+            isinstance(result, str) and result.strip() in ("", "?", ".")
+        ):
+            return None
+        return result
+
+    for i in range(1, 3):
+        if f"auth_seq_id{i}" in row.index:
+            label_chain = value(f"label_asym_id{i}")
+            label_number = value(f"label_seq_id{i}")
+            label_name = value(f"label_comp_id{i}")
+            auth_chain = value(f"auth_asym_id{i}")
+            auth_number = value(f"auth_seq_id{i}")
+            auth_name = value(f"auth_comp_id{i}")
+            insertion_code = value(f"pdbx_PDB_ins_code{i}")
+        else:
+            label_chain = label_number = label_name = None
+            auth_chain = value(f"chain{i}")
+            auth_number = value(f"nr{i}")
+            auth_name = value(f"res{i}")
+            insertion_code = value(f"ins{i}")
+
+        label = None
+        if label_number is not None and label_name is not None:
+            label = ResidueLabel(label_chain, int(label_number), str(label_name))
+
+        auth = None
+        if auth_number is not None and auth_name is not None:
+            auth = ResidueAuth(
+                auth_chain,
+                int(auth_number),
+                insertion_code,
+                str(auth_name),
+            )
+        residues.append(Residue(label, auth))
+
+    return residues[0], residues[1]
 
 
 def parse_dnatco_output(

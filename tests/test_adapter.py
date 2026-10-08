@@ -240,6 +240,68 @@ def test_adapter_auto_detection():
         )
 
 
+def test_adapter_auto_detection_dnatco_filtered_header(tmp_path):
+    """Detect filtered DNATCO CSVs independent of column order and extras."""
+    from rnapolis.adapter import auto_detect_tool
+
+    header = [
+        "family",
+        "auth_seq_id1",
+        "label_asym_id1",
+        "label_comp_id1",
+        "auth_comp_id1",
+        "label_seq_id1",
+        "auth_asym_id1",
+        "pdbid",
+        "model",
+        "auth_seq_id2",
+        "label_asym_id2",
+        "label_comp_id2",
+        "auth_comp_id2",
+        "label_seq_id2",
+        "auth_asym_id2",
+        "additional_export_column",
+    ]
+    csv_path = tmp_path / "filtered.csv"
+    csv_path.write_text(",".join(header) + "\n", encoding="utf-8")
+
+    assert auto_detect_tool([str(csv_path)]) == ExternalTool.DNATCO
+
+
+def test_dnatco_parser_preserves_label_and_auth_residues():
+    """Parse label/auth identifiers and normalize an empty insertion code."""
+    import pandas as pd
+
+    from rnapolis.adapters.dnatco import _parse_residues
+    from rnapolis.common import ResidueAuth, ResidueLabel
+
+    row = pd.Series(
+        {
+            "label_asym_id1": "A",
+            "label_seq_id1": 15,
+            "label_comp_id1": "G",
+            "auth_asym_id1": "A",
+            "auth_seq_id1": 15,
+            "auth_comp_id1": "G",
+            "pdbx_PDB_ins_code1": float("nan"),
+            "label_asym_id2": "A",
+            "label_seq_id2": 48,
+            "label_comp_id2": "C",
+            "auth_asym_id2": "A",
+            "auth_seq_id2": 48,
+            "auth_comp_id2": "C",
+            "pdbx_PDB_ins_code2": "?",
+        }
+    )
+
+    residue1, residue2 = _parse_residues(row)
+
+    assert residue1.label == ResidueLabel("A", 15, "G")
+    assert residue1.auth == ResidueAuth("A", 15, None, "G")
+    assert residue2.label == ResidueLabel("A", 48, "C")
+    assert residue2.auth == ResidueAuth("A", 48, None, "C")
+
+
 def test_adapter_empty_files_maxit():
     """Test adapter with empty external files (should default to MAXIT)."""
     test_dir = Path(__file__).parent

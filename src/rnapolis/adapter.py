@@ -1,5 +1,6 @@
 #! /usr/bin/env python
 import argparse
+import csv
 import logging
 import os
 from enum import Enum
@@ -38,6 +39,29 @@ class ExternalTool(Enum):
 
 
 logging.basicConfig(level=os.getenv("LOGLEVEL", "INFO").upper())
+
+
+def _is_dnatco_header(header: List[str]) -> bool:
+    columns = set(header)
+    shared_columns = {"pdbid", "model", "family"}
+    old_residue_columns = {
+        f"{field}{i}" for i in (1, 2) for field in ("chain", "nr", "res")
+    }
+    new_residue_columns = {
+        f"{field}{i}"
+        for i in (1, 2)
+        for field in (
+            "label_comp_id",
+            "label_asym_id",
+            "label_seq_id",
+            "auth_seq_id",
+            "auth_comp_id",
+            "auth_asym_id",
+        )
+    }
+    return shared_columns <= columns and (
+        old_residue_columns <= columns or new_residue_columns <= columns
+    )
 
 
 def auto_detect_tool(external_files: List[str]) -> ExternalTool:
@@ -83,11 +107,8 @@ def auto_detect_tool(external_files: List[str]) -> ExternalTool:
         # Check header of .csv file for DNATCO
         if basename.endswith(".csv"):
             with open(file_path, "r") as f:
-                line = f.readline().strip()
-                if (
-                    line
-                    == "pdbid,model,family,class,chain1,nr1,res1,alt1,ins1,symmetry_operation1,chain2,nr2,res2,alt2,ins2,symmetry_operation2,confit,rmsd,curated_file,knn_metric,coplanarity_angle,coplanarity_shift1,coplanarity_shift2,coplanarity_edge_angle1,coplanarity_edge_angle2,C1_C1_yaw1,C1_C1_pitch1,C1_C1_roll1,C1_C1_yaw2,C1_C1_pitch2,C1_C1_roll2,hb_0_length,hb_0_donor_angle,hb_0_acceptor_angle,hb_0_OOPA1,hb_0_OOPA2,hb_1_length,hb_1_donor_angle,hb_1_acceptor_angle,hb_1_OOPA1,hb_1_OOPA2,hb_2_length,hb_2_donor_angle,hb_2_acceptor_angle,hb_2_OOPA1,hb_2_OOPA2,hb_3_length,hb_3_donor_angle,hb_3_acceptor_angle,hb_3_OOPA1,hb_3_OOPA2"
-                ):
+                header = next(csv.reader(f), [])
+                if _is_dnatco_header(header):
                     return ExternalTool.DNATCO
 
     # Default to MAXIT if no patterns match
