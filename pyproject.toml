@@ -63,6 +63,11 @@ docs = [
 
 [tool.uv]
 default-groups = []
+# Single source of truth for the uv version: astral-sh/setup-uv reads this
+# when a workflow does not pin a version, and uv itself refuses to run with an
+# older release. The floor must not exceed the uv version provided by the
+# devenv shell; keep any Dockerfile uv pin at or above it.
+required-version = ">=0.13.4"
 
 [project.scripts]
 annotator = "rnapolis.annotator:main"
