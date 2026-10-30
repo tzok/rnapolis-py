@@ -17,7 +17,8 @@ import RNA
 from rnapolis.common import BpSeq, DotBracket
 
 COMBINED_CM = "https://ftp.ebi.ac.uk/pub/databases/Rfam/CURRENT/Rfam.cm.gz"
-SEPARATE_CM = "https://ftp.ebi.ac.uk/pub/databases/Rfam/CURRENT/Rfam.tar.gz"
+SINGLE_CM = "https://rfam.org/family/{family}/cm"
+DOWNLOAD_TIMEOUT = 60
 
 
 class FASTA:
@@ -65,8 +66,8 @@ def ensure_cm(family: str = None) -> str:
     """Ensure that the appropriate Rfam covariance model is downloaded and indexed.
 
     If no family is given, downloads and prepares the combined Rfam covariance model.
-    If a family is provided, downloads the Rfam tarball with separate CMs and extracts
-    the model for the given family. In both cases runs ``cmpress`` when necessary.
+    If a family is provided, downloads only the covariance model of that family from
+    the Rfam website. In both cases runs ``cmpress`` when necessary.
 
     Args:
         family (str, optional): Rfam family accession/name. If None, use the combined model.
@@ -75,7 +76,8 @@ def ensure_cm(family: str = None) -> str:
         Path to the prepared covariance model file (without index extensions).
 
     Raises:
-        RuntimeError: If the family-specific covariance model cannot be found after extraction.
+        requests.HTTPError: If the covariance model could not be downloaded.
+        RuntimeError: If the downloaded file is not a covariance model.
         subprocess.CalledProcessError: If ``cmpress`` fails.
     """
     if not os.path.exists(appdirs.user_data_dir("rnapolis")):
@@ -86,7 +88,8 @@ def ensure_cm(family: str = None) -> str:
         cm_path = appdirs.user_data_dir("rnapolis") + "/Rfam.cm"
 
         if not os.path.exists(cm_gz_path):
-            response = requests.get(COMBINED_CM)
+            response = requests.get(COMBINED_CM, timeout=DOWNLOAD_TIMEOUT)
+            response.raise_for_status()
 
             with open(cm_gz_path, "wb") as f:
                 f.write(response.content)
@@ -95,22 +98,22 @@ def ensure_cm(family: str = None) -> str:
             with gzip.open(cm_gz_path, "rb") as f_in, open(cm_path, "wb") as f_out:
                 f_out.write(f_in.read())
     else:
-        cm_gz_path = appdirs.user_data_dir("rnapolis") + "/Rfam.tar.gz"
         cm_path = appdirs.user_data_dir("rnapolis") + f"/{family}.cm"
 
-        if not os.path.exists(cm_gz_path):
-            response = requests.get(SEPARATE_CM)
-
-            with open(cm_gz_path, "wb") as f:
-                f.write(response.content)
-
         if not os.path.exists(cm_path):
-            shutil.unpack_archive(cm_gz_path, appdirs.user_data_dir("rnapolis"))
+            response = requests.get(
+                SINGLE_CM.format(family=family), timeout=DOWNLOAD_TIMEOUT
+            )
+            response.raise_for_status()
 
-            if not os.path.exists(cm_path):
+            if not response.content.startswith(b"INFERNAL"):
                 raise RuntimeError(
-                    f"Failed to find covariance model for {family} from Rfam."
+                    f"Rfam did not return a covariance model for {family}. "
+                    "Check that the family accession is correct."
                 )
+
+            with open(cm_path, "wb") as f:
+                f.write(response.content)
 
     if any(
         not os.path.exists(cm_path + extension)
