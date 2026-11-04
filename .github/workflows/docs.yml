@@ -15,7 +15,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build:
+  docs:
+    name: docs
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -41,7 +42,7 @@ jobs:
           path: site
 
   deploy:
-    needs: build
+    needs: docs
     runs-on: ubuntu-latest
     environment:
       name: github-pages

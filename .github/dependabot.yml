@@ -6,6 +6,7 @@ updates:
       interval: "weekly"
     commit-message:
       prefix: "build"
+    open-pull-requests-limit: 10
 
   - package-ecosystem: "github-actions"
     directory: "/"
@@ -13,3 +14,4 @@ updates:
       interval: "weekly"
     commit-message:
       prefix: "build"
+    open-pull-requests-limit: 10
