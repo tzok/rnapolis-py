@@ -12,7 +12,7 @@ from rnapolis.common import (
     Saenger,
 )
 from rnapolis.metareader import read_metadata
-from rnapolis.tertiary import Structure3D
+from rnapolis.contracts import StructureLike
 from rnapolis.util import handle_input_file
 
 
@@ -63,7 +63,7 @@ def _maxit_convert_lw(hbond_type_12: Optional[str]) -> Optional[LeontisWesthof]:
 
 
 def parse_maxit_output(
-    file_paths: List[str], structure3d: Structure3D
+    file_paths: List[str], structure3d: StructureLike
 ) -> BaseInteractions:
     """
     Parse MAXIT output files and convert to BaseInteractions.

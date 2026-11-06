@@ -24,12 +24,10 @@ from rnapolis.common import (
     BPh,
     BpSeq,
     LeontisWesthof,
-    OtherInteraction,
     Residue,
     Saenger,
     Stacking,
     StackingTopology,
-    Stem,
     Structure2D,
 )
 from rnapolis.parser import read_3d_structure
@@ -577,118 +575,6 @@ def extract_base_interactions(
     )
 
 
-def generate_pymol_script(mapping: Mapping2D3D, stems: List[Stem]) -> str:
-    """
-    Generate a PyMOL script to visualise stems as cylinders and dihedrals.
-
-    The script creates selections, pseudoatoms on stem centroids and CGO
-    cylinders between them, plus optional dihedral measurements.
-
-    Args:
-        mapping: Mapping between 2D indices and 3D residues.
-        stems: List of stems to visualise.
-
-    Returns:
-        str: Multi-line PyMOL script.
-    """
-    pymol_commands = []
-    radius = 0.5
-    r, g, b = 1.0, 0.0, 0.0  # Red color
-
-    for stem_idx, stem in enumerate(stems):
-        # Get residues for selection string
-        try:
-            res5p_first = mapping.bpseq_index_to_residue_map[stem.strand5p.first]
-            res5p_last = mapping.bpseq_index_to_residue_map[stem.strand5p.last]
-            res3p_first = mapping.bpseq_index_to_residue_map[stem.strand3p.first]
-            res3p_last = mapping.bpseq_index_to_residue_map[stem.strand3p.last]
-
-            # Prefer auth chain/number if available
-            chain5p = (
-                res5p_first.auth.chain if res5p_first.auth else res5p_first.label.chain
-            )
-            num5p_first = (
-                res5p_first.auth.number
-                if res5p_first.auth
-                else res5p_first.label.number
-            )
-            num5p_last = (
-                res5p_last.auth.number if res5p_last.auth else res5p_last.label.number
-            )
-
-            chain3p = (
-                res3p_first.auth.chain if res3p_first.auth else res3p_first.label.chain
-            )
-            num3p_first = (
-                res3p_first.auth.number
-                if res3p_first.auth
-                else res3p_first.label.number
-            )
-            num3p_last = (
-                res3p_last.auth.number if res3p_last.auth else res3p_last.label.number
-            )
-
-            # Format selection string: select stem0, A/1-5/ or A/10-15/
-            selection_str = (
-                f"{chain5p}/{num5p_first}-{num5p_last}/ or "
-                f"{chain3p}/{num3p_first}-{num3p_last}/"
-            )
-            pymol_commands.append(f"select stem{stem_idx}, {selection_str}")
-
-        except (KeyError, AttributeError) as e:
-            logging.warning(
-                f"Could not generate selection string for stem {stem_idx}: "
-                f"Missing residue data ({e})"
-            )
-
-        centroids = mapping.get_stem_coordinates(stem)
-
-        # Need at least 2 centroids to draw a segment
-        if len(centroids) < 2:
-            # Removed warning log for stems with < 2 base pairs
-            continue
-
-        # Create pseudoatoms for each centroid
-        for centroid_idx, centroid in enumerate(centroids):
-            x, y, z = centroid
-            pseudoatom_name = f"stem{stem_idx}_centroid{centroid_idx}"
-            pymol_commands.append(
-                f"pseudoatom {pseudoatom_name}, pos=[{x:.3f}, {y:.3f}, {z:.3f}]"
-            )
-
-        # Draw cylinders between consecutive centroids
-        for seg_idx in range(len(centroids) - 1):
-            p1 = centroids[seg_idx]
-            p2 = centroids[seg_idx + 1]
-            x1, y1, z1 = p1
-            x2, y2, z2 = p2
-            # Format: [CYLINDER, x1, y1, z1, x2, y2, z2, radius, r1, g1, b1, r2, g2, b2]
-            # Use 9.0 for CYLINDER code
-            # Use same color for both ends
-            cgo_object = (
-                f"[ 9.0, {x1:.3f}, {y1:.3f}, {z1:.3f}, "
-                f"{x2:.3f}, {y2:.3f}, {z2:.3f}, {radius}, "
-                f"{r}, {g}, {b}, {r}, {g}, {b} ]"
-            )
-            pymol_commands.append(
-                f'cmd.load_cgo({cgo_object}, "stem_{stem_idx}_seg_{seg_idx}")'
-            )
-
-        # Calculate and display dihedral angles between consecutive centroids
-        if len(centroids) >= 4:
-            for i in range(len(centroids) - 3):
-                pa1 = f"stem{stem_idx}_centroid{i}"
-                pa2 = f"stem{stem_idx}_centroid{i + 1}"
-                pa3 = f"stem{stem_idx}_centroid{i + 2}"
-                pa4 = f"stem{stem_idx}_centroid{i + 3}"
-                dihedral_name = f"stem{stem_idx}_dihedral{i}"
-                pymol_commands.append(
-                    f"dihedral {dihedral_name}, {pa1}, {pa2}, {pa3}, {pa4}"
-                )
-
-    return "\n".join(pymol_commands)
-
-
 def write_json(path: str, structure2d: Structure2D):
     """
     Write a Structure2D object to a JSON file using orjson.
@@ -792,8 +678,8 @@ def add_common_output_arguments(parser: argparse.ArgumentParser):
     """
     Add common output and formatting arguments to an ArgumentParser.
 
-    These options control where BPSEQ/CSV/JSON/DOT/PyMOL outputs are written
-    and enable extra CSV exports for stem parameters.
+    These options control where BPSEQ/CSV/JSON/DOT outputs are written and
+    enable an extra CSV export for stem details.
     """
     parser.add_argument("-b", "--bpseq", help="(optional) path to output BPSEQ file")
     parser.add_argument("-c", "--csv", help="(optional) path to output CSV file")
@@ -812,13 +698,6 @@ def add_common_output_arguments(parser: argparse.ArgumentParser):
         ),
     )
     parser.add_argument("-d", "--dot", help="(optional) path to output DOT file")
-    parser.add_argument(
-        "-p", "--pml", help="(optional) path to output PyMOL PML script for stems"
-    )
-    parser.add_argument(
-        "--inter-stem-csv",
-        help="(optional) path to output CSV file for inter-stem parameters",
-    )
     parser.add_argument(
         "--stems-csv",
         help="(optional) path to output CSV file for stem details",
@@ -844,9 +723,8 @@ def handle_output_arguments(
     """
     Handle all output options based on parsed CLI arguments.
 
-    Depending on the flags, this function writes BPSEQ, CSV, JSON, DOT,
-    PyMOL scripts and optional CSV summaries for stems and inter-stem
-    parameters.
+    Depending on the flags, this function writes BPSEQ, CSV, JSON and DOT
+    outputs and optional CSV summaries for stems.
 
     Args:
         args: Parsed command-line arguments.
@@ -871,41 +749,6 @@ def handle_output_arguments(
 
     if args.dot:
         print(structure2d.bpseq.graphviz)
-
-    if args.pml:
-        pml_script = generate_pymol_script(mapping, structure2d.stems)
-        with open(args.pml, "w") as f:
-            f.write(pml_script)
-
-    if args.inter_stem_csv:
-        if structure2d.inter_stem_parameters:
-            # Convert list of dataclasses to list of dicts
-            params_list = [
-                {
-                    "stem1_idx": p.stem1_idx,
-                    "stem2_idx": p.stem2_idx,
-                    "type": p.type,
-                    "torsion": p.torsion,
-                    "min_endpoint_distance": p.min_endpoint_distance,
-                    "torsion_angle_pdf": p.torsion_angle_pdf,
-                    "min_endpoint_distance_pdf": p.min_endpoint_distance_pdf,
-                    "coaxial_probability": p.coaxial_probability,
-                }
-                for p in structure2d.interStemParameters
-            ]
-            df = pd.DataFrame(params_list)
-            df["input_basename"] = input_basename
-            # Reorder columns to put input_basename first
-            cols = ["input_basename"] + [
-                col for col in df.columns if col != "input_basename"
-            ]
-            df = df[cols]
-            df.to_csv(args.inter_stem_csv, index=False)
-        else:
-            logging.warning(
-                f"No inter-stem parameters calculated for {input_basename}, "
-                f"CSV file '{args.inter_stem_csv}' will be empty or not created."
-            )
 
     if args.stems_csv:
         if structure2d.stems:

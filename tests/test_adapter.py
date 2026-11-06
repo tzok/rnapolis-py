@@ -1,10 +1,24 @@
 import csv
+import inspect
+import argparse
 
 from pathlib import Path
 
 from rnapolis.adapter import ExternalTool, process_external_tool_output
+from rnapolis.annotator import add_common_output_arguments
 from rnapolis.parser import read_3d_structure
 from rnapolis.util import handle_input_file
+
+
+def test_removed_adapter_options_are_not_exposed():
+    """Adapter API and shared CLI no longer expose gap/geometry experiments."""
+    assert "find_gaps" not in inspect.signature(process_external_tool_output).parameters
+
+    parser = argparse.ArgumentParser()
+    add_common_output_arguments(parser)
+    options = {option for action in parser._actions for option in action.option_strings}
+    assert "--pml" not in options
+    assert "--inter-stem-csv" not in options
 
 
 def test_adapter_fr3d():
@@ -23,7 +37,6 @@ def test_adapter_fr3d():
         [str(fr3d_path)],
         ExternalTool.FR3D,
         str(cif_path),
-        find_gaps=False,
     )
 
     # Check the dot-bracket output
@@ -53,7 +66,6 @@ def test_adapter_bpnet():
         [str(bpnet_path)],
         ExternalTool.BPNET,
         str(cif_path),
-        find_gaps=False,
     )
 
     # Check the dot-bracket output
@@ -83,7 +95,6 @@ def test_adapter_rnaview():
         [str(rnaview_path)],
         ExternalTool.RNAVIEW,
         str(cif_path),
-        find_gaps=False,
     )
 
     # Check the dot-bracket output
@@ -113,7 +124,6 @@ def test_adapter_rnaview_gz():
         [str(rnaview_path)],
         ExternalTool.RNAVIEW,
         str(cif_path),
-        find_gaps=False,
     )
 
     # The gzipped structure input must produce the same result as the plain one
@@ -143,7 +153,6 @@ def test_adapter_maxit():
         [str(maxit_path)],
         ExternalTool.MAXIT,
         str(cif_path),
-        find_gaps=False,
     )
 
     # Check the dot-bracket output
@@ -173,7 +182,6 @@ def test_adapter_maxit_gz():
         [str(maxit_path)],
         ExternalTool.MAXIT,
         str(cif_path),
-        find_gaps=False,
     )
 
     # The gzipped MAXIT output must produce the same result as the plain one
@@ -203,7 +211,6 @@ def test_adapter_dssr():
         [str(dssr_path)],
         ExternalTool.DSSR,
         str(cif_path),
-        find_gaps=False,
     )
 
     # Check the dot-bracket output
@@ -317,7 +324,6 @@ def test_adapter_empty_files_maxit():
         [],  # Empty external files
         ExternalTool.MAXIT,
         str(cif_path),
-        find_gaps=False,
     )
 
     # Should still produce some output (even if empty interactions)
@@ -341,7 +347,6 @@ def test_adapter_dnatco():
         [str(dnatco_path)],
         ExternalTool.DNATCO,
         str(cif_path),
-        find_gaps=False,
     )
 
     # Check the dot-bracket output

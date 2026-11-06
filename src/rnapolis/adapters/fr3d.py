@@ -15,7 +15,7 @@ from rnapolis.common import (
     Stacking,
     StackingTopology,
 )
-from rnapolis.tertiary import Structure3D
+from rnapolis.contracts import StructureLike
 
 
 def _fr3d_parse_unit_id(nt: str) -> Residue:
@@ -163,7 +163,7 @@ def _fr3d_process_interaction_line(
 
 
 def parse_fr3d_output(
-    file_paths: List[str], structure3d: Structure3D
+    file_paths: List[str], structure3d: StructureLike
 ) -> BaseInteractions:
     """
     Parse FR3D output files and convert to BaseInteractions.

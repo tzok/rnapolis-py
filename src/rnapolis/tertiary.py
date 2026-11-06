@@ -1,14 +1,12 @@
-import itertools
 import logging
 import math
 from collections import defaultdict
 from dataclasses import dataclass, field
 from functools import cached_property, total_ordering
-from typing import Dict, List, Optional, Set, Tuple, Union
+from typing import Callable, Dict, List, Optional, Set, Tuple, Union
 
 import numpy
 import numpy.typing
-from scipy.stats import vonmises
 
 from rnapolis.common import (
     BaseInteractions,
@@ -16,7 +14,6 @@ from rnapolis.common import (
     BpSeq,
     Entry,
     GlycosidicBond,
-    InterStemParameters,
     LeontisWesthof,
     MissingResidue,
     Molecule,
@@ -25,11 +22,11 @@ from rnapolis.common import (
     ResidueLabel,
     Saenger,
     Stacking,
-    Stem,
     Strand,
     Structure2D,
     classify_molecule,
 )
+from rnapolis.contracts import GapAwareStructureLike, ResidueLike, StructureLike
 
 BASE_ATOMS = {
     "A": ["N1", "C2", "N3", "C4", "C5", "C6", "N6", "N7", "C8", "N9"],
@@ -154,11 +151,17 @@ class Residue3D(Residue):
     one_letter_name: str
     atoms: Tuple[Atom, ...]
     standard_residue_name: str = ""
+    nucleotide_hint: Optional[bool] = field(default=None, compare=False)
 
     def __post_init__(self):
         """Default standard_residue_name to self.name when not provided."""
         if not self.standard_residue_name:
             object.__setattr__(self, "standard_residue_name", self.name or "")
+
+    @property
+    def entity_id(self) -> Optional[str]:
+        """Return the entity identifier of the first atom, if available."""
+        return self.atoms[0].entity_id if self.atoms else None
 
     # Dict representing expected name of atom involved in glycosidic bond
     outermost_atoms = {"A": "N9", "G": "N9", "C": "N1", "U": "N1", "T": "N1"}
@@ -255,59 +258,11 @@ class Residue3D(Residue):
 
         Returns True if the combined score exceeds 0.5.
         """
-        scores = {"phosphate": 0.0, "sugar": 0.0, "base": 0.0, "connections": 0.0}
-        weights = {"phosphate": 0.25, "sugar": 0.25, "base": 0.25, "connections": 0.25}
-
-        residue_atoms = {atom.name for atom in self.atoms}
-
-        phosphate_match = len(residue_atoms.intersection(self.phosphate_atoms))
-        scores["phosphate"] = phosphate_match / len(self.phosphate_atoms)
-
-        sugar_match = len(residue_atoms.intersection(self.sugar_atoms))
-        scores["sugar"] = sugar_match / len(self.sugar_atoms)
-
-        nucleobase_atoms = {
-            key: self.nucleobase_heavy_atoms[key] for key in self.nucleobase_heavy_atoms
-        }
-        matches = {
-            key: len(residue_atoms.intersection(nucleobase_atoms[key]))
-            / len(nucleobase_atoms[key])
-            for key in nucleobase_atoms
-        }
-        best_match = max(matches.items(), key=lambda x: x[1])
-        scores["base"] = best_match[1]
-
-        connection_score = 0.0
-        distance_threshold = 2.0
-
-        if "P" in residue_atoms and "O5'" in residue_atoms:
-            p_atom = next(atom for atom in self.atoms if atom.name == "P")
-            o5_atom = next(atom for atom in self.atoms if atom.name == "O5'")
-            if (
-                numpy.linalg.norm(p_atom.coordinates - o5_atom.coordinates)
-                <= distance_threshold
-            ):
-                connection_score += 0.5
-        if "C1'" in residue_atoms:
-            c1_atom = next(atom for atom in self.atoms if atom.name == "C1'")
-            for base_connection in ["N9", "N1"]:
-                if base_connection in residue_atoms:
-                    base_atom = next(
-                        atom for atom in self.atoms if atom.name == base_connection
-                    )
-                    if (
-                        numpy.linalg.norm(c1_atom.coordinates - base_atom.coordinates)
-                        <= distance_threshold
-                    ):
-                        connection_score += 0.5
-                        break
-
-        scores["connections"] = connection_score
-
-        probability = sum(
-            scores[component] * weights[component] for component in scores.keys()
+        if self.nucleotide_hint is not None:
+            return self.nucleotide_hint
+        return is_nucleotide_from_atoms(
+            frozenset(atom.name for atom in self.atoms), self.find_atom
         )
-        return probability > 0.5
 
     @cached_property
     def base_normal_vector(self) -> Optional[numpy.typing.NDArray[numpy.floating]]:
@@ -446,6 +401,74 @@ class Residue3D(Residue):
         yield Atom(None, self.label, self.auth, self.model, "UNK", 0.0, 0.0, 0.0, None)
 
 
+def is_nucleotide_from_atoms(
+    atom_names: Set[str],
+    find_atom: Callable[[str], Optional[Atom]],
+) -> bool:
+    """Classify a residue as a nucleotide from atom names and selected coordinates.
+
+    Args:
+        atom_names: Names of all atoms present in the residue.
+        find_atom: Callback returning an atom by name, or None if absent.
+
+    Returns:
+        True if the combined heuristic score exceeds 0.5.
+    """
+    scores = {"phosphate": 0.0, "sugar": 0.0, "base": 0.0, "connections": 0.0}
+    weights = {"phosphate": 0.25, "sugar": 0.25, "base": 0.25, "connections": 0.25}
+
+    phosphate_match = len(atom_names.intersection(Residue3D.phosphate_atoms))
+    scores["phosphate"] = phosphate_match / len(Residue3D.phosphate_atoms)
+
+    sugar_match = len(atom_names.intersection(Residue3D.sugar_atoms))
+    scores["sugar"] = sugar_match / len(Residue3D.sugar_atoms)
+
+    nucleobase_atoms = Residue3D.nucleobase_heavy_atoms
+    matches = {
+        key: len(atom_names.intersection(nucleobase_atoms[key]))
+        / len(nucleobase_atoms[key])
+        for key in nucleobase_atoms
+    }
+    best_match = max(matches.items(), key=lambda x: x[1])
+    scores["base"] = best_match[1]
+
+    connection_score = 0.0
+    distance_threshold = 2.0
+
+    if "P" in atom_names and "O5'" in atom_names:
+        p_atom = find_atom("P")
+        o5_atom = find_atom("O5'")
+        if (
+            p_atom is not None
+            and o5_atom is not None
+            and numpy.linalg.norm(p_atom.coordinates - o5_atom.coordinates)
+            <= distance_threshold
+        ):
+            connection_score += 0.5
+    if "C1'" in atom_names:
+        c1_atom = find_atom("C1'")
+        if c1_atom is not None:
+            for base_connection in ["N9", "N1"]:
+                if base_connection in atom_names:
+                    base_atom = find_atom(base_connection)
+                    if (
+                        base_atom is not None
+                        and numpy.linalg.norm(
+                            c1_atom.coordinates - base_atom.coordinates
+                        )
+                        <= distance_threshold
+                    ):
+                        connection_score += 0.5
+                        break
+
+    scores["connections"] = connection_score
+
+    probability = sum(
+        scores[component] * weights[component] for component in scores.keys()
+    )
+    return probability > 0.5
+
+
 @dataclass(frozen=True, order=True)
 class BasePair3D(BasePair):
     """3D extension of BasePair with explicit 3D residue references and helpers."""
@@ -528,11 +551,11 @@ class Stacking3D(Stacking):
 
 
 def _residue_entries_with_missing(
-    nucleotides: List[Residue3D],
+    nucleotides: List[ResidueLike],
     missing_residues: List[MissingResidue],
     sequence_by_entity: Dict[str, str],
     find_gaps: bool = False,
-) -> List[Tuple[str, str, Optional[Residue3D]]]:
+) -> List[Tuple[Optional[str], str, Optional[ResidueLike]]]:
     """Merge modelled nucleotides with header-reported missing residues.
 
     Returns (chain, one-letter code, residue or None) entries ordered per
@@ -550,7 +573,7 @@ def _residue_entries_with_missing(
         ]
 
     if not missing_residues:
-        entries: List[Tuple[str, str, Optional[Residue3D]]] = []
+        entries: List[Tuple[Optional[str], str, Optional[ResidueLike]]] = []
         for position, residue in enumerate(nucleotides):
             if (
                 position > 0
@@ -572,24 +595,22 @@ def _residue_entries_with_missing(
             entries.append((residue.chain, residue.one_letter_name, residue))
         return entries
 
-    modelled_by_chain: Dict[str, Dict[int, Residue3D]] = {}
-    chain_order: List[str] = []
-    entity_by_chain: Dict[str, Optional[str]] = {}
+    modelled_by_chain: Dict[Optional[str], Dict[int, ResidueLike]] = {}
+    chain_order: List[Optional[str]] = []
+    entity_by_chain: Dict[Optional[str], Optional[str]] = {}
     for residue in nucleotides:
         modelled_by_chain.setdefault(residue.chain, {})[residue.number] = residue
         if residue.chain not in chain_order:
             chain_order.append(residue.chain)
-            entity_by_chain[residue.chain] = (
-                residue.atoms[0].entity_id if residue.atoms else None
-            )
+            entity_by_chain[residue.chain] = residue.entity_id
 
-    missing_by_chain: Dict[str, Dict[int, MissingResidue]] = {}
+    missing_by_chain: Dict[Optional[str], Dict[int, MissingResidue]] = {}
     for missing in missing_residues:
         if missing.chain not in modelled_by_chain or missing.number is None:
             continue
         missing_by_chain.setdefault(missing.chain, {})[missing.number] = missing
 
-    entries: List[Tuple[str, str, Optional[Residue3D]]] = []
+    entries: List[Tuple[Optional[str], str, Optional[ResidueLike]]] = []
     for chain in chain_order:
         modelled = modelled_by_chain[chain]
         missing = missing_by_chain.get(chain, {})
@@ -676,73 +697,96 @@ class Structure3D:
         Returns:
             A tuple containing the Structure2D object and the Mapping2D3D object.
         """
-        mapping = Mapping2D3D(
+        return extract_secondary_structure(
             self,
-            base_interactions.base_pairs,
-            base_interactions.stackings,
+            base_interactions,
             find_gaps,
+            decompose_pseudoknot_free,
         )
 
-        full_dotbracket_str = mapping.bpseq.dot_bracket.structure
 
-        if decompose_pseudoknot_free:
-            pk_free_bpseq = mapping.bpseq.without_pseudoknots()
-            stems, single_strands, hairpins, loops = pk_free_bpseq.compute_elements(
-                dotbracket_override=full_dotbracket_str
-            )
-        else:
-            stems, single_strands, hairpins, loops = mapping.bpseq.elements
+def extract_secondary_structure(
+    structure: StructureLike,
+    base_interactions: BaseInteractions,
+    find_gaps: bool = False,
+    decompose_pseudoknot_free: bool = False,
+) -> Tuple[Structure2D, "Mapping2D3D"]:
+    """Create a secondary structure representation from base interactions.
 
-        # Identify pseudoknot stems: stems whose Strand.structure contains
-        # characters other than '(' and ')' (i.e. higher-order brackets like
-        # '[', ']', '{', '}', etc.).  This works in both modes because
-        # Strand.structure always reflects the full dot-bracket notation.
-        canonical = set("()")
-        full_stems, _, _, _ = mapping.bpseq.elements
-        pseudoknot_stems = [
-            stem
-            for stem in full_stems
-            if any(c not in canonical for c in stem.strand5p.structure)
-            or any(c not in canonical for c in stem.strand3p.structure)
-        ]
+    Args:
+        structure: Structure providing residues and residue lookup.
+        base_interactions: Interactions to convert.
+        find_gaps: Whether to detect gaps in the structure. Requires a
+            gap-aware structure with coordinates.
+        decompose_pseudoknot_free: If True, structural elements are decomposed
+            from the pseudoknot-free structure while retaining pseudoknot
+            characters in dot-bracket strings.
 
-        # Calculate inter-stem parameters using the helper function
-        inter_stem_params = calculate_all_inter_stem_parameters(mapping)
+    Returns:
+        A tuple containing the Structure2D object and the Mapping2D3D object.
+    """
+    mapping = Mapping2D3D(
+        structure,
+        base_interactions.base_pairs,
+        base_interactions.stackings,
+        find_gaps,
+    )
 
-        structure2d = Structure2D(
-            base_interactions.base_pairs,
-            base_interactions.stackings,
-            base_interactions.base_ribose_interactions,
-            base_interactions.base_phosphate_interactions,
-            base_interactions.other_interactions,
-            mapping.bpseq,
-            mapping.bpseq_index_to_residue_map,
-            mapping.dot_bracket,
-            mapping.extended_dot_bracket,
-            stems,
-            single_strands,
-            hairpins,
-            loops,
-            pseudoknot_stems,
-            inter_stem_params,
+    full_dotbracket_str = mapping.bpseq.dot_bracket.structure
+
+    if decompose_pseudoknot_free:
+        pk_free_bpseq = mapping.bpseq.without_pseudoknots()
+        stems, single_strands, hairpins, loops = pk_free_bpseq.compute_elements(
+            dotbracket_override=full_dotbracket_str
         )
-        return structure2d, mapping
+    else:
+        stems, single_strands, hairpins, loops = mapping.bpseq.elements
+
+    # Identify pseudoknot stems: stems whose Strand.structure contains
+    # characters other than '(' and ')' (i.e. higher-order brackets like
+    # '[', ']', '{', '}', etc.).  This works in both modes because
+    # Strand.structure always reflects the full dot-bracket notation.
+    canonical = set("()")
+    full_stems, _, _, _ = mapping.bpseq.elements
+    pseudoknot_stems = [
+        stem
+        for stem in full_stems
+        if any(c not in canonical for c in stem.strand5p.structure)
+        or any(c not in canonical for c in stem.strand3p.structure)
+    ]
+
+    structure2d = Structure2D(
+        base_interactions.base_pairs,
+        base_interactions.stackings,
+        base_interactions.base_ribose_interactions,
+        base_interactions.base_phosphate_interactions,
+        base_interactions.other_interactions,
+        mapping.bpseq,
+        mapping.bpseq_index_to_residue_map,
+        mapping.dot_bracket,
+        mapping.extended_dot_bracket,
+        stems,
+        single_strands,
+        hairpins,
+        loops,
+        pseudoknot_stems,
+    )
+    return structure2d, mapping
 
 
 @dataclass
 class Mapping2D3D:
-    """Mapping between 2D base interactions and 3D structural data.
+    """Mapping between 2D base interactions and structure-like data.
 
     This class:
 
-    - connects 2D BasePair/Stacking objects with Residue3D instances,
-    - builds 3D-aware base-pair and stacking graphs,
-    - constructs a BpSeq representation consistent with the 3D structure,
-    - derives dot-bracket and extended dot-bracket notations per strand,
-    - and provides utilities for computing inter-stem parameters.
+    - connects 2D BasePair/Stacking objects with residue objects,
+    - builds base-pair and stacking graphs,
+    - constructs a BpSeq representation consistent with the structure,
+    - and derives dot-bracket and extended dot-bracket notations per strand.
     """
 
-    structure3d: Structure3D
+    structure3d: StructureLike
     base_pairs2d: List[BasePair]
     stackings2d: List[Stacking]
     find_gaps: bool
@@ -821,6 +865,36 @@ class Mapping2D3D:
             graph[pair.nt2_3d].add(pair.nt1_3d)
         return graph
 
+    def _nucleotide_entries(
+        self,
+    ) -> List[Tuple[Optional[str], str, Optional[ResidueLike]]]:
+        """Return ordered (chain, one-letter code, residue) nucleotide entries.
+
+        Gap-aware mode requires a structure with coordinates and header
+        metadata. Identity-only structures are supported only with
+        ``find_gaps=False``.
+        """
+        nucleotides = [
+            residue for residue in self.structure3d.residues if residue.is_nucleotide
+        ]
+        if not self.find_gaps:
+            return [
+                (residue.chain, residue.one_letter_name, residue)
+                for residue in nucleotides
+            ]
+
+        if not isinstance(self.structure3d, GapAwareStructureLike):
+            raise TypeError(
+                "find_gaps=True requires a gap-aware structure such as Structure3D"
+            )
+
+        return _residue_entries_with_missing(
+            nucleotides,
+            self.structure3d.missing_residues,
+            self.structure3d.sequence_by_entity,
+            True,
+        )
+
     @cached_property
     def strands_sequences(self) -> List[Tuple[str, str]]:
         """Return sequences per chain as (chain_id, sequence) tuples.
@@ -830,12 +904,7 @@ class Mapping2D3D:
         file header (structure3d.missing_residues) are inserted with their
         real one-letter codes.
         """
-        entries = _residue_entries_with_missing(
-            list(filter(lambda r: r.is_nucleotide, self.structure3d.residues)),
-            self.structure3d.missing_residues if self.find_gaps else [],
-            self.structure3d.sequence_by_entity,
-            self.find_gaps,
-        )
+        entries = self._nucleotide_entries()
 
         if not entries:
             return []
@@ -911,12 +980,7 @@ class Mapping2D3D:
 
     def __generate_bpseq(self, base_pairs) -> Tuple[BpSeq, Dict[int, Residue3D]]:
         """Generates BpSeq entries and a map from index to Residue3D."""
-        entries = _residue_entries_with_missing(
-            list(filter(lambda r: r.is_nucleotide, self.structure3d.residues)),
-            self.structure3d.missing_residues if self.find_gaps else [],
-            self.structure3d.sequence_by_entity,
-            self.find_gaps,
-        )
+        entries = self._nucleotide_entries()
         result: Dict[int, List] = {}
         residue_map: Dict[Residue3D, int] = {}
         index_to_residue_map: Dict[int, Residue3D] = {}
@@ -979,200 +1043,6 @@ class Mapping2D3D:
             result.append(dbns[i])
             i += len(sequence)
         return "\n".join(result)
-
-    def _calculate_pair_centroid(
-        self, residue1: Residue3D, residue2: Residue3D
-    ) -> Optional[numpy.typing.NDArray[numpy.floating]]:
-        """Calculates the geometric mean of base atoms for a pair of residues."""
-        base_atoms = []
-        for residue in [residue1, residue2]:
-            base_atom_names = Residue3D.nucleobase_heavy_atoms.get(
-                residue.one_letter_name.upper(), set()
-            )
-            if not base_atom_names:
-                logging.warning(
-                    f"Could not find base atom definition for residue {residue.full_name}"
-                )
-                continue
-            for atom in residue.atoms:
-                if atom.name in base_atom_names:
-                    base_atoms.append(atom)
-
-        if not base_atoms:
-            logging.warning(
-                f"No base atoms found for pair {residue1.full_name} - {residue2.full_name}"
-            )
-            return None
-
-        coordinates = [atom.coordinates for atom in base_atoms]
-        return numpy.mean(coordinates, axis=0)
-
-    def get_stem_coordinates(
-        self, stem: Stem
-    ) -> List[numpy.typing.NDArray[numpy.floating]]:
-        """
-        Calculates the geometric centroid for each base pair in the stem.
-
-        Args:
-            stem: The Stem object.
-
-        Returns:
-            A list of numpy arrays, where each array is the centroid of a base pair in the stem. Returns an empty list if no centroids can be calculated.
-        """
-        all_pair_centroids = []
-        stem_len = stem.strand5p.last - stem.strand5p.first + 1
-
-        for i in range(stem_len):
-            idx5p = stem.strand5p.first + i
-            idx3p = stem.strand3p.last - i
-            try:
-                res5p = self.bpseq_index_to_residue_map[idx5p]
-                res3p = self.bpseq_index_to_residue_map[idx3p]
-                centroid = self._calculate_pair_centroid(res5p, res3p)
-                if centroid is not None:
-                    all_pair_centroids.append(centroid)
-            except KeyError:
-                logging.warning(
-                    f"Could not find residues for pair {idx5p}-{idx3p} in stem {stem}"
-                )
-                continue  # Continue calculating other centroids
-
-        return all_pair_centroids
-
-    def calculate_inter_stem_parameters(
-        self, stem1: Stem, stem2: Stem, kappa: float = 10.0
-    ) -> Optional[Dict[str, Union[str, float]]]:
-        """
-        Calculates geometric parameters between two stems based on closest endpoints
-        and the probability of the observed torsion angle given the expected A-RNA
-        twist using a von Mises distribution.
-
-        Args:
-            stem1: The first Stem object.
-            stem2: The second Stem object.
-            kappa: Concentration parameter for the von Mises distribution
-                (default: 10.0).
-
-        Returns:
-            dict | None:
-                A dictionary containing:
-
-                - **type** (str): the type of closest endpoint pair
-                (``'cs55'``, ``'cs53'``, ``'cs35'``, ``'cs33'``).
-                - **torsion_angle** (float): calculated torsion angle in degrees.
-                - **min_endpoint_distance** (float): minimum distance between endpoints.
-                - **torsion_angle_pdf** (float): PDF value for the torsion angle under
-                the von Mises distribution.
-                - **min_endpoint_distance_pdf** (float): PDF value based on the minimum
-                endpoint distance using a Lennard-Jones-like function.
-                - **coaxial_probability** (float): normalized product of torsion-angle
-                PDF and distance PDF (0–1), indicating coaxial-stacking likelihood.
-
-                Returns ``None`` if either stem has fewer than two base pairs or
-                centroids cannot be calculated.
-        """
-
-        stem1_centroids = self.get_stem_coordinates(stem1)
-        stem2_centroids = self.get_stem_coordinates(stem2)
-
-        # Need at least 2 centroids (base pairs) per stem
-        if len(stem1_centroids) < 2 or len(stem2_centroids) < 2:
-            logging.warning(
-                f"Cannot calculate inter-stem parameters for stems {stem1} and {stem2}: "
-                f"Insufficient base pairs ({len(stem1_centroids)} and {len(stem2_centroids)} respectively)."
-            )
-            return None
-
-        # Define the endpoints for each stem
-        s1_first, s1_last = stem1_centroids[0], stem1_centroids[-1]
-        s2_first, s2_last = stem2_centroids[0], stem2_centroids[-1]
-
-        # Calculate distances between the four endpoint pairs
-        endpoint_distances = {
-            "cs55": numpy.linalg.norm(s1_first - s2_first),
-            "cs53": numpy.linalg.norm(s1_first - s2_last),
-            "cs35": numpy.linalg.norm(s1_last - s2_first),
-            "cs33": numpy.linalg.norm(s1_last - s2_last),
-        }
-
-        # Find the minimum endpoint distance and the corresponding pair
-        min_endpoint_distance = min(endpoint_distances.values())
-        closest_pair_key = min(endpoint_distances, key=endpoint_distances.get)
-
-        # Select the points for torsion and determine mu based on the closest pair.
-        # s1p2 and s2p1 must be the endpoints involved in the minimum distance.
-        a_rna_twist = 32.7
-        mu_degrees = 0.0
-
-        if closest_pair_key == "cs55":
-            # Closest: s1_first and s2_first
-            # Torsion points: s1_second, s1_first, s2_first, s2_second
-            s1p1, s1p2 = stem1_centroids[1], stem1_centroids[0]
-            s2p1, s2p2 = stem2_centroids[0], stem2_centroids[1]
-            mu_degrees = 180.0 - a_rna_twist
-        elif closest_pair_key == "cs53":
-            # Closest: s1_first and s2_last
-            # Torsion points: s1_second, s1_first, s2_last, s2_second_last
-            s1p1, s1p2 = stem1_centroids[1], stem1_centroids[0]
-            s2p1, s2p2 = stem2_centroids[-1], stem2_centroids[-2]
-            mu_degrees = 0.0 - a_rna_twist
-        elif closest_pair_key == "cs35":
-            # Closest: s1_last and s2_first
-            # Torsion points: s1_second_last, s1_last, s2_first, s2_second
-            s1p1, s1p2 = stem1_centroids[-2], stem1_centroids[-1]
-            s2p1, s2p2 = stem2_centroids[0], stem2_centroids[1]
-            mu_degrees = 0.0 + a_rna_twist
-        elif closest_pair_key == "cs33":
-            # Closest: s1_last and s2_last
-            # Torsion points: s1_second_last, s1_last, s2_last, s2_second_last
-            s1p1, s1p2 = stem1_centroids[-2], stem1_centroids[-1]
-            s2p1, s2p2 = stem2_centroids[-1], stem2_centroids[-2]
-            mu_degrees = 180.0 + a_rna_twist
-        else:
-            # This case should ideally not be reached if endpoint_distances is not empty
-            logging.error(
-                f"Unexpected closest pair key: {closest_pair_key}. Cannot calculate parameters."
-            )
-            return None
-
-        # Calculate torsion angle (in radians)
-        torsion_radians = calculate_torsion_angle_coords(s1p1, s1p2, s2p1, s2p2)
-
-        # Create von Mises distribution instance
-        mu_radians = math.radians(mu_degrees)
-        vm_dist = vonmises(kappa=kappa, loc=mu_radians)
-
-        # Calculate the probability density function (PDF) value for the torsion angle
-        torsion_probability = vm_dist.pdf(torsion_radians)
-
-        # Calculate the probability density for the minimum endpoint distance
-        distance_probability = distance_pdf(
-            min_endpoint_distance
-        )  # Use the new function
-
-        # Calculate the coaxial probability
-        # Max torsion probability occurs at mu (location of the distribution)
-        max_torsion_probability = vm_dist.pdf(mu_radians)
-        # Max distance probability is 1.0 by design of lennard_jones_like_pdf
-        max_distance_probability = 1.0
-        # Normalization factor is the product of maximum possible probabilities
-        normalization_factor = max_torsion_probability * max_distance_probability
-
-        coaxial_probability = 0.0
-        if normalization_factor > 1e-9:  # Avoid division by zero
-            probability_product = torsion_probability * distance_probability
-            coaxial_probability = probability_product / normalization_factor
-            # Clamp between 0 and 1
-            coaxial_probability = max(0.0, min(1.0, coaxial_probability))
-
-        return {
-            "type": closest_pair_key,
-            "torsion_angle": math.degrees(torsion_radians),
-            "min_endpoint_distance": min_endpoint_distance,
-            "torsion_angle_pdf": torsion_probability,
-            "min_endpoint_distance_pdf": distance_probability,
-            "coaxial_probability": coaxial_probability,
-        }
 
     def __generate_dot_bracket_per_strand(self, dbn_structure: str) -> List[str]:
         """Split a global dot-bracket string into a list of per-strand strings."""
@@ -1241,85 +1111,6 @@ class Mapping2D3D:
                         result[i].append(f"{lw.value} {dbns[i]}")
 
         return "\n".join(["\n".join(r) for r in result])
-
-
-def distance_pdf(
-    x: float, lower_bound: float = 3.0, upper_bound: float = 7.0, steepness: float = 5.0
-) -> float:
-    """
-    Calculates a probability density based on distance using a plateau function.
-
-    The function uses the product of two sigmoid functions to create a distribution
-    that is close to 1.0 between lower_bound and upper_bound, and drops off
-    rapidly outside this range.
-
-    Args:
-        x: The distance value.
-        lower_bound: The start of the high-probability plateau (default: 3.0).
-        upper_bound: The end of the high-probability plateau (default: 7.0).
-        steepness: Controls how quickly the probability drops outside the plateau
-                   (default: 5.0). Higher values mean steeper drops.
-
-    Returns:
-        The calculated probability density (between 0.0 and 1.0).
-    """
-    # Define a maximum exponent value to prevent overflow
-    max_exponent = 700.0
-
-    # Calculate exponent for the first sigmoid (increasing)
-    exponent1 = -steepness * (x - lower_bound)
-    # Clamp the exponent if it's excessively large (which happens when x << lower_bound)
-    exponent1 = min(exponent1, max_exponent)
-    sigmoid1 = 1.0 / (1.0 + math.exp(exponent1))
-
-    # Calculate exponent for the second sigmoid (decreasing)
-    exponent2 = steepness * (x - upper_bound)
-    # Clamp the exponent if it's excessively large (which happens when x >> upper_bound)
-    exponent2 = min(exponent2, max_exponent)
-    sigmoid2 = 1.0 / (1.0 + math.exp(exponent2))
-
-    # The product creates the plateau effect
-    probability = sigmoid1 * sigmoid2
-    # Clamp to handle potential floating point inaccuracies near 0 and 1
-    return max(0.0, min(1.0, probability))
-
-
-def calculate_all_inter_stem_parameters(
-    mapping: Mapping2D3D,
-) -> List[InterStemParameters]:
-    """
-    Calculates InterStemParameters for all valid pairs of stems found in the mapping.
-
-    Args:
-        mapping: The Mapping2D3D object containing structure, 2D info, and mapping.
-
-    """
-    stems = mapping.bpseq.elements[0]  # Get stems from mapping
-    inter_stem_params = []
-    for i, j in itertools.combinations(range(len(stems)), 2):
-        stem1 = stems[i]
-        stem2 = stems[j]
-
-        # Ensure both stems have at least 2 base pairs for parameter calculation
-        if (stem1.strand5p.last - stem1.strand5p.first + 1) > 1 and (
-            stem2.strand5p.last - stem2.strand5p.first + 1
-        ) > 1:
-            params = mapping.calculate_inter_stem_parameters(stem1, stem2)
-            # Only add if calculation returned valid values
-            if params is not None:
-                inter_stem_params.append(
-                    InterStemParameters(
-                        stem1_idx=i,
-                        stem2_idx=j,
-                        type=params["type"],
-                        torsion=params["torsion_angle"],
-                        min_endpoint_distance=params["min_endpoint_distance"],
-                        torsion_angle_pdf=params["torsion_angle_pdf"],
-                        min_endpoint_distance_pdf=params["min_endpoint_distance_pdf"],
-                        coaxial_probability=params["coaxial_probability"],
-                    )
-                )
-    return inter_stem_params
 
 
 def torsion_angle(a1: Atom, a2: Atom, a3: Atom, a4: Atom) -> float:

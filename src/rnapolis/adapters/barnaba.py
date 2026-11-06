@@ -16,7 +16,7 @@ from rnapolis.common import (
     Stacking,
     StackingTopology,
 )
-from rnapolis.tertiary import Structure3D
+from rnapolis.contracts import StructureLike
 
 _BARNABA_STACKING_TOPOLOGIES = {
     ">>": "upward",
@@ -151,7 +151,7 @@ def _barnaba_get_residue(
 
 
 def parse_barnaba_output(
-    file_paths: List[str], structure3d: Structure3D
+    file_paths: List[str], structure3d: StructureLike
 ) -> BaseInteractions:
     """
     Parse barnaba output files and convert to BaseInteractions.

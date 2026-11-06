@@ -17,7 +17,7 @@ from rnapolis.common import (
     Stacking,
     StackingTopology,
 )
-from rnapolis.tertiary import Structure3D
+from rnapolis.contracts import StructureLike
 from rnapolis.util import handle_input_file
 
 
@@ -308,7 +308,7 @@ class MCAnnotateAdapter:
 
 
 def parse_mcannotate_output(
-    file_paths: List[str], structure3d: Structure3D
+    file_paths: List[str], structure3d: StructureLike
 ) -> BaseInteractions:
     """
     Parse mc-annotate output and convert to BaseInteractions.

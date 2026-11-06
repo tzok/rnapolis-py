@@ -11,7 +11,7 @@ from rnapolis.common import (
     ResidueAuth,
     ResidueLabel,
 )
-from rnapolis.tertiary import Structure3D
+from rnapolis.contracts import StructureLike
 
 
 class InteractionType(Enum):
@@ -104,7 +104,7 @@ def _parse_residues(row: pd.Series) -> tuple[Residue, Residue]:
 
 
 def parse_dnatco_output(
-    file_paths: List[str], structure3d: Structure3D
+    file_paths: List[str], structure3d: StructureLike
 ) -> BaseInteractions:
     """
     Parse DNATCO output files and convert to BaseInteractions.

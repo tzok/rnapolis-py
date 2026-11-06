@@ -17,7 +17,7 @@ from rnapolis.common import (
     Stacking,
 )
 from rnapolis.parser_v2 import parse_cif_atoms, parse_pdb_atoms
-from rnapolis.tertiary import Structure3D
+from rnapolis.contracts import StructureLike
 from rnapolis.tertiary_v2 import Structure as StructureV2
 from rnapolis.util import handle_input_file
 
@@ -159,7 +159,7 @@ def _rnaview_check_indexing_correctness(
 
 
 def parse_rnaview_output(
-    file_paths: List[str], structure3d: Structure3D
+    file_paths: List[str], structure3d: StructureLike
 ) -> BaseInteractions:
     """
     Parse RNAView output files and convert to BaseInteractions.
