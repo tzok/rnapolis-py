@@ -10,11 +10,11 @@ from rnapolis.common import (
     Residue,
     Stacking,
 )
-from rnapolis.tertiary import Structure3D
+from rnapolis.contracts import StructureLike
 
 
 def _dssr_match_name_to_residue(
-    structure3d: Structure3D, nt_id: Optional[str]
+    structure3d: StructureLike, nt_id: Optional[str]
 ) -> Optional[Residue]:
     if nt_id is not None:
         nt_id = nt_id.split(":")[-1]
@@ -38,7 +38,7 @@ def _dssr_match_lw(lw: Optional[str]) -> Optional[LeontisWesthof]:
 
 
 def parse_dssr_output(
-    file_paths: List[str], structure3d: Structure3D, model: Optional[int] = None
+    file_paths: List[str], structure3d: StructureLike, model: Optional[int] = None
 ) -> BaseInteractions:
     """
     Parse DSSR JSON output and convert to BaseInteractions.

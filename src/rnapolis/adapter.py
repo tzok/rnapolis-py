@@ -19,10 +19,11 @@ from rnapolis.annotator import (
     handle_output_arguments,
 )
 from rnapolis.common import BaseInteractions, Structure2D
-from rnapolis.parser import read_3d_structure
+from rnapolis.contracts import StructureLike
+from rnapolis.structure_index import read_structure_index
 from rnapolis.tertiary import (
     Mapping2D3D,
-    Structure3D,
+    extract_secondary_structure,
 )
 from rnapolis.util import handle_input_file
 
@@ -116,7 +117,7 @@ def auto_detect_tool(external_files: List[str]) -> ExternalTool:
 
 
 def parse_external_output(
-    file_paths: List[str], tool: ExternalTool, structure3d: Structure3D
+    file_paths: List[str], tool: ExternalTool, structure3d: StructureLike
 ) -> BaseInteractions:
     """
     Parse the output from an external tool (FR3D, DSSR, etc.) and convert it to BaseInteractions.
@@ -150,13 +151,12 @@ def parse_external_output(
 
 
 def process_external_tool_output(
-    structure3d: Structure3D,
+    structure3d: StructureLike,
     external_file_paths: List[str],
     tool: ExternalTool,
     input_file_path: str,
-    find_gaps: bool = False,
     decompose_pseudoknot_free: bool = False,
-) -> Tuple[Structure2D, Mapping2D3D]:  # Added Mapping2D3D to return tuple
+) -> Tuple[Structure2D, Mapping2D3D]:
     """
     Process external tool output and create a secondary structure representation.
 
@@ -164,11 +164,10 @@ def process_external_tool_output(
     and get a Structure2D object with the secondary structure information.
 
     Args:
-        structure3d: The 3D structure parsed from PDB/mmCIF
+        structure3d: The structure parsed from PDB/mmCIF
         external_file_paths: List of paths to external tool output files (empty for MAXIT)
         tool: The external tool that generated the output (FR3D, DSSR, etc.)
         input_file_path: Path to the input file (used when external_file_paths is empty)
-        find_gaps: Whether to detect gaps in the structure
         decompose_pseudoknot_free: If True, structural elements are decomposed from the
             pseudoknot-free structure while retaining pseudoknot characters in
             dot-bracket strings. Pseudoknotted stems are reported separately.
@@ -190,8 +189,8 @@ def process_external_tool_output(
     base_interactions = parse_external_output(file_paths_to_process, tool, structure3d)
 
     # Extract secondary structure using the external tool's interactions
-    return structure3d.extract_secondary_structure(
-        base_interactions, find_gaps, decompose_pseudoknot_free
+    return extract_secondary_structure(
+        structure3d, base_interactions, False, decompose_pseudoknot_free
     )
 
 
@@ -208,18 +207,11 @@ def main():
         choices=[t.value for t in ExternalTool],
         help="External tool that generated the output file (auto-detected if not specified)",
     )
-    parser.add_argument(
-        "-f",
-        "--find-gaps",
-        action="store_true",
-        help="(optional) if set, the program will detect gaps and break the PDB chain into two or more strands",
-    )
     add_common_output_arguments(parser)
-    # The --inter-stem-csv and --stems-csv arguments are now added by add_common_output_arguments
     args = parser.parse_args()
 
     file = handle_input_file(args.input)
-    structure3d = read_3d_structure(file, None)
+    structure = read_structure_index(file, None)
 
     # Auto-detect tool if not specified
     if args.tool is not None:
@@ -231,11 +223,10 @@ def main():
     # Process external tool output files and get secondary structure
     # Always call process_external_tool_output, even for MAXIT (empty external files)
     structure2d, mapping = process_external_tool_output(
-        structure3d,
+        structure,
         args.external_files,
         tool,
         args.input,
-        args.find_gaps,
         args.decompose_pseudoknot_free,
     )
 

@@ -443,12 +443,8 @@ def test_pseudoknot_stems_empty_when_no_pseudoknots():
     import orjson
 
     from rnapolis.common import (
-        Hairpin,
-        InterStemParameters,
-        Loop,
         MultiStrandDotBracket,
         Residue,
-        SingleStrand,
         Stem,
         Strand,
         Structure2D,
@@ -475,7 +471,6 @@ def test_pseudoknot_stems_empty_when_no_pseudoknots():
         hairpins=[],
         loops=[],
         pseudoknot_stems=[pk_stem],
-        inter_stem_parameters=[],
     )
 
     # Serialize to JSON
@@ -491,6 +486,7 @@ def test_pseudoknot_stems_empty_when_no_pseudoknots():
     )
 
     assert "pseudoknot_stems" in data
+    assert "inter_stem_parameters" not in data
     assert len(data["pseudoknot_stems"]) == 1
     pk = data["pseudoknot_stems"][0]
     assert pk["strand5p"]["first"] == 18

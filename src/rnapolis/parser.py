@@ -3,7 +3,7 @@ import logging
 import os
 import re
 import tempfile
-from typing import IO, Dict, List, Optional, Tuple, Union, cast
+from typing import IO, Dict, List, Optional, Set, Tuple, Union, cast
 
 import numpy as np
 from mmcif.io.IoAdapterPy import IoAdapterPy
@@ -651,13 +651,24 @@ def detect_one_letter_name(atoms: List[Atom]) -> str:
     Returns:
         str: Best-scoring nucleotide (A/C/G/U/T) or '?' if no match is found.
     """
-    atom_names_present = {atom.name for atom in atoms}
+    return detect_one_letter_name_from_names({atom.name for atom in atoms})
+
+
+def detect_one_letter_name_from_names(atom_names: Set[str]) -> str:
+    """Guess a nucleotide one-letter code from a set of atom names.
+
+    Args:
+        atom_names: Names of all atoms present in a single residue.
+
+    Returns:
+        str: Best-scoring nucleotide (A/C/G/U/T) or '?' if no match is found.
+    """
     score = {}
     for candidate in "ACGUT":
         atom_names_expected = BASE_ATOMS[candidate]
-        count = sum(
-            1 for atom in atom_names_expected if atom in atom_names_present
-        ) / len(atom_names_expected)
+        count = sum(1 for atom in atom_names_expected if atom in atom_names) / len(
+            atom_names_expected
+        )
         score[candidate] = count
     items = sorted(score.items(), key=lambda kv: kv[1], reverse=True)
     if items[0][1] == 0:

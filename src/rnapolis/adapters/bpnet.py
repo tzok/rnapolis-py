@@ -14,7 +14,7 @@ from rnapolis.common import (
     ResidueAuth,
     Stacking,
 )
-from rnapolis.tertiary import Structure3D
+from rnapolis.contracts import StructureLike
 
 
 def _bpnet_convert_lw(bpnet_lw) -> LeontisWesthof:
@@ -49,7 +49,7 @@ def _bpnet_residues_from_overlap_info(fields):
 
 
 def parse_bpnet_output(
-    file_paths: List[str], structure3d: Structure3D
+    file_paths: List[str], structure3d: StructureLike
 ) -> BaseInteractions:
     """
     Parse BPNet output files and convert to BaseInteractions.

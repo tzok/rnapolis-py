@@ -5,13 +5,16 @@ import re
 import string
 from collections import defaultdict
 from collections.abc import Sequence
-from dataclasses import InitVar, dataclass
+from dataclasses import dataclass
 from enum import Enum
 from functools import cache, cached_property, total_ordering
-from typing import Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Dict, Iterator, List, Optional, Tuple
 
 import graphviz
 import pulp
+
+if TYPE_CHECKING:
+    from rnapolis.contracts import StructureLike
 
 LOGLEVEL = os.environ.get("LOGLEVEL", "INFO").upper()
 logging.basicConfig(level=LOGLEVEL)
@@ -1460,7 +1463,7 @@ class BaseInteractions:
     @classmethod
     def from_structure3d(
         cls,
-        structure3d: "Structure3D",
+        structure3d: "StructureLike",
         base_pairs: List[BasePair],
         stackings: List[Stacking],
         base_ribose_interactions: List[BaseRibose],
@@ -1567,26 +1570,12 @@ class BaseInteractions:
         )
 
 
-@dataclass(frozen=True, order=True)
-class InterStemParameters:
-    """Geometric parameters describing relationships between two stems."""
-
-    stem1_idx: int
-    stem2_idx: int
-    type: Optional[str]  # Type of closest endpoint pair ('cs55', 'cs53', etc.)
-    torsion: Optional[float]  # Torsion angle between stem segments (degrees)
-    min_endpoint_distance: Optional[float]  # Minimum distance between stem endpoints
-    torsion_angle_pdf: Optional[float]  # PDF value of the torsion angle
-    min_endpoint_distance_pdf: Optional[float]  # PDF value of the min endpoint distance
-    coaxial_probability: Optional[float]  # Probability of stems being coaxial (0-1)
-
-
 @dataclass
 class Structure2D:
     """Secondary structure representation plus derived structural elements.
 
-    This object collects interactions, BPSEQ, dot-bracket notation,
-    stems, loops and optional inter-stem parameters.
+    This object collects interactions, BPSEQ, dot-bracket notation, stems and
+    loops.
     """
 
     base_pairs: List[BasePair]
@@ -1603,4 +1592,3 @@ class Structure2D:
     hairpins: List[Hairpin]
     loops: List[Loop]
     pseudoknot_stems: List[Stem]
-    inter_stem_parameters: List[InterStemParameters]
