@@ -979,19 +979,30 @@ class Mapping2D3D:
         return self.__generate_bpseq(canonical)
 
     def __generate_bpseq(self, base_pairs) -> Tuple[BpSeq, Dict[int, Residue3D]]:
-        """Generates BpSeq entries and a map from index to Residue3D."""
+        """Generates BpSeq entries and a map from index to Residue3D.
+
+        All chains are concatenated into one continuous index space.  The
+        last index of each chain is recorded in ``strand_breaks`` so that
+        downstream element decomposition never produces structural
+        elements spanning a chain boundary.  Gap placeholders inserted by
+        ``find_gaps=True`` keep their chain id and therefore do not
+        introduce breaks.
+        """
         entries = self._nucleotide_entries()
         result: Dict[int, List] = {}
         residue_map: Dict[Residue3D, int] = {}
         index_to_residue_map: Dict[int, Residue3D] = {}
-        i = 1
+        strand_breaks: List[int] = []
+        previous_chain = None
 
-        for _, letter, residue in entries:
-            result[i] = [i, letter, 0]
+        for position, (chain, letter, residue) in enumerate(entries, start=1):
+            if position > 1 and chain != previous_chain:
+                strand_breaks.append(position - 1)
+            result[position] = [position, letter, 0]
             if residue is not None:
-                residue_map[residue] = i
-                index_to_residue_map[i] = residue
-            i += 1
+                residue_map[residue] = position
+                index_to_residue_map[position] = residue
+            previous_chain = chain
 
         for base_pair in base_pairs:
             j = residue_map.get(base_pair.nt1_3d, None)
@@ -1005,7 +1016,8 @@ class Mapping2D3D:
             [
                 Entry(index_, sequence, pair)
                 for index_, sequence, pair in result.values()
-            ]
+            ],
+            strand_breaks,
         ), index_to_residue_map
 
     def find_residue_for_entry(self, entry: Entry) -> Optional[Residue3D]:

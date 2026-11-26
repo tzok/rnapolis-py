@@ -8,7 +8,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import Enum
 from functools import cache, cached_property, total_ordering
-from typing import TYPE_CHECKING, Dict, Iterator, List, Optional, Tuple
+from typing import TYPE_CHECKING, Dict, FrozenSet, Iterator, List, Optional, Tuple
 
 import graphviz
 import pulp
@@ -673,9 +673,20 @@ class Loop:
 
 @dataclass
 class BpSeq:
-    """Sequence and base-pairing information in BPSEQ format."""
+    """Sequence and base-pairing information in BPSEQ format.
+
+    ``strand_breaks`` records 1-based indices ``i`` where the covalent
+    backbone is broken between entries ``i`` and ``i + 1`` (i.e. ``i`` is
+    the last entry of a strand), as happens at chain boundaries of
+    multi-chain structures.  Element decomposition
+    (:meth:`compute_elements`) uses it so that structural elements never
+    span a strand break.  When empty or unset, the whole BPSEQ is treated
+    as one continuous strand, which preserves the legacy behaviour for
+    plain BPSEQ input (the format itself carries no chain information).
+    """
 
     entries: List[Entry]
+    strand_breaks: Optional[List[int]] = None
 
     @staticmethod
     def from_string(bpseq_str: str) -> "BpSeq":
@@ -714,11 +725,17 @@ class BpSeq:
             return BpSeq.from_string(f.read())
 
     @staticmethod
-    def from_dotbracket(dot_bracket: "DotBracket") -> "BpSeq":
+    def from_dotbracket(
+        dot_bracket: "DotBracket", strand_breaks: Optional[List[int]] = None
+    ) -> "BpSeq":
         """Convert dot-bracket representation to BPSEQ entries.
 
         Args:
             dot_bracket: Dot-bracket representation with sequence and structure.
+            strand_breaks: Optional strand break positions (1-based index of
+                the last entry of each strand). When omitted and
+                ``dot_bracket`` is a :class:`MultiStrandDotBracket`, the
+                breaks are derived from its strand boundaries.
 
         Returns:
             BPSEQ representation derived from dot-bracket.
@@ -730,7 +747,9 @@ class BpSeq:
         for i, j in dot_bracket.pairs:
             entries[i].pair = j + 1
             entries[j].pair = i + 1
-        return BpSeq(entries)
+        if strand_breaks is None and isinstance(dot_bracket, MultiStrandDotBracket):
+            strand_breaks = [strand.last for strand in dot_bracket.strands[:-1]]
+        return BpSeq(entries, strand_breaks)
 
     def __post_init__(self):
         """Build internal mapping from indices to their pairing partners."""
@@ -739,6 +758,28 @@ class BpSeq:
             if j != 0:
                 self.pairs[i] = j
                 self.pairs[j] = i
+        if self.strand_breaks:
+            limit = len(self.entries)
+            self.strand_breaks = sorted(
+                set(
+                    index
+                    for index in self.strand_breaks
+                    if isinstance(index, int) and 1 <= index < limit
+                )
+            )
+        else:
+            self.strand_breaks = None
+
+    def _strand_break_set(self) -> FrozenSet[int]:
+        """Return the validated strand breaks as a fresh frozenset.
+
+        Deliberately not cached on the instance: orjson serializes the full
+        dataclass ``__dict__`` and a frozenset attribute would break the
+        JSON output of the annotator pipeline.
+        """
+        if not self.strand_breaks:
+            return frozenset()
+        return frozenset(self.strand_breaks)
 
     def __str__(self):
         """Format BPSEQ entries as multi-line text."""
@@ -774,6 +815,7 @@ class BpSeq:
         """Internal helper: group paired entries into stems."""
         stems = []
         entries: List[Entry] = []
+        breaks = self._strand_break_set()
 
         for entry in self.paired(only5to3=True):
             if not entries:
@@ -782,7 +824,14 @@ class BpSeq:
 
             i, _, j = entry
             k, _, l = entries[-1]
-            if i == k + 1 and j == l - 1:
+            if (
+                i == k + 1
+                and j == l - 1
+                # a strand break inside either strand splits the stem;
+                # a break between the two strands (blunt-end duplex) does not
+                and k not in breaks
+                and j not in breaks
+            ):
                 entries.append(entry)
                 continue
 
@@ -810,6 +859,19 @@ class BpSeq:
         dotbracket_override: Optional[str] = None,
     ) -> Tuple[List[Stem], List[SingleStrand], List[Hairpin], List[Loop]]:
         """Decompose structure into stems, single strands, hairpins and loops.
+
+        When ``strand_breaks`` is set (e.g. derived from the chain
+        boundaries of a multi-chain structure), elements never cross a
+        break: stems whose strand spans a break are split, and a region
+        spanning a break yields per-strand terminal single strands instead
+        of a spurious hairpin or loop.  Segments bounded by breaks on both
+        sides without an adjacent stem produce no element, consistent with
+        the convention that a structure without stems yields no elements.
+        Loops may still connect strands of different chains through stems:
+        each constituent strand is intra-strand, but the junction cycle is
+        closed by base pairs, not covalent bonds.  Without
+        ``strand_breaks`` the decomposition is unchanged and treats the
+        whole BPSEQ as one continuous strand.
 
         Args:
             dotbracket_override: If provided, use this dot-bracket string for
@@ -844,44 +906,77 @@ class BpSeq:
 
         stops = sorted(stopset)
         loop_candidates = []
+        breaks = self._strand_break_set()
+
+        def classify_region(
+            first: int, last: int, left_is_stop: bool, right_is_stop: bool
+        ) -> None:
+            """Classify the 1-based inclusive region [first, last].
+
+            The region is split at strand breaks.  Each segment is then
+            classified by its boundary types: a segment closed by stems on
+            both sides keeps the classic hairpin / loop-candidate logic, a
+            segment closed by a stem on one side and a break on the other
+            is the terminal single strand of its strand, and a segment
+            touching no stem yields no element.
+            """
+            segment_bounds = []
+            segment_first = first
+            for b in sorted(b for b in breaks if first <= b < last):
+                segment_bounds.append((segment_first, b))
+                segment_first = b + 1
+            segment_bounds.append((segment_first, last))
+
+            for segment_first, segment_last in segment_bounds:
+                segment = self.entries[segment_first - 1 : segment_last]
+                left_stop = left_is_stop and segment_first == first
+                right_stop = right_is_stop and segment_last == last
+                if left_stop and right_stop:
+                    # contiguous region between two stem boundaries
+                    if segment[0].pair == segment[-1].index_:
+                        hairpins.append(
+                            Hairpin(
+                                Strand.from_bpseq_entries(segment, dotbracket_str)
+                            )
+                        )
+                    else:
+                        loop_candidates.append(
+                            Strand.from_bpseq_entries(segment, dotbracket_str)
+                        )
+                elif left_stop:
+                    # stem-closed 3' terminus of a strand
+                    single_strands.append(
+                        SingleStrand(
+                            Strand.from_bpseq_entries(segment, dotbracket_str),
+                            False,
+                            True,
+                        )
+                    )
+                elif right_stop:
+                    # stem-closed 5' start of a strand
+                    single_strands.append(
+                        SingleStrand(
+                            Strand.from_bpseq_entries(segment, dotbracket_str),
+                            True,
+                            False,
+                        )
+                    )
+                # else: segment bounded by strand breaks without stem
+                # adjacency produces no element
 
         # 5' single strand
         if stops[0] > 0:
-            single_strands.append(
-                SingleStrand(
-                    Strand.from_bpseq_entries(
-                        self.entries[: stops[0] + 1],
-                        dotbracket_str,
-                    ),
-                    True,
-                    False,
-                )
-            )
+            classify_region(1, stops[0] + 1, False, True)
 
         # single strands
         for i in range(1, len(stops)):
             candidate = self.entries[stops[i - 1] : stops[i] + 1]
             if all([entry.pair == 0 for entry in candidate[1:-1]]):
-                if candidate[0].pair == candidate[-1].index_:
-                    hairpins.append(
-                        Hairpin(Strand.from_bpseq_entries(candidate, dotbracket_str))
-                    )
-                else:
-                    loop_candidates.append(
-                        Strand.from_bpseq_entries(candidate, dotbracket_str)
-                    )
+                classify_region(stops[i - 1] + 1, stops[i] + 1, True, True)
 
         # 3' single strand
         if stops[-1] < len(self.entries) - 1:
-            single_strands.append(
-                SingleStrand(
-                    Strand.from_bpseq_entries(
-                        self.entries[stops[-1] :], dotbracket_str
-                    ),
-                    False,
-                    True,
-                )
-            )
+            classify_region(stops[-1] + 1, len(self.entries), True, False)
 
         graph = defaultdict(set)
 
@@ -1266,15 +1361,20 @@ class BpSeq:
         """Return BPSEQ converted to dot-bracket with pseudoknots removed.
 
         Returns:
-            New BPSEQ object with all pseudoknots removed.
+            New BPSEQ object with all pseudoknots removed. Strand breaks
+            are preserved.
         """
-        return BpSeq.from_dotbracket(self.dot_bracket.without_pseudoknots())
+        return BpSeq.from_dotbracket(
+            self.dot_bracket.without_pseudoknots(),
+            strand_breaks=self.strand_breaks,
+        )
 
     def without_isolated(self) -> "BpSeq":
         """Return BpSeq with isolated base pairs unpaired.
 
         Returns:
             New BPSEQ object where isolated base pairs have been unpaired.
+            Strand breaks are preserved.
         """
         stems, _, _, _ = self.elements
         to_unpair = []
@@ -1291,7 +1391,7 @@ class BpSeq:
         for i in to_unpair:
             entries[i].pair = 0
 
-        return BpSeq(entries)
+        return BpSeq(entries, strand_breaks=self.strand_breaks)
 
 
 @dataclass
