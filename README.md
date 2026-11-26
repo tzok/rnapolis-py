@@ -47,7 +47,7 @@ Extracts and classifies RNA secondary structure from 3D coordinates, detecting b
 
 ### `adapter`
 
-Converts base-interaction output from external tools into RNApolis' secondary-structure format, reusing `annotator`'s output options. Supports FR3D, DSSR, RNAView, BPNet, MAXIT, BARNABA, MC-Annotate, and DNATCO; the source tool is auto-detected from file patterns (override with `--tool`). Usage: `adapter <structure> [external files...]`.
+Converts base-interaction output from external tools into RNApolis' secondary-structure format, reusing `annotator`'s output options. Supports FR3D, DSSR, RNAView, BPNet, MAXIT, BARNABA, MC-Annotate, and NAPAIR; the source tool is auto-detected from file patterns (override with `--tool`). Usage: `adapter <structure> [external files...]`.
 
 ### `aligner`
 

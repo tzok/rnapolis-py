@@ -1,6 +1,5 @@
 #! /usr/bin/env python
 import argparse
-import csv
 import logging
 import os
 from enum import Enum
@@ -12,8 +11,8 @@ from rnapolis.adapters.dssr import parse_dssr_output
 from rnapolis.adapters.fr3d import parse_fr3d_output
 from rnapolis.adapters.maxit import parse_maxit_output
 from rnapolis.adapters.mc_annotate import parse_mcannotate_output
+from rnapolis.adapters.napair import is_napair_file, parse_napair_output
 from rnapolis.adapters.rnaview import parse_rnaview_output
-from rnapolis.adapters.dnatco import parse_dnatco_output
 from rnapolis.annotator import (
     add_common_output_arguments,
     handle_output_arguments,
@@ -36,33 +35,23 @@ class ExternalTool(Enum):
     MAXIT = "maxit"
     BARNABA = "barnaba"
     MCANNOTATE = "mc-annotate"
-    DNATCO = "dnatco"
+    NAPAIR = "napair"
+    DNATCO = "dnatco"  # deprecated alias for NAPAIR
 
 
 logging.basicConfig(level=os.getenv("LOGLEVEL", "INFO").upper())
 
 
-def _is_dnatco_header(header: List[str]) -> bool:
-    columns = set(header)
-    shared_columns = {"pdbid", "model", "family"}
-    old_residue_columns = {
-        f"{field}{i}" for i in (1, 2) for field in ("chain", "nr", "res")
-    }
-    new_residue_columns = {
-        f"{field}{i}"
-        for i in (1, 2)
-        for field in (
-            "label_comp_id",
-            "label_asym_id",
-            "label_seq_id",
-            "auth_seq_id",
-            "auth_comp_id",
-            "auth_asym_id",
-        )
-    }
-    return shared_columns <= columns and (
-        old_residue_columns <= columns or new_residue_columns <= columns
-    )
+NAPAIR_SUFFIXES = (
+    ".csv",
+    ".csv.gz",
+    ".json",
+    ".json.gz",
+    ".jsonl",
+    ".jsonl.gz",
+    ".jsonnd",
+    ".jsonnd.gz",
+)
 
 
 def auto_detect_tool(external_files: List[str]) -> ExternalTool:
@@ -101,16 +90,13 @@ def auto_detect_tool(external_files: List[str]) -> ExternalTool:
         if "pairing" in basename or "stacking" in basename:
             return ExternalTool.BARNABA
 
+        # Check content of NAPAIR output files (CSV, JSON, or JSON Lines)
+        if basename.endswith(NAPAIR_SUFFIXES) and is_napair_file(file_path):
+            return ExternalTool.NAPAIR
+
         # Check for JSON files (DSSR)
         if basename.endswith(".json"):
             return ExternalTool.DSSR
-
-        # Check header of .csv file for DNATCO
-        if basename.endswith(".csv"):
-            with open(file_path, "r") as f:
-                header = next(csv.reader(f), [])
-                if _is_dnatco_header(header):
-                    return ExternalTool.DNATCO
 
     # Default to MAXIT if no patterns match
     return ExternalTool.MAXIT
@@ -144,8 +130,10 @@ def parse_external_output(
         return parse_barnaba_output(file_paths, structure3d)
     elif tool == ExternalTool.MCANNOTATE:
         return parse_mcannotate_output(file_paths, structure3d)
-    elif tool == ExternalTool.DNATCO:
-        return parse_dnatco_output(file_paths, structure3d)
+    elif tool in (ExternalTool.NAPAIR, ExternalTool.DNATCO):
+        if tool == ExternalTool.DNATCO:
+            logging.warning("'dnatco' is a deprecated alias for 'napair'")
+        return parse_napair_output(file_paths, structure3d)
     else:
         raise ValueError(f"Unsupported external tool: {tool}")
 
