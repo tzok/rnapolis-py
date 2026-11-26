@@ -1,8 +1,11 @@
 import csv
 import inspect
 import argparse
+import json
 
 from pathlib import Path
+
+import pytest
 
 from rnapolis.adapter import ExternalTool, process_external_tool_output
 from rnapolis.annotator import add_common_output_arguments
@@ -235,7 +238,9 @@ def test_adapter_auto_detection():
         (test_dir / "1A4D_1_A-B-input.cif.out", ExternalTool.RNAVIEW),
         (test_dir / "1A4D_1_A-B-output.cif", ExternalTool.MAXIT),
         (test_dir / "1A4D_1_A-B-dssr.json", ExternalTool.DSSR),
-        (test_dir / "dnatco/1ehz/1ehz.csv", ExternalTool.DNATCO),
+        (test_dir / "napair/1ehz/1ehz.csv", ExternalTool.NAPAIR),
+        (test_dir / "napair/1ehz/1ehz.json", ExternalTool.NAPAIR),
+        (test_dir / "napair/1ehz/1ehz.jsonl", ExternalTool.NAPAIR),
     ]
 
     from rnapolis.adapter import auto_detect_tool
@@ -247,8 +252,8 @@ def test_adapter_auto_detection():
         )
 
 
-def test_adapter_auto_detection_dnatco_filtered_header(tmp_path):
-    """Detect filtered DNATCO CSVs independent of column order and extras."""
+def test_adapter_auto_detection_napair_filtered_header(tmp_path):
+    """Detect filtered NAPAIR CSVs independent of column order and extras."""
     from rnapolis.adapter import auto_detect_tool
 
     header = [
@@ -272,34 +277,52 @@ def test_adapter_auto_detection_dnatco_filtered_header(tmp_path):
     csv_path = tmp_path / "filtered.csv"
     csv_path.write_text(",".join(header) + "\n", encoding="utf-8")
 
-    assert auto_detect_tool([str(csv_path)]) == ExternalTool.DNATCO
+    assert auto_detect_tool([str(csv_path)]) == ExternalTool.NAPAIR
 
 
-def test_dnatco_parser_preserves_label_and_auth_residues():
+def test_adapter_auto_detection_legacy_short_name_csv_not_napair(tmp_path):
+    """Legacy short-name CSVs (chain/nr/res) are no longer auto-detected as NAPAIR."""
+    from rnapolis.adapter import auto_detect_tool
+
+    header = [
+        "pdbid",
+        "model",
+        "family",
+        "class",
+        "chain1",
+        "nr1",
+        "res1",
+        "chain2",
+        "nr2",
+        "res2",
+    ]
+    csv_path = tmp_path / "legacy.csv"
+    csv_path.write_text(",".join(header) + "\n", encoding="utf-8")
+
+    assert auto_detect_tool([str(csv_path)]) == ExternalTool.MAXIT
+
+
+def test_napair_parser_preserves_label_and_auth_residues():
     """Parse label/auth identifiers and normalize an empty insertion code."""
-    import pandas as pd
-
-    from rnapolis.adapters.dnatco import _parse_residues
+    from rnapolis.adapters.napair import _parse_residues
     from rnapolis.common import ResidueAuth, ResidueLabel
 
-    row = pd.Series(
-        {
-            "label_asym_id1": "A",
-            "label_seq_id1": 15,
-            "label_comp_id1": "G",
-            "auth_asym_id1": "A",
-            "auth_seq_id1": 15,
-            "auth_comp_id1": "G",
-            "pdbx_PDB_ins_code1": float("nan"),
-            "label_asym_id2": "A",
-            "label_seq_id2": 48,
-            "label_comp_id2": "C",
-            "auth_asym_id2": "A",
-            "auth_seq_id2": 48,
-            "auth_comp_id2": "C",
-            "pdbx_PDB_ins_code2": "?",
-        }
-    )
+    row = {
+        "label_asym_id1": "A",
+        "label_seq_id1": 15,
+        "label_comp_id1": "G",
+        "auth_asym_id1": "A",
+        "auth_seq_id1": 15,
+        "auth_comp_id1": "G",
+        "pdbx_PDB_ins_code1": None,
+        "label_asym_id2": "A",
+        "label_seq_id2": 48,
+        "label_comp_id2": "C",
+        "auth_asym_id2": "A",
+        "auth_seq_id2": 48,
+        "auth_comp_id2": "C",
+        "pdbx_PDB_ins_code2": "?",
+    }
 
     residue1, residue2 = _parse_residues(row)
 
@@ -307,6 +330,17 @@ def test_dnatco_parser_preserves_label_and_auth_residues():
     assert residue1.auth == ResidueAuth("A", 15, None, "G")
     assert residue2.label == ResidueLabel("A", 48, "C")
     assert residue2.auth == ResidueAuth("A", 48, None, "C")
+
+    # NAPAIR's JSON output omits null keys entirely, so a missing insertion
+    # code key must behave like an empty CSV field
+    json_row = dict(row)
+    del json_row["pdbx_PDB_ins_code1"]
+    del json_row["pdbx_PDB_ins_code2"]
+
+    json_residue1, json_residue2 = _parse_residues(json_row)
+
+    assert json_residue1.auth == ResidueAuth("A", 15, None, "G")
+    assert json_residue2.auth == ResidueAuth("A", 48, None, "C")
 
 
 def test_adapter_empty_files_maxit():
@@ -331,11 +365,15 @@ def test_adapter_empty_files_maxit():
     assert structure2d is not None
 
 
-def test_adapter_dnatco():
-    """Test adapter with DNATCO output for 1EHZ structure."""
+@pytest.mark.parametrize(
+    "external_file",
+    ["1ehz.csv", "1ehz.json", "1ehz.jsonl"],
+)
+def test_adapter_napair(external_file):
+    """Test adapter with NAPAIR output for 1EHZ structure."""
     test_dir = Path(__file__).parent
-    cif_path = test_dir / "dnatco/1ehz/1ehz.cif"
-    dnatco_path = test_dir / "dnatco/1ehz/1ehz.csv"
+    cif_path = test_dir / "napair/1ehz/1ehz.cif"
+    napair_path = test_dir / "napair/1ehz" / external_file
 
     # Read 3D structure
     file = handle_input_file(str(cif_path))
@@ -344,28 +382,57 @@ def test_adapter_dnatco():
     # Process external tool output
     _, mapping = process_external_tool_output(
         structure3d,
-        [str(dnatco_path)],
-        ExternalTool.DNATCO,
+        [str(napair_path)],
+        ExternalTool.NAPAIR,
         str(cif_path),
     )
 
     # Check the dot-bracket output
     expected_dot_bracket = """>strand_A
 GCGGAUUUAGCUCAGUUGGGAGAGCGCCAGACUGAAGAUCUGGAGGUCCUGUGUUCGAUCCACAGAAUUCGCACCA
-(((((((...(((.....[..)))..(((...........)))......((((..]....)))).)))))))...."""
+(((((((..((((........)))).((((.........)))).....(((((.......))))))))))))...."""
 
     assert mapping.dot_bracket == expected_dot_bracket
 
-    with open(dnatco_path) as csvfile:
-        reader = csv.DictReader(csvfile)
-        i = 0
-        while True:
-            try:
-                next(reader)
-                i += 1
-            except StopIteration:
-                break
+    if napair_path.suffix == ".csv":
+        with open(napair_path) as f:
+            i = sum(1 for _ in csv.DictReader(f))
+    elif napair_path.suffix == ".jsonl":
+        with open(napair_path) as f:
+            i = sum(1 for line in f if line.strip())
+    else:
+        with open(napair_path) as f:
+            data = json.load(f)
+        i = sum(len(value) for value in data.values() if isinstance(value, list))
 
     # Check that the number of base pairs matches
     assert len(mapping.base_pairs2d) == i
     assert len(mapping.base_pairs) == i * 2
+
+
+def test_adapter_dnatco_deprecated_alias():
+    """The deprecated 'dnatco' tool name dispatches to the NAPAIR parser."""
+    test_dir = Path(__file__).parent
+    cif_path = test_dir / "napair/1ehz/1ehz.cif"
+    napair_path = test_dir / "napair/1ehz/1ehz.csv"
+
+    # Read 3D structure
+    file = handle_input_file(str(cif_path))
+    structure3d = read_3d_structure(file, None)
+
+    # Process external tool output
+    _, napair_mapping = process_external_tool_output(
+        structure3d,
+        [str(napair_path)],
+        ExternalTool.NAPAIR,
+        str(cif_path),
+    )
+    _, dnatco_mapping = process_external_tool_output(
+        structure3d,
+        [str(napair_path)],
+        ExternalTool.DNATCO,
+        str(cif_path),
+    )
+
+    assert dnatco_mapping.dot_bracket == napair_mapping.dot_bracket
+    assert dnatco_mapping.bpseq == napair_mapping.bpseq

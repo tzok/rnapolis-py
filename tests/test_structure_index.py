@@ -107,19 +107,19 @@ def test_adapter_output_matches_full_structure(tool, external_file):
     assert index_mapping.bpseq == full_mapping.bpseq
 
 
-def test_dnatco_adapter_output_matches_full_structure():
-    """DNATCO conversion is independent of the full 3D representation."""
-    cif_path = TEST_DIR / "dnatco/1ehz/1ehz.cif"
-    dnatco_path = TEST_DIR / "dnatco/1ehz/1ehz.csv"
+def test_napair_adapter_output_matches_full_structure():
+    """NAPAIR conversion is independent of the full 3D representation."""
+    cif_path = TEST_DIR / "napair/1ehz/1ehz.cif"
+    napair_path = TEST_DIR / "napair/1ehz/1ehz.csv"
 
     full = read_3d_structure(handle_input_file(str(cif_path)), None)
     index = read_structure_index(handle_input_file(str(cif_path)), None)
 
     full_mapping = process_external_tool_output(
-        full, [str(dnatco_path)], ExternalTool.DNATCO, str(cif_path)
+        full, [str(napair_path)], ExternalTool.NAPAIR, str(cif_path)
     )[1]
     index_mapping = process_external_tool_output(
-        index, [str(dnatco_path)], ExternalTool.DNATCO, str(cif_path)
+        index, [str(napair_path)], ExternalTool.NAPAIR, str(cif_path)
     )[1]
 
     assert index_mapping.dot_bracket == full_mapping.dot_bracket

@@ -2910,7 +2910,7 @@ wheels = [
 
 [[package]]
 name = "rnapolis"
-version = "0.17.0"
+version = "0.17.1"
 source = { editable = "." }
 default-groups = []
 dependencies = [
